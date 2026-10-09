@@ -1,0 +1,33 @@
+# =====================================
+# Theia Engine — Git Ignore
+# =====================================
+
+# Rust build outputs
+target/
+**/target/
+
+# Generated shader binaries
+build/
+*.spv
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# IDE files
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
