@@ -4,6 +4,14 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M1 CPU oracle — independently executed
+
+`crates/theia-ecs` now provides the bounded dense-column/generational-handle CPU
+reference. Six local unit tests pass, including 10,000 deterministic randomized
+operations checked against an independent map. Formatting and Clippy with denied
+warnings pass. This is reference scaffolding, not GPU ECS execution; M1 remains
+open. Scope and next GPU checks: [M1 qualification contract](M1_GPU_ECS.md).
+
 ## M0-D reference qualification closeout — independently executed
 
 - RX 7900 XTX / RADV / X11: `--wsi-smoke-test` completes all four explicitly
