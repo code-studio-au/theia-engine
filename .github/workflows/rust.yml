@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        package: [apps/theia-gpu-test, apps/theia-render-lab, crates/theia-ecs, apps/theia-ecs-lab]
+        package: [apps/theia-gpu-test, apps/theia-render-lab, crates/theia-ecs, apps/theia-ecs-lab, crates/theia-assets]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -42,3 +42,16 @@ jobs:
         run: |
           "$RUNNER_TEMP/slang/bin/slangc" shaders/compute/buffer_test.slang -entry computeMain -stage compute -target spirv -profile spirv_1_6 -o build/shaders/buffer_test.spv
           spirv-val --target-env vulkan1.3 build/shaders/buffer_test.spv
+      - name: Build qualified offline meshoptimizer tool
+        run: |
+          curl --fail --location --retry 3 https://github.com/zeux/meshoptimizer/releases/download/v1.3/meshoptimizer-1.3.tar.gz -o "$RUNNER_TEMP/meshoptimizer.tar.gz"
+          echo "d50a0b5e1323ba4379cdb32f89436c20652b7393445f8e18c88ae64445b67b77  $RUNNER_TEMP/meshoptimizer.tar.gz" | sha256sum --check -
+          mkdir "$RUNNER_TEMP/meshoptimizer"
+          tar -xzf "$RUNNER_TEMP/meshoptimizer.tar.gz" -C "$RUNNER_TEMP/meshoptimizer"
+          cmake -S "$RUNNER_TEMP/meshoptimizer/meshoptimizer-1.3" -B "$RUNNER_TEMP/meshopt-build" -DCMAKE_BUILD_TYPE=Release -DMESHOPT_BUILD_SHARED_LIBS=ON
+          cmake --build "$RUNNER_TEMP/meshopt-build" --parallel 2
+      - name: Qualify meshlet fixture coverage and Rust container reader
+        run: |
+          python3 tools/cook_meshlet_fixture.py --library "$RUNNER_TEMP/meshopt-build/libmeshoptimizer.so" --source-archive "$RUNNER_TEMP/meshoptimizer.tar.gz"
+          python3 tools/cook_meshlet_fixture.py --fixture quad --library "$RUNNER_TEMP/meshopt-build/libmeshoptimizer.so" --source-archive "$RUNNER_TEMP/meshoptimizer.tar.gz"
+          cargo run --locked --manifest-path crates/theia-assets/Cargo.toml --example inspect -- "$(python3 -c 'import json; print(json.load(open("build/assets/grid16-report.json"))["path"])')"
