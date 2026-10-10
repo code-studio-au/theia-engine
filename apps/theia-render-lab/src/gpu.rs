@@ -1,4 +1,4 @@
-use crate::{Options, Result};
+use crate::{Options, Result, pipeline::Pipeline};
 use ash::{Entry, vk};
 use std::{
     ffi::{CStr, c_void},
@@ -86,6 +86,7 @@ struct Context {
     surface_loader: Option<ash::khr::surface::Instance>,
     surface: vk::SurfaceKHR,
     device: Option<ash::Device>,
+    mesh_commands: Option<ash::ext::mesh_shader::Device>,
     physical: vk::PhysicalDevice,
     graphics_family: u32,
     present_family: u32,
@@ -110,6 +111,7 @@ impl Context {
             surface_loader: None,
             surface: vk::SurfaceKHR::null(),
             device: None,
+            mesh_commands: None,
             physical: vk::PhysicalDevice::null(),
             graphics_family: 0,
             present_family: 0,
@@ -275,6 +277,7 @@ impl Context {
                 )?,
             );
             let device = self.device.as_ref().unwrap();
+            self.mesh_commands = Some(ash::ext::mesh_shader::Device::new(instance, device));
             self.graphics = device.get_device_queue(self.graphics_family, 0);
             self.present = device.get_device_queue(self.present_family, 0);
             self.pool = device.create_command_pool(
@@ -342,6 +345,13 @@ impl Context {
                         has_extension(&extensions, ash::ext::mesh_shader::NAME),
                     ),
                     ("meshShader", mesh.mesh_shader == vk::TRUE),
+                    (
+                        "triangle mesh limits",
+                        limits.max_mesh_work_group_invocations >= 32
+                            && limits.max_mesh_work_group_size[0] >= 32
+                            && limits.max_mesh_output_vertices >= 3
+                            && limits.max_mesh_output_primitives >= 1,
+                    ),
                     ("taskShader", mesh.task_shader == vk::TRUE),
                     ("dynamicRendering", v13.dynamic_rendering == vk::TRUE),
                     ("synchronization2", v13.synchronization2 == vk::TRUE),
@@ -495,6 +505,7 @@ struct Swapchain {
     fences: Vec<vk::Fence>,
     pending: Vec<bool>,
     extent: vk::Extent2D,
+    pipeline: Option<Pipeline>,
 }
 fn choose_extent(
     capabilities: &vk::SurfaceCapabilitiesKHR,
@@ -520,7 +531,12 @@ fn choose_extent(
     (extent.width > 0 && extent.height > 0).then_some(extent)
 }
 impl Swapchain {
-    fn new(ctx: &Context, old: vk::SwapchainKHR, size: PhysicalSize<u32>) -> Result<Option<Self>> {
+    fn new(
+        ctx: &Context,
+        old: vk::SwapchainKHR,
+        size: PhysicalSize<u32>,
+        shader_dir: Option<&std::path::Path>,
+    ) -> Result<Option<Self>> {
         let device = ctx.device.as_ref().unwrap();
         let surface = ctx.surface_loader.as_ref().unwrap();
         // SAFETY: Surface/device remain live through construction and throughout Swapchain lifetime;
@@ -595,7 +611,11 @@ impl Swapchain {
                 fences: Vec::new(),
                 pending: Vec::new(),
                 extent,
+                pipeline: None,
             };
+            if let Some(shader_dir) = shader_dir {
+                chain.pipeline = Some(Pipeline::new(device, format.format, shader_dir)?);
+            }
             chain.images = chain.loader.get_swapchain_images(handle)?;
             for &image in &chain.images {
                 chain.views.push(
@@ -682,6 +702,7 @@ pub struct Renderer {
     chain: Option<Swapchain>,
     pub recreate: bool,
     generations: u64,
+    shader_dir: Option<std::path::PathBuf>,
 }
 impl Renderer {
     pub fn new(
@@ -695,6 +716,11 @@ impl Renderer {
             chain: None,
             recreate: true,
             generations: 0,
+            shader_dir: (!options.clear_only).then(|| {
+                options.shader_dir.clone().unwrap_or_else(|| {
+                    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/shaders")
+                })
+            }),
         };
         renderer.rebuild(renderer.ctx.window.inner_size())?;
         Ok(renderer)
@@ -710,7 +736,7 @@ impl Renderer {
             .chain
             .as_ref()
             .map_or(vk::SwapchainKHR::null(), |chain| chain.handle);
-        if let Some(chain) = Swapchain::new(&self.ctx, old, size)? {
+        if let Some(chain) = Swapchain::new(&self.ctx, old, size, self.shader_dir.as_deref())? {
             self.chain = Some(chain);
             self.recreate = false;
             self.generations += 1;
@@ -793,6 +819,34 @@ impl Renderer {
                     .layer_count(1)
                     .color_attachments(&attachments),
             );
+            if let Some(pipeline) = &chain.pipeline {
+                device.cmd_bind_pipeline(
+                    ctx.command,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline.handle,
+                );
+                device.cmd_set_viewport(
+                    ctx.command,
+                    0,
+                    &[vk::Viewport::default()
+                        .width(chain.extent.width as f32)
+                        .height(chain.extent.height as f32)
+                        .min_depth(0.0)
+                        .max_depth(1.0)],
+                );
+                device.cmd_set_scissor(
+                    ctx.command,
+                    0,
+                    &[vk::Rect2D {
+                        offset: vk::Offset2D::default(),
+                        extent: chain.extent,
+                    }],
+                );
+                ctx.mesh_commands
+                    .as_ref()
+                    .unwrap()
+                    .cmd_draw_mesh_tasks(ctx.command, 1, 1, 1);
+            }
             device.cmd_end_rendering(ctx.command);
             let to_present = [vk::ImageMemoryBarrier2::default()
                 .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)

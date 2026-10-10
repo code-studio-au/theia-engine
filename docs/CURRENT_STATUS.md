@@ -4,13 +4,36 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
-## M0-D bootstrap — independently executed
+## M0-D mesh-only triangle — independently executed
+
+- Slang 2026.19 compiles mesh + fragment stages to SPIR-V 1.6; both pass
+  `spirv-val --target-env vulkan1.3`. Mesh uses `MeshShadingEXT` / `MeshEXT`,
+  local size 32x1x1, three output vertices and one primitive. No language fallback.
+- Render Lab now creates a mesh-only graphics pipeline and executes
+  `vkCmdDrawMeshTasksEXT(1,1,1)` on RX 7900 XTX / RADV / X11. There is no vertex
+  shader, vertex buffer or index buffer. **Task shaders have not executed yet.**
+- Mesh smoke: 120 queued presentations, six swapchain generations, zero validation
+  warnings/errors including teardown. A 300-frame run also passes; own-window image
+  checks verify the clear background, interpolated center and red/green/blue regions.
+- Pipeline/layout/module RAII covers creation errors and recreation for the actual
+  swapchain format. `--clear-only` preserves the bootstrap path; `--shader-dir`
+  supports explicit shader locations. Missing shaders fail with clean teardown.
+- Rust formatting, Clippy with denied warnings and the two extent tests pass.
+  The original compute app/source remain unchanged. CI now also compiles/validates
+  shaders with the official Slang release, pinned by SHA-256.
+
+Evidence and limitations: [mesh triangle qualification](validation/M0D_MESH_TRIANGLE.md).
+Next outstanding M0-D task: **Slang task-shader amplification**, followed by
+compute-written indirect mesh/task work. **M0-D remains open.** Windows/Wayland GPU
+execution, other vendors and GPU-assisted validation remain unqualified.
+
+## M0-D bootstrap — previously qualified
 
 - Added separate `apps/theia-render-lab`: ash 0.38, ash-window 0.13, winit 0.30.13,
   pinned lockfile. Native X11 surface and FIFO swapchain execute on RX 7900 XTX,
   RADV Mesa 26.2.4; dynamic rendering displays a dark blue clear.
 - Queries/enables Vulkan 1.3 mesh/task capability, BDA, descriptor-indexing subset,
-  timeline semaphores, dynamic rendering and Sync2. **Mesh/task pipelines have not
+  timeline semaphores, dynamic rendering and Sync2. **At bootstrap qualification, mesh/task pipelines had not
   executed.** The lab additionally requires EXT swapchain/surface maintenance for
   presentation-fence retirement; this does not redefine the approved engine profile.
 - Explicitly enables `VK_LAYER_KHRONOS_validation` (installed version 1.3.275),
@@ -31,8 +54,8 @@ executed in the local checkout on 2026-10-10.
   actual `ERROR_OUT_OF_DATE_KHR` return was exercised.
 
 Commands, observed logs and limitations: [M0-D bootstrap qualification](validation/M0D_BOOTSTRAP.md).
-Next: compile/validate/execute the Slang mesh-only triangle + fragment shader, then
-add task amplification and GPU-written indirect work counts. **M0-D remains open.**
+The subsequent mesh-only triangle qualification is recorded above. Task amplification
+and GPU-written indirect work counts remain outstanding. **M0-D remains open.**
 
 ## Original handoff — completed and verified
 
@@ -62,7 +85,7 @@ add task amplification and GPU-written indirect work counts. **M0-D remains open
 
 This handoff ZIP does **not** include copies of the user's latest local application sources; Codex should inspect the Git checkout. An earlier uploaded `main.rs` in the conversation had the debug callback; local version may have changed after that.
 
-## Immediate next goal — M0-D
+## Original handoff plan — M0-D
 
 Create **separate** `apps/theia-render-lab` (cargo new `--vcs none`), native window and Vulkan surface/swapchain, compile and run Slang task+mesh+fragment shaders, render one GPU-generated triangle. Then compute-generated indirect mesh task dispatch, Vulkan validation and correct resize/recreation. Keep headless compute test intact as regression. No ECS, GI, game server or editor yet.
 
