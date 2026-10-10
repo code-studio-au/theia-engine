@@ -293,3 +293,23 @@ apps/theia-render-lab/target/debug/theia-render-lab --asset /path/to/hash.theia-
 Use `THEIA_CAPTURE_SHADER_DIR=build/shaders-shared` with the existing material
 capture environment to replay that exact pair. Pinned compiler provenance and
 limits are in [M4 qualification evidence](validation/M4_COOKED_MESHLETS.md).
+
+### Authored opaque factors
+
+Cook explicit material assignments against an exact geometry page, then validate
+with the independent Rust reader before running GPU qualification:
+
+```sh
+python3 tools/cook_material_page.py --mesh build/assets/<hash>.theia-mesh \
+  --assignments fixtures/materials/imported_unlit.json
+cargo run --manifest-path crates/theia-assets/Cargo.toml --example material -- \
+  build/assets/<hash>.theia-mesh build/assets/<material-hash>.theia-material
+apps/theia-render-lab/target/debug/theia-render-lab --asset build/assets/<hash>.theia-mesh \
+  --materials build/assets/<material-hash>.theia-material --wsi-smoke-test
+```
+
+The fixture's geometry hash is explicit; use its bound imported asset or author
+new assignments for a different cooked file. `THEIA_CAPTURE_MATERIAL_PAGE`
+selects authored factor replay and checks every visible triangle plus the grid.
+Optional `THEIA_CAPTURE_SHADER_DIR=build/shaders-shared` checks the alternate
+shared primitive interface. These tests do not implement glTF material import.

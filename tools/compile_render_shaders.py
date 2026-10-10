@@ -41,7 +41,8 @@ def main():
                ('asset_cull.slang', 'assetCulledMesh', 'mesh', 'asset.cull.mesh.spv'),
                ('asset_visibility.slang', 'assetVisibilityMesh', 'mesh', 'asset.visibility.mesh.spv'),
                ('asset_visibility.slang', 'assetVisibilityFragment', 'fragment', 'asset.visibility.frag.spv'),
-               ('asset_resolve.slang', 'assetResolveFragment', 'fragment', 'asset.resolve.frag.spv')]
+               ('asset_resolve.slang', 'assetResolveFragment', 'fragment', 'asset.resolve.frag.spv'),
+               ('asset_authored_resolve.slang', 'assetAuthoredResolveFragment', 'fragment', 'asset.authored.resolve.frag.spv')]
     try:
         subprocess.run([args.slangc, '-version'], check=True)
         if args.shared_primitive_interface:

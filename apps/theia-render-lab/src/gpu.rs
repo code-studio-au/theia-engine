@@ -634,6 +634,7 @@ impl Swapchain {
         shader_dir: Option<&std::path::Path>,
         mode: RenderMode,
         descriptor_layout: Option<vk::DescriptorSetLayout>,
+        material_info: Option<vk::DescriptorBufferInfo>,
     ) -> Result<Option<Self>> {
         let device = ctx.device.as_ref().unwrap();
         let surface = ctx.surface_loader.as_ref().unwrap();
@@ -745,7 +746,10 @@ impl Swapchain {
                         extent,
                         format.format,
                         shader_dir,
-                        descriptor_layout.ok_or("Visibility mode needs GPU work layout")?,
+                        (
+                            descriptor_layout.ok_or("Visibility mode needs GPU work layout")?,
+                            material_info,
+                        ),
                         mode == RenderMode::AssetResolve,
                     )?);
                 } else {
@@ -845,6 +849,7 @@ pub struct Renderer {
     chain: Option<Swapchain>,
     stream: Option<crate::streaming::Stream>,
     work: Option<IndirectWork>,
+    materials: Option<crate::asset::Buffer>,
     pub recreate: bool,
     generations: u64,
     shader_dir: Option<std::path::PathBuf>,
@@ -871,6 +876,7 @@ impl Renderer {
             generations: 0,
             mode: options.render_mode(),
             work: None,
+            materials: None,
             work_items: options.work_items.unwrap_or(2),
             cycle_work: options.smoke,
             presented: 0,
@@ -963,6 +969,36 @@ impl Renderer {
                     alignment,
                 )?;
             }
+            if let Some(path) = &options.materials {
+                let bytes = asset
+                    .as_ref()
+                    .ok_or("Authored materials need fixed geometry")?;
+                let mesh = theia_assets::Mesh::decode(bytes, None, theia_assets::DEFAULT_BUDGET)?;
+                let material = crate::asset::load_material(path, &mesh)?;
+                // SAFETY: Selected physical device belongs to the retained live instance.
+                let limit = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits
+                        .max_storage_buffer_range
+                };
+                if material.len() > limit as usize {
+                    return Err("Material exceeds device storage range".into());
+                }
+                renderer.materials = Some(crate::asset::Buffer::upload(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    &material,
+                    renderer.ctx.graphics_family,
+                    renderer.ctx.graphics,
+                    theia_assets::material::DEFAULT_BUDGET as u64,
+                    None,
+                )?);
+            }
             renderer.work = Some(IndirectWork::new(
                 renderer.ctx.device.as_ref().unwrap(),
                 &memory,
@@ -1009,6 +1045,12 @@ impl Renderer {
             self.shader_dir.as_deref(),
             self.mode,
             self.work.as_ref().map(|work| work.descriptor_layout),
+            self.materials.as_ref().map(|buffer| {
+                vk::DescriptorBufferInfo::default()
+                    .buffer(buffer.handle)
+                    .offset(buffer.offset)
+                    .range(buffer.bytes)
+            }),
         )? {
             self.chain = Some(chain);
             self.recreate = false;
@@ -1385,6 +1427,7 @@ impl Drop for Renderer {
         drop(self.chain.take());
         drop(self.stream.take());
         drop(self.work.take());
+        drop(self.materials.take());
         println!(
             "Render Lab teardown: {} swapchain generations",
             self.generations

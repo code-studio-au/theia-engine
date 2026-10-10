@@ -148,6 +148,7 @@ impl Pipeline {
         shader_dir: &Path,
         descriptor_layout: vk::DescriptorSetLayout,
         cooked: bool,
+        authored: bool,
     ) -> Result<Self> {
         Self::configured(
             device,
@@ -157,13 +158,15 @@ impl Pipeline {
             ShaderStages {
                 mesh: "resolve.mesh.spv",
                 task: None,
-                fragment: if cooked {
+                fragment: if authored {
+                    "asset.authored.resolve.frag.spv"
+                } else if cooked {
                     "asset.resolve.frag.spv"
                 } else {
                     "resolve.frag.spv"
                 },
                 depth: None,
-                push: cooked.then_some(vk::ShaderStageFlags::FRAGMENT),
+                push: (cooked && !authored).then_some(vk::ShaderStageFlags::FRAGMENT),
             },
         )
     }

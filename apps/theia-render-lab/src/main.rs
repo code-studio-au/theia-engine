@@ -56,6 +56,7 @@ struct Options {
     camera: bool,
     frustum: bool,
     material: bool,
+    materials: Option<std::path::PathBuf>,
 }
 impl Options {
     fn render_mode(&self) -> RenderMode {
@@ -77,11 +78,30 @@ impl Options {
                 "--camera-test" => result.camera = true,
                 "--frustum-test" => result.frustum = true,
                 "--material-test" => result.material = true,
-                "--camera-reference" | "--frustum-reference" | "--material-reference" => {
+                "--materials" => {
+                    result.material = true;
+                    result.materials = Some(
+                        args.next()
+                            .ok_or("--materials needs a content-addressed material sidecar")?
+                            .into(),
+                    );
+                }
+                "--camera-reference"
+                | "--frustum-reference"
+                | "--material-reference"
+                | "--authored-reference" => {
                     use std::io::Read;
                     let path = args.next().ok_or(
                         "--camera-reference needs mesh path and x y width height scenario",
                     )?;
+                    let authored =
+                        if arg == "--authored-reference" {
+                            Some(args.next().ok_or(
+                                "--authored-reference needs material sidecar after mesh path",
+                            )?)
+                        } else {
+                            None
+                        };
                     let mut values = [0u32; 5];
                     for value in &mut values {
                         *value = args
@@ -102,6 +122,21 @@ impl Options {
                     if material && pixel.identity[0] != 0 && (pixel.identity[0] - 1) & 1 != 0 {
                         pixel.color[0] *= 89. / 255.;
                         pixel.color[1] *= 153. / 255.;
+                    }
+                    if let Some(path) = authored {
+                        let data = asset::load_material(std::path::Path::new(&path), &mesh)?;
+                        let page = theia_assets::material::MaterialPage::decode(
+                            &data,
+                            None,
+                            &mesh,
+                            theia_assets::material::DEFAULT_BUDGET,
+                        )?;
+                        if pixel.identity[0] != 0 {
+                            let color = page
+                                .color(pixel.identity[0] - 1, pixel.identity[1])
+                                .ok_or("Invalid CPU material identity")?;
+                            pixel.color.copy_from_slice(&color[..3]);
+                        }
                     }
                     let ids = if frustum {
                         camera::visible(&mesh, camera::view_rows(width, height, scenario)?)?
@@ -227,7 +262,7 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -240,6 +275,11 @@ impl Options {
             return Err(
                 "--camera-test/--frustum-test/--material-test require --asset or --cell".into(),
             );
+        }
+        if result.materials.is_some()
+            && (result.asset.is_none() || result.cell.is_some() || result.fallback.is_some())
+        {
+            return Err("--materials requires a fixed --asset without --cell/--fallback".into());
         }
         if result.resident_budget.is_some() && result.cell.is_none() {
             return Err("--resident-budget requires --cell".into());

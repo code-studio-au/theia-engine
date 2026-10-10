@@ -86,9 +86,9 @@ Position-only static glTF node transforms/reflections now feed the cooker/viewer
 with qualified source/tool provenance. Conservative GPU meshlet frustum selection
 now feeds indirect task/mesh work and passes CPU/replay checks. Cooked identity,
 depth and deferred diagnostic material resolve now connect those slices. Next
-qualify GPU lookup/resolve of the bounded opaque material sidecar; its reader
-and offline cooker now pass independent CPU checks. Explicit cooked-triangle
-assignments precede general glTF material/attribute import. The optional shared-
+qualify bounded glTF unlit factor import and native triangle-remapping provenance.
+The material sidecar reader/cooker and GPU lookup/resolve now pass independent
+checks; assignments still target explicit cooked triangle IDs. The optional shared-
 vertex Slang mesh / GLSL fragment interface passes replay alongside the default
 expanded-vertex Slang test. General
 LOD/hierarchy errors, broader page dependencies/readers and virtual texture

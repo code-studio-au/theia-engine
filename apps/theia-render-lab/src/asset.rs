@@ -90,6 +90,26 @@ struct Allocation {
     handle: vk::Buffer,
     memory: vk::DeviceMemory,
 }
+pub fn load_material(path: &Path, mesh: &Mesh) -> Result<Vec<u8>> {
+    let budget = theia_assets::material::DEFAULT_BUDGET;
+    let mut bytes = Vec::new();
+    fs::File::open(path)?
+        .take(budget as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    let name = path
+        .file_stem()
+        .and_then(|v| v.to_str())
+        .ok_or("Material needs a content address filename")?;
+    let actual = theia_assets::content_id(&bytes)
+        .iter()
+        .map(|v| format!("{v:02x}"))
+        .collect::<String>();
+    if name != actual {
+        return Err("Material content address filename mismatch".into());
+    }
+    theia_assets::material::MaterialPage::decode(&bytes, None, mesh, budget)?;
+    Ok(bytes)
+}
 pub struct Buffer {
     _allocation: Arc<Allocation>,
     _lease: Option<theia_assets::arena::Lease>,

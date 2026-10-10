@@ -44,7 +44,8 @@ def qualify(report):
     visibility = os.environ.get('THEIA_CAPTURE_VISIBILITY') == '1'
     asset_path = os.environ.get('THEIA_CAPTURE_ASSET')
     cell_path = os.environ.get('THEIA_CAPTURE_CELL')
-    material = os.environ.get('THEIA_CAPTURE_MATERIAL') == '1'
+    authored = os.environ.get('THEIA_CAPTURE_MATERIAL_PAGE')
+    material = os.environ.get('THEIA_CAPTURE_MATERIAL') == '1' or bool(authored)
     cull = os.environ.get('THEIA_CAPTURE_CULL') == '1' or material
     camera = os.environ.get('THEIA_CAPTURE_CAMERA') == '1' or cull
     if camera and not asset_path:
@@ -63,7 +64,12 @@ def qualify(report):
         quoted_dir = subprocess.list2cmdline([shader_dir]) if os.name == 'nt' else shlex.quote(shader_dir)
         arguments += f' --shader-dir {quoted_dir}'
         report['shader_directory'] = shader_dir
-    if material:
+    if authored:
+        if cell_path: raise RuntimeError('Authored material capture requires a fixed geometry page')
+        authored = str(Path(authored).resolve())
+        quoted_material = subprocess.list2cmdline([authored]) if os.name == 'nt' else shlex.quote(authored)
+        arguments += f' --materials {quoted_material}'
+    elif material:
         arguments += ' --material-test'
     elif cull:
         arguments += ' --frustum-test'
@@ -228,7 +234,7 @@ def qualify(report):
             verify_surface(controller, executable, root, present.copyDestination, scenario, report)
         if asset_path:
             if camera:
-                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material)
+                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material, authored)
             else:
                 verify_asset(controller, present.copyDestination, source, count, report)
         save = rd.TextureSave()
@@ -351,7 +357,7 @@ def verify_asset(controller, color_id, source, count, report):
     report.update(asset_surface_samples=samples, asset_surface_verified=True, selected_triangles=len(geometry))
 
 
-def verify_camera(controller, executable, root, color_id, asset_path, scenario, report, cull=False, material=False):
+def verify_camera(controller, executable, root, color_id, asset_path, scenario, report, cull=False, material=False, authored=None):
     textures = controller.GetTextures()
     color = next(texture for texture in textures if texture.resourceId == color_id)
     depths = [texture for texture in textures if texture.format.compType == rd.CompType.Depth
@@ -371,25 +377,47 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
     def srgb(value):
         value = max(0, min(1, value))
         return round((value*12.92 if value <= .0031308 else 1.055*value**(1/2.4)-.055)*255)
+    points = [(int(color.width*x/10), int(color.height*y/10)) for y in range(1,10) for x in range(1,10)]
+    if authored:
+        data = Path(authored).read_bytes()
+        candidates = [buffer for buffer in controller.GetBuffers() if buffer.length == len(data)]
+        matches = [buffer for buffer in candidates if controller.GetBufferData(buffer.resourceId,0,len(data)) == data]
+        if len(matches) != 1: raise RuntimeError('Expected exact immutable material GPU bytes')
+        report['material_gpu_bytes_verified'] = True
+        probes = {}
+        fallback_probes = {}
+        for y in range(color.height):
+            for x in range(color.width):
+                offset = y*color.width+x
+                value = struct.unpack_from('<2I',identity,offset*8)
+                if value[0]:
+                    fallback_probes.setdefault(value, (x,y))
+                    if value not in probes and 0 < x < color.width-1 and 0 < y < color.height-1 and all(struct.unpack_from('<2I',identity,neighbor*8) == value for neighbor in (offset-1,offset+1,offset-color.width,offset+color.width)):
+                        probes[value] = (x,y)
+        report['interior_triangle_probes'] = len(probes)
+        for value, pixel in fallback_probes.items():
+            probes.setdefault(value, pixel)
+        points += list(probes.values())
+        report['visible_triangle_probes'] = [list(value) for value in sorted(probes)]
     samples = []
-    for y in range(1,10):
-        for x in range(1,10):
-            pixel = (int(color.width*x/10), int(color.height*y/10))
-            expected = json.loads(subprocess.check_output([str(executable), '--material-reference' if material else '--frustum-reference' if cull else '--camera-reference', asset_path,
-                                  str(pixel[0]), str(pixel[1]), str(color.width), str(color.height), str(scenario)], cwd=root))
-            offset = pixel[1]*color.width+pixel[0]
-            if material:
-                actual_identity = list(struct.unpack_from('<2I', identity, offset*8))
-                if actual_identity != expected['identity']: raise RuntimeError(f'Cooked identity mismatch at {pixel}: {actual_identity}, expected {expected}')
-            actual_color = list(rgb[offset*4:offset*4+3])
-            if color.format.BGRAOrder():
-                actual_color.reverse()
-            actual_depth = struct.unpack_from('<f', depth, offset*4)[0]
-            if abs(actual_depth-expected['depth']) > 2e-6 or any(abs(a-srgb(b)) > 2 for a,b in zip(actual_color,expected['color'])):
-                raise RuntimeError(f'Perspective camera color/depth mismatch at {pixel}: {actual_color}/{actual_depth}, expected {expected}')
-            samples.append({'pixel':pixel,'covered':expected['covered'],'color':actual_color,'depth':actual_depth})
+    for pixel in points:
+        reference = [str(executable), '--authored-reference', asset_path, authored] if authored else [str(executable), '--material-reference' if material else '--frustum-reference' if cull else '--camera-reference', asset_path]
+        expected = json.loads(subprocess.check_output(reference + [
+                              str(pixel[0]), str(pixel[1]), str(color.width), str(color.height), str(scenario)], cwd=root))
+        offset = pixel[1]*color.width+pixel[0]
+        if material:
+            actual_identity = list(struct.unpack_from('<2I', identity, offset*8))
+            if actual_identity != expected['identity']: raise RuntimeError(f'Cooked identity mismatch at {pixel}: {actual_identity}, expected {expected}')
+        actual_color = list(rgb[offset*4:offset*4+3])
+        if color.format.BGRAOrder():
+            actual_color.reverse()
+        actual_depth = struct.unpack_from('<f', depth, offset*4)[0]
+        if abs(actual_depth-expected['depth']) > 2e-6 or any(abs(a-srgb(b)) > 2 for a,b in zip(actual_color,expected['color'])):
+            raise RuntimeError(f'Perspective camera color/depth mismatch at {pixel}: {actual_color}/{actual_depth}, expected {expected}')
+        samples.append({'pixel':pixel,'covered':expected['covered'],'color':actual_color,'depth':actual_depth})
     report.update(camera_samples=samples, camera_verified=True)
     if material: report['material_verified'] = True
+    if authored: report['authored_material_verified'] = True
 
 report = {'renderdoc': rd.GetVersionString(), 'validation_enabled_in_capture': False}
 code = 0

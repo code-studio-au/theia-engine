@@ -511,3 +511,60 @@ import, PBR lighting, transparency, material arena/residency or scene material
 identities. Explicit assignments use cooked triangle order and exact file hash.
 Geometry recooking requires a new explicit assignment source. GPU lookup/resolve
 is the next bounded gate; M4 remains incomplete.
+
+## GPU authored opaque factors (2026-10-10)
+
+Fixed `--asset --materials` uses the validated THEIAMAT geometry binding and
+one immutable fragment storage buffer, actual allocation capped independently
+at 4 MiB. Existing upload fence/staging lifetime and Transfer->Fragment Sync2
+cover binding 5 reads. GPU identity selects meshlet prefix/local-triangle
+assignment and returns the corresponding finite linear opaque factor. Host does
+not select per-triangle material or read GPU work. Shader/descriptor push layout
+for this factor-only resolve needs no fragment camera constants; identity mesh
+and cull camera remain unchanged. Cell/fallback combinations fail explicitly.
+
+Default and optional shared-interface builds compile/SPIR-V validate all 24
+outputs. Thirteen renderer tests, fmt and denied-warning Clippy pass. Standalone
+imported/terrain/terrain-shared WSI passes 120 frames/ten generations with zero
+validation warnings/errors including teardown. Twelve path regressions pass:
+authored terrain/shared, indirect, clear, mesh, task, spatial, M3 visibility,
+asset, camera, frustum and diagnostic material cell. Missing authored resolve
+fragment after material upload/work/identity-target construction exits 1 with
+zero diagnostics; wrong geometry binding likewise fails with clean teardown.
+
+Separate replay verifies exact uploaded geometry/material bytes, compacted
+candidates/counts/masks, exact identity and nearest depth (2e-6), and linear factor
+color after sRGB conversion (two RGB byte levels):
+
+| Capture | Pixel samples | Visible triangle identities checked |
+|---|---:|---:|
+| Imported full | 85 | 4 |
+| Imported translated empty | 81 | 0 |
+| Terrain full, expanded Slang | 593 | 512 |
+| Terrain narrow | 320 | 239 |
+| Imported shared interface | 85 | 4 |
+| Terrain full, shared interface | 593 | 512 |
+
+Each capture has the 81-point independent grid plus one sample for every GPU
+identity observed in the target. Prefer four-neighbor interior pixels; two full-
+terrain and one narrow-view triangle require edge-pixel fallbacks, also matching
+CPU results. Imported meshlet contains all four triangles with material indices
+[0,1,2,0], checking multiple materials within one meshlet. Terrain alternates three
+factors by `(meshlet + localTriangle) % 3`, checking prefix mapping across eight
+meshlets. Its 2,520-byte material page hash is
+`5a004f271a50c8498c3aa262f2a5316b5740fd349a92b74222a20e511402162c`.
+
+Every successful capture target presents 180 frames; capture validation is
+disabled, separately from standalone validation. One narrow capture attempt
+produced no capture/target log; it establishes no runtime result and is retained
+as `terrain-narrow/uncaptured-attempt.json`. Rerun at frame 30 passes 180 frames
+and all 320 samples. Original M3 replay still verifies its 84 samples.
+Artifacts: `build/qualification/m4-authored-material-{shaders,shared-shaders,
+smoke,regression-*,missing-shader,wrong-geometry}.log`, terrain cooking report,
+and `{full,empty,terrain,terrain-narrow,gltf-shared,terrain-shared,m3-regression}`
+reports/captures/images. No hosted CI, push or performance claim.
+
+This is explicit cooked-triangle factor assignment, not general glTF material
+import, UV/normal/texture/mip/lighting/alpha support or material/cell dependency
+publication. Renderer retains both identity shader choices; conservative profile
+limits remain. Bounded unlit import/remapping is next; M4 remains open.

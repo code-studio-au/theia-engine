@@ -265,3 +265,27 @@ source and script hashes, shades only opaque linear factors, and has no native
 runtime dependency. Rust `--example material` independently validates its output.
 The cell loader currently accepts geometry pages only; material residency,
 dependency publication, GPU binding and general authoring conversion remain open.
+
+### GPU opaque factor resolve
+
+`--asset <mesh> --materials <sidecar>` validates the sidecar against the selected
+full mesh hash and uploads one immutable storage buffer. This implies the cooked
+frustum/visibility path. It requires fixed geometry; `--cell` and `--fallback`
+combinations fail explicitly because material dependency streaming is not yet
+implemented. The buffer's actual allocation is capped at 4 MiB independently of
+geometry allocation, and checked against device storage-buffer range limits.
+
+Fragment binding 5 addresses material records, meshlet-prefix offsets and local
+triangle assignments. Background ID zero retains the existing background color;
+otherwise resolve returns the authored opaque linear factor directly. This
+factor-only shader adds no lighting, sampled texture, world-position modulation
+or authored UV. Startup transfer publishes fragment reads; the dedicated upload
+fence retires staging. The renderer owns the material buffer until graphics
+swapchain targets/descriptors are retired, including construction-error cleanup.
+It performs no runtime host triangle/material lookup or readback.
+
+`--authored-reference <mesh material x y width height view>` returns independent
+CPU identity/depth/color JSON. Capture uses `THEIA_CAPTURE_MATERIAL_PAGE` and
+checks immutable GPU bytes plus an interior sample per rasterized identity,
+falling back to an edge pixel for tiny triangles, alongside the 81-point grid.
+These readbacks are qualification tooling only.

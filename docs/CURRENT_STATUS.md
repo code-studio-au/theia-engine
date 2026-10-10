@@ -4,6 +4,30 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M4 GPU authored opaque factors — independently executed
+
+`--materials <hash.theia-material>` on a fixed `--asset` validates an exact geometry
+binding, uploads one immutable material buffer, and resolves meshlet/triangle IDs
+to authored opaque linear factors at fragment binding 5. No runtime CPU triangle
+lookup/draw/readback. Material upload uses the existing dedicated fence and scoped
+fragment storage-read publication; swapchain/descriptor retirement precedes
+buffer/device destruction. Cell/fallback material dependencies remain unsupported.
+Default and optional shared-interface builds each compile/validate 24 shaders.
+
+RX 7900 XTX authored glTF/terrain WSI passes 120 frames/ten generations with zero
+diagnostics; twelve new/previous GPU paths pass regression. Six separate replay
+cases verify geometry/material GPU bytes, compacted work, exact identities,
+depth and factor color: imported full/empty, terrain full/narrow, imported shared
+and terrain shared. Full terrain checks all 512 visible triangles plus 81 grid
+samples; narrow checks 239 triangles plus 81 samples. Both imported variants
+check all four visible triangles/three assigned factors. Original M3 replay
+remains qualified; wrong geometry and missing authored fragment clean up without
+diagnostics. Thirteen renderer tests, fmt and denied-warning Clippy pass.
+
+Assignments still target explicit cooked triangle IDs. Bounded glTF unlit factor
+import/remapping is next; UVs/textures/normals/lighting/alpha, material dependency
+streaming and broader scene integration remain open. M4 remains incomplete.
+
 ## M4 bounded opaque material contract — CPU/offline qualified
 
 THEIAMAT v1 sidecars bind exact immutable geometry hashes to finite opaque
@@ -16,8 +40,8 @@ triangle sidecar which Rust independently decodes; repeat cooking is identical.
 Six malformed assignment cases and a different-geometry binding fail explicitly.
 
 Assignments are hand-authored against cooked triangle IDs, not glTF primitive
-indices. No GPU material binding or glTF material import is implemented by this
-unit. GPU lookup/resolve qualification is next; textures/UVs/normals, lighting,
+indices. This CPU/offline unit adds no GPU binding; the later GPU unit above qualifies
+lookup/resolve. General glTF material import remains open; textures/UVs/normals, lighting,
 alpha/transparency and material dependency residency remain open. M4 stays open.
 
 ## M4 optional shared primitive interface — independently executed
