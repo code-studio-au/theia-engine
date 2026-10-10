@@ -4,6 +4,30 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M0-D reference qualification closeout — independently executed
+
+- RX 7900 XTX / RADV / X11: `--wsi-smoke-test` completes all four explicitly
+  injected acquire/present recovery probes, 120 successful queued presentations
+  and ten swapchain generations, with zero validation warnings/errors including
+  teardown. Genuine driver suboptimal results were observed during resize.
+  Genuine driver out-of-date, surface/device-loss and allocation-failure returns
+  remain unobserved; fatal present classification has CPU tests only.
+- RenderDoc 1.46 captures and replays compute + indirect task/mesh work. Diagnostic
+  replay verifies command/count `(1,1,1,1)`, two downstream mesh groups and GPU
+  transforms, and exports the correct two-triangle image. Runtime has no readback.
+- Capture runs explicitly disable validation. Combined capture/validation produced
+  layout diagnostics; standalone synchronization-validation runs pass. Muted
+  RenderDoc output also suppresses the deliberate callback check. These tooling
+  limitations are recorded, not treated as a validated combined workflow.
+- Normal indirect smoke and preserved headless compute (256/256) pass. Formatting,
+  Clippy with denied warnings and five unit tests pass locally. Changes remain
+  local at user request; no new hosted CI result is claimed.
+
+The **local RADV/X11 M0-D reference slice is qualified**; M1 can begin. Windows,
+Wayland, other vendors, GPU-assisted validation, real fatal WSI returns and
+performance remain separate qualification work. No locked ADR changed.
+Evidence and commands: [M0-D closeout](validation/M0D_CLOSEOUT.md).
+
 ## M0-D GPU indirect work — independently executed
 
 - Default Render Lab runs Slang compute to write a device-local 64-byte work buffer:
@@ -25,8 +49,7 @@ executed in the local checkout on 2026-10-10.
 
 Evidence: [GPU indirect work qualification](validation/M0D_INDIRECT_WORK.md).
 This qualifies a bounded work-generation test, not scene culling or GPU ECS.
-**M0-D remains open for qualification closeout**: exercise/document remaining WSI
-error-return paths and establish the RenderDoc capture/debug workflow before M1.
+The subsequent local reference closeout is recorded above.
 Windows/Wayland GPU runtime, other vendors, GPU-assisted validation and performance
 remain unqualified. No locked architectural decision changed.
 

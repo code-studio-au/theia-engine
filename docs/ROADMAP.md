@@ -26,7 +26,17 @@ The goal is an **early end-to-end playable vertical slice**, not years of isolat
 5. Implement minimal Slang mesh-only + fragment triangle; compile, validate and **execute**.
 6. Add task shader amplification, validate output and framebuffer.
 7. Add compute-written GPU work descriptors + indirect mesh-task dispatch, correct barriers, no host readback for count — [bounded reference test qualified on RADV](validation/M0D_INDIRECT_WORK.md).
-8. Qualification closeout: results/correctness logs and Vulkan validation exist for tested paths; exercise/document remaining WSI error returns, establish RenderDoc capture/debug workflow, and document per-vendor evidence before M1.
+8. Qualification closeout: [local RADV/X11 reference slice qualified](validation/M0D_CLOSEOUT.md), with labeled WSI recovery injection, genuine suboptimal returns, and RenderDoc capture/replay. Real driver out-of-date/fatal returns and other platforms/vendors remain unqualified.
+
+## Next local implementation — M1
+
+Start with a bounded CPU oracle: dense chunked position/velocity columns, stable
+generational handles, two fixed archetypes, spawn/despawn/component migration at
+explicit epochs, and delayed slot reuse while readers retain an older epoch.
+Qualify a Slang implementation against that oracle with deterministic and randomized
+mutation batches, stale/conflicting handles, exhausted capacity and retained-reader
+tests. Vulkan resource ownership and batched transfer/dispatch are explicit. Do
+not infer that the full GPU ECS, scheduler or allocation strategy exists from M0-D.
 
 ## Exit gates / nonfunctional requirements
 

@@ -1,3 +1,4 @@
+use crate::wsi::{PresentOutcome, Probe, RecoveryProbes};
 use crate::{Options, RenderMode, Result, indirect::IndirectWork, pipeline::Pipeline};
 use ash::{Entry, vk};
 use std::{
@@ -730,6 +731,7 @@ pub struct Renderer {
     cycle_work: bool,
     presented: u64,
     last_input: Option<u32>,
+    probes: RecoveryProbes,
     ctx: Context,
 }
 impl Renderer {
@@ -750,6 +752,7 @@ impl Renderer {
             cycle_work: options.smoke,
             presented: 0,
             last_input: None,
+            probes: RecoveryProbes::new(options.wsi_smoke),
             shader_dir: (options.render_mode() != RenderMode::Clear).then(|| {
                 options.shader_dir.clone().unwrap_or_else(|| {
                     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/shaders")
@@ -831,12 +834,22 @@ impl Renderer {
         // wait. Barriers order color writes and the present transition. Swapchain owns all referenced views.
         unsafe {
             device.wait_for_fences(&[ctx.complete], true, u64::MAX)?;
-            let (index, suboptimal) = match chain.loader.acquire_next_image(
-                chain.handle,
-                u64::MAX,
-                ctx.acquired,
-                vk::Fence::null(),
-            ) {
+            // Inject before acquire so an out-of-date probe cannot leave its semaphore signaled.
+            let acquire = if self.probes.hit(Probe::AcquireOutOfDate, self.presented) {
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR)
+            } else {
+                let result = chain.loader.acquire_next_image(
+                    chain.handle,
+                    u64::MAX,
+                    ctx.acquired,
+                    vk::Fence::null(),
+                );
+                if !matches!(result, Ok((_, false))) {
+                    println!("WSI DRIVER acquire result: {result:?}");
+                }
+                result
+            };
+            let (index, mut suboptimal) = match acquire {
                 Ok(value) => value,
                 Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                     self.recreate = true;
@@ -844,6 +857,7 @@ impl Renderer {
                 }
                 Err(error) => return Err(error.into()),
             };
+            suboptimal |= self.probes.hit(Probe::AcquireSuboptimal, self.presented);
             let i = index as usize;
             chain.wait_present(i)?;
             device.reset_command_buffer(ctx.command, vk::CommandBufferResetFlags::empty())?;
@@ -964,30 +978,34 @@ impl Renderer {
                 .swapchains(&chains)
                 .image_indices(&indices)
                 .push_next(&mut fence_info);
-            match chain.loader.queue_present(ctx.present, &info) {
-                Ok(present_suboptimal) => {
-                    chain.pending[i] = true;
-                    self.presented += 1;
-                    self.recreate |= suboptimal || present_suboptimal;
-                    Ok(true)
-                }
-                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    chain.pending[i] = true;
-                    self.recreate = true;
-                    Ok(false)
-                }
-                Err(error) => {
-                    // Surface loss still queues presentation operations. Allocation failure leaves
-                    // synchronization untouched; device loss prevents outstanding work from continuing.
-                    chain.pending[i] = matches!(
-                        error,
-                        vk::Result::ERROR_SURFACE_LOST_KHR
-                            | vk::Result::ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT
-                    );
-                    Err(error.into())
+            let mut present = chain.loader.queue_present(ctx.present, &info);
+            if !matches!(present, Ok(false)) {
+                println!("WSI DRIVER present result: {present:?}");
+            }
+            // Override only successful real presents: semaphore waits and fence are already queued.
+            // Never hide a real driver error or fabricate an unqueued presentation fence.
+            if present.is_ok() {
+                if self.probes.hit(Probe::PresentOutOfDate, self.presented) {
+                    present = Err(vk::Result::ERROR_OUT_OF_DATE_KHR);
+                } else if self.probes.hit(Probe::PresentSuboptimal, self.presented) {
+                    present = Ok(true);
                 }
             }
+            let outcome = PresentOutcome::classify(present);
+            chain.pending[i] = outcome.pending;
+            self.recreate |= suboptimal || outcome.recreate;
+            if let Some(error) = outcome.error {
+                return Err(error.into());
+            }
+            self.presented += u64::from(outcome.presented);
+            Ok(outcome.presented)
         }
+    }
+    pub fn qualification_complete(&self) -> Result<()> {
+        if self.probes.remaining() != 0 {
+            return Err("WSI qualification ended before all four recovery probes ran".into());
+        }
+        Ok(())
     }
 }
 impl Drop for Renderer {

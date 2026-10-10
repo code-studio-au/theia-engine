@@ -1,6 +1,7 @@
 mod gpu;
 mod indirect;
 mod pipeline;
+mod wsi;
 
 use std::{
     error::Error,
@@ -31,6 +32,7 @@ struct Options {
     gpu: Option<String>,
     frames: Option<u64>,
     smoke: bool,
+    wsi_smoke: bool,
     mode: Option<RenderMode>,
     work_items: Option<u32>,
     shader_dir: Option<std::path::PathBuf>,
@@ -78,9 +80,13 @@ impl Options {
                         Some(args.next().ok_or("--shader-dir needs a directory")?.into())
                 }
                 "--smoke-test" => result.smoke = true,
+                "--wsi-smoke-test" => {
+                    result.smoke = true;
+                    result.wsi_smoke = true;
+                }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --shader-dir <directory>  compiled SPIR-V directory\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -221,6 +227,10 @@ impl ApplicationHandler for App {
                     .frames
                     .is_some_and(|limit| self.frames >= limit)
                 {
+                    if let Err(error) = self.renderer.as_ref().unwrap().qualification_complete() {
+                        self.fail(event_loop, error);
+                        return;
+                    }
                     println!("Presented {} frames", self.frames);
                     event_loop.exit();
                 }

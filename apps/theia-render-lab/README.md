@@ -40,6 +40,11 @@ Wayland and Windows execution still require qualification.
   requests minimize for 300 ms, restores/resizes, and exits after 120 frames.
   Indirect mode also cycles inputs 0, 1, 2 every 20 presented frames, twice.
   Window-manager actions are requests; X11 need not report zero size on minimize.
+- `--wsi-smoke-test` adds four labeled one-shot recovery probes to the smoke test:
+  acquire/present out-of-date and suboptimal. Injected acquire failure skips the
+  API call; injected present results follow a successful real present. Driver
+  returns are logged separately. This validates application recovery, not the
+  driver's error-enqueue behavior. See [closeout evidence](../../docs/validation/M0D_CLOSEOUT.md).
 - `--no-validation` explicitly disables the layer. It cannot combine with the smoke
   test. The debug messenger and callback-delivery diagnostic remain active.
 - Close the window or press Escape to exit.
@@ -141,3 +146,5 @@ with a pinned SHA-256 and compiles/validates both task variants, both mesh varia
 fragment, work-generation compute and the preserved headless compute shader. Hosted CI does not execute GPU workloads. Actual target-GPU evidence is
 recorded in [CURRENT_STATUS](../../docs/CURRENT_STATUS.md) and
 [the indirect work qualification record](../../docs/validation/M0D_INDIRECT_WORK.md).
+RenderDoc capture/replay commands and the validation interaction are documented
+in [DEVELOPMENT](../../docs/DEVELOPMENT.md#renderdoc-capture-and-replay).
