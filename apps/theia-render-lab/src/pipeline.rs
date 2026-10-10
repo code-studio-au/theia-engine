@@ -59,8 +59,11 @@ impl Pipeline {
                 | RenderMode::Spatial
                 | RenderMode::Asset
                 | RenderMode::AssetCamera
+                | RenderMode::AssetCull
         );
-        let mesh_file = if mode == RenderMode::AssetCamera {
+        let mesh_file = if mode == RenderMode::AssetCull {
+            "asset.cull.mesh.spv"
+        } else if mode == RenderMode::AssetCamera {
             "asset.camera.mesh.spv"
         } else if mode == RenderMode::Asset {
             "asset.mesh.spv"
@@ -73,7 +76,10 @@ impl Pipeline {
         };
         let task_file = if task_amplification {
             Some(
-                if matches!(mode, RenderMode::Asset | RenderMode::AssetCamera) {
+                if matches!(
+                    mode,
+                    RenderMode::Asset | RenderMode::AssetCamera | RenderMode::AssetCull
+                ) {
                     "asset.task.spv"
                 } else if mode == RenderMode::Spatial {
                     "spatial.task.spv"
@@ -95,8 +101,9 @@ impl Pipeline {
                 mesh: mesh_file,
                 task: task_file,
                 fragment: "triangle.frag.spv",
-                depth: (mode == RenderMode::AssetCamera).then_some(vk::Format::D32_SFLOAT),
-                camera: mode == RenderMode::AssetCamera,
+                depth: matches!(mode, RenderMode::AssetCamera | RenderMode::AssetCull)
+                    .then_some(vk::Format::D32_SFLOAT),
+                camera: matches!(mode, RenderMode::AssetCamera | RenderMode::AssetCull),
             },
         )?;
         println!("Graphics pipeline ready for {mode:?}");

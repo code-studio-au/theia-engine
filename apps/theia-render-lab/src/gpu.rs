@@ -232,8 +232,9 @@ impl Context {
             options.render_mode() == RenderMode::Visibility,
             matches!(
                 options.render_mode(),
-                RenderMode::Asset | RenderMode::AssetCamera
+                RenderMode::Asset | RenderMode::AssetCamera | RenderMode::AssetCull
             ),
+            options.render_mode() == RenderMode::AssetCull,
         )?;
         // SAFETY: Features were queried on the selected device; all queue indices support the intended
         // operations. Create-info backing storage remains live and handles immediately gain RAII ownership.
@@ -316,6 +317,7 @@ impl Context {
         spatial: bool,
         visibility: bool,
         asset: bool,
+        cull: bool,
     ) -> Result<()> {
         let instance = self.instance.as_ref().unwrap();
         let surface = self.surface_loader.as_ref().unwrap();
@@ -419,6 +421,15 @@ impl Context {
                                 && properties.limits.max_storage_buffer_range >= 9728),
                     ),
                     ("dynamicRendering", v13.dynamic_rendering == vk::TRUE),
+                    (
+                        "meshlet cull compute limits",
+                        !cull
+                            || (properties.limits.max_compute_work_group_invocations >= 32
+                                && properties.limits.max_compute_work_group_size[0] >= 32
+                                && properties.limits.max_compute_shared_memory_size >= 8
+                                && properties.limits.max_storage_buffer_range >= 256
+                                && properties.limits.max_push_constants_size >= 64),
+                    ),
                     ("synchronization2", v13.synchronization2 == vk::TRUE),
                     ("timelineSemaphore", v12.timeline_semaphore == vk::TRUE),
                     ("drawIndirectCount", v12.draw_indirect_count == vk::TRUE),
@@ -686,7 +697,7 @@ impl Swapchain {
                 depth: None,
             };
             if let Some(shader_dir) = shader_dir {
-                if mode == RenderMode::AssetCamera {
+                if matches!(mode, RenderMode::AssetCamera | RenderMode::AssetCull) {
                     let instance = ctx.instance.as_ref().unwrap();
                     if !instance
                         .get_physical_device_format_properties(ctx.physical, vk::Format::D32_SFLOAT)
@@ -860,6 +871,7 @@ impl Renderer {
                 | RenderMode::Visibility
                 | RenderMode::Asset
                 | RenderMode::AssetCamera
+                | RenderMode::AssetCull
         ) {
             // SAFETY: The selected physical device belongs to the retained live instance.
             let memory = unsafe {
@@ -906,7 +918,11 @@ impl Renderer {
                 if bytes.len() > limits.max_storage_buffer_range as usize {
                     return Err("Cooked asset exceeds selected GPU storage-buffer range".into());
                 }
-                if renderer.mode == RenderMode::AssetCamera && limits.max_push_constants_size < 64 {
+                if matches!(
+                    renderer.mode,
+                    RenderMode::AssetCamera | RenderMode::AssetCull
+                ) && limits.max_push_constants_size < 64
+                {
                     return Err("Camera mode requires 64 mesh-stage push constant bytes".into());
                 }
             }
@@ -932,7 +948,7 @@ impl Renderer {
                 renderer.ctx.device.as_ref().unwrap(),
                 &memory,
                 renderer.shader_dir.as_ref().unwrap(),
-                renderer.mode == RenderMode::Spatial,
+                renderer.mode,
                 asset.as_deref().map(|bytes| {
                     (
                         bytes,
@@ -999,7 +1015,14 @@ impl Renderer {
             self.work_items
         };
         if self.work.is_some() && self.last_input != Some(input) {
-            if matches!(self.mode, RenderMode::Asset | RenderMode::AssetCamera) {
+            if self.mode == RenderMode::AssetCull {
+                println!(
+                    "GPU frustum qualification view: {input} (0 translated empty, 1 narrow left, 2 full; compute selects meshlet IDs/counts)"
+                );
+            } else if matches!(
+                self.mode,
+                RenderMode::Asset | RenderMode::AssetCamera | RenderMode::AssetCull
+            ) {
                 println!(
                     "Cooked mesh qualification scenario: {input} (0 empty, 1 first meshlet, 2 all; GPU reads asset header/counts; no count readback)"
                 );
@@ -1047,6 +1070,20 @@ impl Renderer {
         let chain = self.chain.as_mut().unwrap();
         let ctx = &self.ctx;
         let device = ctx.device.as_ref().unwrap();
+        let camera_rows = if self.mode == RenderMode::AssetCull {
+            Some(crate::camera::view_rows(
+                chain.extent.width,
+                chain.extent.height,
+                input,
+            )?)
+        } else if self.mode == RenderMode::AssetCamera {
+            Some(crate::camera::rows(
+                chain.extent.width,
+                chain.extent.height,
+            )?)
+        } else {
+            None
+        };
         // SAFETY: A single frame in flight; its fence protects command buffer/acquire semaphore reuse.
         // Image-specific presentation semaphores are reused only after acquire and a presentation-fence
         // wait. Barriers order color writes/presentation and depth reuse after earlier fragment tests.
@@ -1085,7 +1122,7 @@ impl Renderer {
                     .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?;
             if let Some(work) = &self.work {
-                work.generate(ctx.command, input);
+                work.generate(ctx.command, input, camera_rows);
             }
             if let Some(depth) = &chain.depth {
                 let barriers = [vk::ImageMemoryBarrier2::default()
@@ -1198,8 +1235,8 @@ impl Renderer {
                     }],
                 );
                 let commands = ctx.mesh_commands.as_ref().unwrap();
-                if self.mode == RenderMode::AssetCamera {
-                    let rows = crate::camera::rows(chain.extent.width, chain.extent.height)?;
+                if matches!(self.mode, RenderMode::AssetCamera | RenderMode::AssetCull) {
+                    let rows = camera_rows.unwrap();
                     let mut bytes = [0u8; 64];
                     for (i, value) in rows.iter().flatten().enumerate() {
                         bytes[i * 4..i * 4 + 4].copy_from_slice(&value.to_ne_bytes());

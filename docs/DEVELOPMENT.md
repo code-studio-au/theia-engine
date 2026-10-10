@@ -260,3 +260,18 @@ The source fixture tests shared-mesh static nodes, nested transforms, reflection
 rotation and differing height. This converter rejects assigned materials, other
 attributes, skin/animation, extensions and authored cameras. Full workflow and
 source/buffer/geometry bounds: [normalizer contract](../tools/theia-gltf-import/README.md).
+
+### M4 GPU meshlet frustum selection
+
+Add `--frustum-test` to `--asset`/`--cell`. `--work-items 0|1|2` selects an
+empty translated camera, narrow left camera (20-degree FOV), or full camera;
+smoke mode cycles these views. This mode already includes perspective/depth.
+Compute intersects outside-plane masks across each meshlet's referenced vertices,
+rejects only a shared outside plane, compacts candidates and generates task work.
+Candidates can still rasterize nothing; this is conservative, with no HZB/LOD.
+
+For capture use `THEIA_CAPTURE_CULL=1` and expected page/arena settings as before.
+The helper verifies GPU IDs/mask/counts against `--frustum-reference <mesh-file>
+<x y width height view>`, then checks perspective pixels/depth. Full terrain's
+observed masks are 0, 0x5f and 0xff at 960x540; candidate counts 0, 6, 8. Cell
+frame 30 narrow capture also checks full terrain at arena offset 5528.

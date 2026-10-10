@@ -32,7 +32,9 @@ def main():
                ('asset.slang', 'assetCompute', 'compute', 'asset.compute.spv'),
                ('asset.slang', 'assetTask', 'amplification', 'asset.task.spv'),
                ('asset.slang', 'assetMesh', 'mesh', 'asset.mesh.spv'),
-               ('asset_camera.slang', 'assetCameraMesh', 'mesh', 'asset.camera.mesh.spv')]
+               ('asset_camera.slang', 'assetCameraMesh', 'mesh', 'asset.camera.mesh.spv'),
+               ('asset_cull.slang', 'assetCullCompute', 'compute', 'asset.cull.compute.spv'),
+               ('asset_cull.slang', 'assetCulledMesh', 'mesh', 'asset.cull.mesh.spv')]
     try:
         subprocess.run([args.slangc, '-version'], check=True)
         with tempfile.TemporaryDirectory(dir=args.output_dir) as temporary:

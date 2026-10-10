@@ -4,6 +4,28 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M4 GPU meshlet frustum selection — independently executed
+
+Optional `--frustum-test` computes conservative clip-plane candidates from GPU
+resident meshlet vertices, compacts IDs and writes indirect counts. Task/mesh
+stages consume those IDs with perspective/depth rendering; no host count/list
+readback or per-meshlet draws. A 256-byte work ABI holds command/count, candidate
+count/mask and up to 32 IDs. Queried compute limits cover 32 lanes/eight shared
+bytes/64 push bytes; Slang compile/SPIR-V validation passes (20 render outputs).
+
+RX 7900 XTX cell WSI passes five page replacements, 120 frames/ten generations,
+zero validation diagnostics. Three full-terrain captures match CPU candidate
+IDs/counts/masks for empty/narrow/full views: 0 / 6 / 8 candidates, masks 0 / 0x5f /
+0xff, with 81 perspective color/depth samples each. An additional cell capture
+checks narrow-view IDs and nonzero arena offset after page replacement. Thirteen
+renderer tests, fmt and denied-warning Clippy pass; nine prior rendering paths
+and missing cull mesh construction failure pass zero-diagnostic GPU regression.
+
+This is conservative meshlet selection, not exact primitive visibility, HZB,
+projected-error LOD, cell-demand feedback or M1/M2/M3 scene integration. Current
+forward diagnostic color and independent M3 visibility/material test remain
+separate; connecting cooked geometry to visibility/material resolve is next.
+
 ## M4 bounded static glTF geometry — independently executed
 
 Offline Rust normalizer evaluates pinned `gltf` 1.4.1 (verified MIT/Apache-2.0)

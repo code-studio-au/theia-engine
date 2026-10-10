@@ -83,7 +83,8 @@ preserves exact boundaries and passes independent sampled-error checks. A bounde
 fixed geometry arena now qualifies aligned ranges, retirement/reuse and physical
 capacity rejection. A fixed perspective/depth camera now passes CPU/replay checks.
 Position-only static glTF node transforms/reflections now feed the cooker/viewer
-with qualified source/tool provenance. Qualify GPU meshlet frustum selection and
-broader static scene/material contracts next. General
+with qualified source/tool provenance. Conservative GPU meshlet frustum selection
+now feeds indirect task/mesh work and passes CPU/replay checks. Connect cooked
+geometry/camera selection to visibility-buffer/material resolve next. General
 LOD/hierarchy errors, broader page dependencies/readers and virtual texture
 residency remain open. Retain the current viewer/fixture checks; M5 GI stays deferred.

@@ -1,5 +1,5 @@
 //! One device-local work buffer, generated and consumed without host readback.
-use crate::{Result, pipeline::ShaderModule};
+use crate::{RenderMode, Result, pipeline::ShaderModule};
 use ash::vk;
 use std::path::Path;
 const BUFFER_BYTES: vk::DeviceSize = 64;
@@ -17,20 +17,31 @@ pub struct IndirectWork {
     compute: vk::Pipeline,
     bytes: vk::DeviceSize,
     asset: Option<crate::asset::Buffer>,
+    cull: bool,
 }
 impl IndirectWork {
     pub fn new(
         device: &ash::Device,
         memory_properties: &vk::PhysicalDeviceMemoryProperties,
         shader_dir: &Path,
-        spatial: bool,
+        mode: RenderMode,
         asset: Option<(&[u8], Option<&crate::asset::GeometryArena>)>,
         queue: (u32, vk::Queue, u64),
     ) -> Result<Self> {
-        let bytes = if spatial { 9728 } else { BUFFER_BYTES };
+        let spatial = mode == RenderMode::Spatial;
+        let cull = mode == RenderMode::AssetCull;
+        let bytes = if spatial {
+            9728
+        } else if cull {
+            256
+        } else {
+            BUFFER_BYTES
+        };
         let shader = ShaderModule::load(
             device,
-            &shader_dir.join(if asset.is_some() {
+            &shader_dir.join(if cull {
+                "asset.cull.compute.spv"
+            } else if asset.is_some() {
                 "asset.compute.spv"
             } else if spatial {
                 "spatial.compute.spv"
@@ -49,6 +60,7 @@ impl IndirectWork {
             compute: vk::Pipeline::null(),
             bytes,
             asset: None,
+            cull,
         };
         // SAFETY: All create-info backing arrays remain live through calls. Every successful handle
         // immediately gains ownership in work; Drop handles partial initialization in dependency order.
@@ -87,7 +99,7 @@ impl IndirectWork {
                     .stage_flags(
                         vk::ShaderStageFlags::COMPUTE
                             | vk::ShaderStageFlags::TASK_EXT
-                            | if spatial {
+                            | if spatial || cull {
                                 vk::ShaderStageFlags::MESH_EXT
                             } else {
                                 vk::ShaderStageFlags::empty()
@@ -162,7 +174,7 @@ impl IndirectWork {
             let push = [vk::PushConstantRange::default()
                 .stage_flags(vk::ShaderStageFlags::COMPUTE)
                 .offset(0)
-                .size(4)];
+                .size(if cull { 64 } else { 4 })];
             work.compute_layout = device.create_pipeline_layout(
                 &vk::PipelineLayoutCreateInfo::default()
                     .set_layouts(&layouts)
@@ -191,7 +203,11 @@ impl IndirectWork {
                 }
             }
         }
-        if asset.is_some() {
+        if cull {
+            println!(
+                "GPU meshlet frustum work initialized: 256-byte device-local command/count; visible count at 36, mask at 40, IDs at 64; no readback"
+            );
+        } else if asset.is_some() {
             println!(
                 "GPU cooked-mesh work initialized: 64-byte device-local command/count; meshlet count at 36; immutable geometry at binding 1; no count readback"
             );
@@ -206,7 +222,12 @@ impl IndirectWork {
         }
         Ok(work)
     }
-    pub fn generate(&self, command: vk::CommandBuffer, requested_items: u32) {
+    pub fn generate(
+        &self,
+        command: vk::CommandBuffer,
+        requested_items: u32,
+        rows: Option<[[f32; 4]; 4]>,
+    ) {
         // SAFETY: Caller has begun recording a graphics+compute command buffer and waited its frame
         // fence. Work handles/descriptor set remain live; explicit barriers order reuse, compute writes,
         // indirect command/count reads and task descriptor reads. Push constants are copied by Vulkan.
@@ -244,12 +265,28 @@ impl IndirectWork {
                 &[self.set],
                 &[],
             );
+            let mut camera_bytes = [0u8; 64];
+            if self.cull {
+                for (i, value) in rows
+                    .expect("Culling requires camera rows")
+                    .iter()
+                    .flatten()
+                    .enumerate()
+                {
+                    camera_bytes[i * 4..i * 4 + 4].copy_from_slice(&value.to_ne_bytes());
+                }
+            }
+            let scenario_bytes = requested_items.to_ne_bytes();
             self.device.cmd_push_constants(
                 command,
                 self.compute_layout,
                 vk::ShaderStageFlags::COMPUTE,
                 0,
-                &requested_items.to_ne_bytes(),
+                if self.cull {
+                    &camera_bytes
+                } else {
+                    &scenario_bytes
+                },
             );
             self.device.cmd_dispatch(command, 1, 1, 1);
             let publish = [vk::BufferMemoryBarrier2::default()

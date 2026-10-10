@@ -173,3 +173,22 @@ meshlet triangle-multiset checks apply to the normalized geometry. The normalize
 has no runtime dependency and rejects unsupported source features instead of
 silently discarding them. Bounds, file/geometry caps and supported containers:
 [offline tool contract](../tools/theia-gltf-import/README.md).
+
+### GPU meshlet frustum work ABI
+
+`--frustum-test` uses the existing immutable page and fixed arena with separate
+256-byte mutable work storage. Words at bytes 0/4/8 are task group XYZ, byte 12
+is indirect draw count, byte 36 candidate count, byte 40 candidate mask; up to
+32 compacted meshlet IDs begin at byte 64. Compute uses 32 lanes/eight shared
+bytes and the same 64-byte camera rows as mesh projection. It rejects a meshlet
+only when all its referenced vertices lie outside one common homogeneous clip
+plane. This is conservative; a surviving candidate may still rasterize nothing.
+No cooked bounds/hierarchy, HZB or LOD error selection is implied.
+
+Within-group synchronization publishes shared count/mask and ID stores; scoped
+Sync2 publishes work to indirect/task/mesh reads. Mesh group index addresses the
+compacted ID list, not directly the page's meshlet array. Counts/lists are never
+read by the renderer host. CPU/reference/RenderDoc readbacks are diagnostic only.
+Frame fence and upload/arena lease rules remain unchanged across page replacement.
+This extends static meshlet selection; M2's spatial table and M3's independent
+visibility/material fixture are not yet a unified scene pipeline.

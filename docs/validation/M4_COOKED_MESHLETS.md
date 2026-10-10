@@ -341,3 +341,52 @@ page-demand/frustum selection or complete static scene database. Names/indices
 are source provenance, not durable world IDs. Arbitrary third-party exports and
 Windows runtime remain unqualified. M4 remains open. Workflow: DEVELOPMENT and
 [tool contract](../../tools/theia-gltf-import/README.md).
+
+## Subsequent GPU meshlet frustum qualification — 2026-10-10
+
+New `--frustum-test` extends the cooked page/camera reference with GPU-resident
+candidate selection. One 32-lane compute group intersects homogeneous outside-
+plane masks across every referenced vertex of each meshlet, atomically compacts
+candidate IDs/count/mask, and writes the indirect task command/count. A shared
+outside plane rejects the meshlet; surviving hulls may still rasterize nothing.
+Task emits the candidate count, mesh stages decode the compacted ID rather than
+group index, and existing perspective/depth drawing consumes selected geometry.
+No runtime host list/count readback, CPU per-object sort or individual draw calls.
+
+Mutable work is 256 bytes; command/count at 0..16, candidate count at 36, mask at
+40, 32 IDs at 64..192. Both compute and mesh use identical 64-byte camera rows.
+Resource-scoped reuse/publish barriers and within-group synchronization cover
+command/count, shared state and ID writes. Actual SPIR-V has two Workgroup uint
+variables (eight shared bytes). Device limits query 32 compute lanes, shared size,
+storage/push ranges plus existing mesh/task profile. Slang's two additional stages
+compile/validate; all **20 render outputs** publish. No language fallback.
+
+CPU analytic test verifies wholly outside rejection and crossing-hull retention.
+Thirteen renderer tests, fmt and denied-warning Clippy pass. RX 7900 XTX curved
+terrain cell WSI presents 120 frames/ten generations, replaces five pages, and
+reports **zero validation warnings/errors including teardown**. Nine prior paths
+(indirect/clear/mesh/task/spatial/visibility/asset/camera/cell) pass 120-frame GPU
+regressions. Missing cull mesh after work/arena/upload/depth construction exits 1
+and releases resources with zero diagnostics.
+
+Separate full-terrain replay captures match independently decoded CPU candidate
+IDs/masks/counts and 81 perspective color/depth samples each at 960x540:
+
+| View | CPU/GPU candidate IDs | Mask | Covered sample points |
+|---|---|---:|---:|
+| Translated empty camera | [] | 0 | 0 |
+| Narrow left / 20-degree FOV | [0,1,2,3,4,6] | 0x5f | 53 |
+| Full / 60-degree FOV | [0,1,2,3,4,5,6,7] | 0xff | 16 |
+
+Atomic compaction order is not a persistent ordering contract; replay compares
+sorted IDs and exact masks/counts. An additional cell/frame-30/narrow capture
+checks the same IDs/pixels after page publication, with immutable full-terrain
+bytes verified at **arena offset 5528**. Every capture target presents 180 frames.
+Captures disable validation and remain separate from standalone validation runs.
+
+Artifacts: `build/qualification/m4-frustum-*` shaders/assembly/WSI/regression/
+failure logs, `m4-frustum-renderdoc-{0,1,2}/report.json` and
+`m4-frustum-cell-renderdoc/report.json` with captures/PNGs. No new hosted CI result,
+push or benchmark is claimed; changes remain local. General HZB, spatial-cell
+integration, projected-error LOD, feedback/demand streaming, material/visibility
+integration and multi-frame readers remain open. M4 remains incomplete.

@@ -44,7 +44,8 @@ def qualify(report):
     visibility = os.environ.get('THEIA_CAPTURE_VISIBILITY') == '1'
     asset_path = os.environ.get('THEIA_CAPTURE_ASSET')
     cell_path = os.environ.get('THEIA_CAPTURE_CELL')
-    camera = os.environ.get('THEIA_CAPTURE_CAMERA') == '1'
+    cull = os.environ.get('THEIA_CAPTURE_CULL') == '1'
+    camera = os.environ.get('THEIA_CAPTURE_CAMERA') == '1' or cull
     if camera and not asset_path:
         raise RuntimeError('Camera capture requires expected mesh page')
     if cell_path and not asset_path:
@@ -55,7 +56,9 @@ def qualify(report):
     if scenario not in (0, 1, 2):
         raise RuntimeError('Capture scenario must be 0, 1 or 2')
     arguments = '--frames 180 --gpu 7900 --no-validation'
-    if camera:
+    if cull:
+        arguments += ' --frustum-test'
+    elif camera:
         arguments += ' --camera-test'
     if spatial:
         arguments += f' --spatial-test --work-items {scenario}'
@@ -119,6 +122,12 @@ def qualify(report):
         result, controller = cap.OpenCapture(rd.ReplayOptions(), None)
         require_success(result)
         actions = list(walk(controller.GetRootActions()))
+        cull_reference = None
+        if cull:
+            present_action = next(action for action in actions if action.flags & rd.ActionFlags.Present)
+            color = next(texture for texture in controller.GetTextures() if texture.resourceId == present_action.copyDestination)
+            cull_reference = json.loads(subprocess.check_output([str(executable), '--frustum-reference', asset_path,
+                                        '0','0',str(color.width),str(color.height),str(scenario)],cwd=root))
         report['actions'] = [
             {'event': action.eventId, 'name': action.GetName(controller.GetStructuredFile()),
              'flags': str(action.flags)} for action in actions]
@@ -130,11 +139,12 @@ def qualify(report):
         mesh = [action for action in actions if action.flags & rd.ActionFlags.MeshDispatch
                 and action.flags & rd.ActionFlags.Indirect
                 and not action.flags & rd.ActionFlags.MultiAction]
-        if len(mesh) != (0 if (spatial or visibility or asset_path) and scenario == 0 else 1):
+        expected_dispatches = int(bool(cull_reference['ids'])) if cull else (0 if (spatial or visibility or asset_path) and scenario == 0 else 1)
+        if len(mesh) != expected_dispatches:
             raise RuntimeError('Expected one indirect task dispatch')
         event = mesh[0] if mesh else next(action for action in actions if action.flags & rd.ActionFlags.Dispatch)
         controller.SetFrameEvent(event.eventId, True)
-        size = 9728 if spatial else 64
+        size = 9728 if spatial else 256 if cull else 64
         work = [buffer for buffer in controller.GetBuffers() if buffer.length == size]
         if len(work) != 1:
             raise RuntimeError('Expected one qualification work buffer')
@@ -171,7 +181,15 @@ def qualify(report):
         elif asset_path:
             source = Path(asset_path).read_bytes()
             meshlets = struct.unpack_from('<I', source, 20)[0]
-            count = 0 if scenario == 0 else min(meshlets,1) if scenario == 1 else meshlets
+            count = len(cull_reference['ids']) if cull else 0 if scenario == 0 else min(meshlets,1) if scenario == 1 else meshlets
+            if cull:
+                actual_count, mask = struct.unpack_from('<2I',data,36)
+                if actual_count > 32:
+                    raise RuntimeError('GPU meshlet visibility exceeds qualification capacity')
+                visible = list(struct.unpack_from(f'<{actual_count}I',data,64))
+                if sorted(visible) != cull_reference['ids'] or mask != sum(1<<id for id in cull_reference['ids']):
+                    raise RuntimeError('GPU meshlet frustum IDs/mask differ from CPU oracle')
+                report.update(visible_meshlets=visible, visibility_mask=mask, frustum_verified=True)
             draws = int(count != 0)
             if struct.unpack_from('<I', data, 36)[0] != count or command != (draws,1,1,draws):
                 raise RuntimeError('Cooked mesh indirect count differs from asset header/scenario')
@@ -201,7 +219,7 @@ def qualify(report):
             verify_surface(controller, executable, root, present.copyDestination, scenario, report)
         if asset_path:
             if camera:
-                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report)
+                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull)
             else:
                 verify_asset(controller, present.copyDestination, source, count, report)
         save = rd.TextureSave()
@@ -318,7 +336,7 @@ def verify_asset(controller, color_id, source, count, report):
     report.update(asset_surface_samples=samples, asset_surface_verified=True, selected_triangles=len(geometry))
 
 
-def verify_camera(controller, executable, root, color_id, asset_path, scenario, report):
+def verify_camera(controller, executable, root, color_id, asset_path, scenario, report, cull=False):
     textures = controller.GetTextures()
     color = next(texture for texture in textures if texture.resourceId == color_id)
     depths = [texture for texture in textures if texture.format.compType == rd.CompType.Depth
@@ -336,7 +354,7 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
     for y in range(1,10):
         for x in range(1,10):
             pixel = (int(color.width*x/10), int(color.height*y/10))
-            expected = json.loads(subprocess.check_output([str(executable), '--camera-reference', asset_path,
+            expected = json.loads(subprocess.check_output([str(executable), '--frustum-reference' if cull else '--camera-reference', asset_path,
                                   str(pixel[0]), str(pixel[1]), str(color.width), str(color.height), str(scenario)], cwd=root))
             offset = pixel[1]*color.width+pixel[0]
             actual_color = list(rgb[offset*4:offset*4+3])
