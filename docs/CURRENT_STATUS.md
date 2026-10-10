@@ -4,6 +4,29 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M4 perspective/depth reference — independently executed
+
+Optional `--camera-test` transforms cooked meshlets with a fixed Z-up perspective
+camera, aspect-dependent rows and a D32 LESS depth target. Cell/page residency,
+GPU indirect counts and existing XY viewer stay intact. Slang camera mesh stage
+compiles/validates (18 render outputs total); three camera tests independently
+check Vulkan near/far depth, aspect/Y direction and analytic center-ray occlusion.
+All twelve renderer tests, formatting and denied-warning Clippy pass.
+
+RX 7900 XTX terrain/cell camera WSI smoke passes five replacements, 120 frames,
+ten swapchain generations and zero validation diagnostics. Four separate captures
+verify uploaded page bytes/counts and 81 perspective color/depth samples each for
+coarse terrain, full terrain, empty work and near-before-far occlusion. CPU oracle
+uses perspective-correct world attributes and nearest depth; replay tolerance is
+2e-6 depth / two RGB byte levels. The fixture deliberately puts farther triangles
+after nearer ones, with ordering verified by the offline cooker.
+All eight prior render paths and the new occlusion camera smoke pass regression;
+missing camera mesh after arena/upload/depth creation cleans up with zero diagnostics.
+
+This qualifies a fixed camera/raw-position meshlet reference, not authored glTF
+scene/node transforms, general clipped-triangle CPU rasterization, materials,
+camera controls or M1/M2/M3 scene integration. M4 remains open.
+
 ## M4 fixed geometry arena — independently executed
 
 Cell streaming now allocates one fixed device-local geometry buffer and leases

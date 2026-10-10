@@ -28,7 +28,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--library', type=Path, required=True)
     parser.add_argument('--source-archive', type=Path, required=True)
-    parser.add_argument('--fixture', choices=['grid16','triangle','quad','terrain16'], default='grid16')
+    parser.add_argument('--fixture', choices=['grid16','triangle','quad','terrain16','occlusion'], default='grid16')
     parser.add_argument('--simplify-ratio', type=float, help='Bounded heightfield LOD target triangle ratio')
     parser.add_argument('--simplify-error', type=float, default=.02, help='Native absolute position error limit')
     parser.add_argument('--max-height-error', type=float, default=.03, help='Independent sampled vertical error limit')
@@ -65,6 +65,9 @@ def main():
         indices = [0,1,2]
     if args.fixture == 'terrain16':
         positions = [(x/16*1.6-.8,y/16*1.6-.8,.5+.12*math.sin(math.pi*x/16)*math.sin(2*math.pi*y/16)) for y in range(17) for x in range(17)]
+    if args.fixture == 'occlusion':
+        positions = [(x,y,z) for z in (.65,.35) for x,y in ((-.6,-.6),(.6,-.6),(.6,.6),(-.6,.6))]
+        indices = [0,1,2,0,2,3,4,5,6,4,6,7]
     source = struct.pack(f'<{len(positions)*3}f', *(v for p in positions for v in p)) + struct.pack(f'<{len(indices)}I', *indices)
     vertices = (c.c_float * (len(positions)*3))(*(v for p in positions for v in p))
     lod = None
@@ -101,11 +104,21 @@ def main():
     for m in meshlets[:count]:
         library.meshopt_optimizeMeshlet(c.cast(c.byref(refs,m.vertex_offset*4),c.POINTER(c.c_uint)),
             c.cast(c.byref(triangles,m.triangle_offset),c.POINTER(c.c_ubyte)),m.triangle_count,m.vertex_count)
+        if args.fixture == 'occlusion':
+            if count != 1:
+                raise RuntimeError('Occlusion order qualification requires one meshlet')
+            ordered = [tuple(triangles[m.triangle_offset+i*3+axis] for axis in range(3)) for i in range(m.triangle_count)]
+            ordered.sort(key=lambda t: positions[refs[m.vertex_offset+t[0]]][2],reverse=True)
+            for i, triangle in enumerate(ordered):
+                for axis in range(3):
+                    triangles[m.triangle_offset+i*3+axis] = triangle[axis]
         for triangle in range(m.triangle_count):
             reconstructed.append(tuple(refs[m.vertex_offset + triangles[m.triangle_offset+triangle*3+axis]] for axis in range(3)))
     expected_triangles = [tuple(indices[i:i+3]) for i in range(0,len(indices),3)]
     if Counter(map(canonical,reconstructed)) != Counter(map(canonical,expected_triangles)):
         raise RuntimeError('Meshlet construction changed coverage or winding')
+    if args.fixture == 'occlusion' and [round(positions[t[0]][2],2) for t in reconstructed] != [.65,.65,.35,.35]:
+        raise RuntimeError('Occlusion qualification requires near triangles before far triangles')
     used_refs = max(m.vertex_offset+m.vertex_count for m in meshlets[:count])
     used_triangles = max(m.triangle_offset+m.triangle_count*3 for m in meshlets[:count])
     metadata = {
@@ -120,6 +133,8 @@ def main():
     }
     if args.fixture == 'quad':
         metadata['fallback_for_source_sha256'] = hashlib.sha256(grid_source).hexdigest()
+    if args.fixture == 'occlusion':
+        metadata['qualification_triangle_order'] = 'near-z0.65-before-far-z0.35'
     if lod is not None:
         metadata['fallback_for_source_sha256'] = original_source_digest
         metadata['producer'] = 'meshoptimizer-1.3/simplify+buildMeshlets+optimizeMeshlet'

@@ -244,3 +244,56 @@ upload, descriptor publication and safe reuse on one frame/queue. GPU demand/
 allocation queues, multi-frame readers, diverse arena classes, staging reuse,
 authored geometry/cameras, general hierarchy/LOD/seams and virtual textures remain
 open. No throughput/latency or cross-platform qualification is claimed; M4 stays open.
+
+## Subsequent perspective/depth qualification — 2026-10-10
+
+New optional `--camera-test` for asset/cell paths transforms immutable meshlets
+through a fixed Z-up RH perspective rig. Aspect follows swapchain extent; explicit
+Vulkan 0..1 depth/Y direction and four float4 push rows are part of the reference
+ABI. D32 depth attachment/LESS state and per-generation image lifetime are active.
+The GPU still generates indirect counts and decodes geometry; no count readback,
+conventional vertex/index buffers, runtime native dependency or CPU object draws.
+
+Slang camera mesh output passes Vulkan 1.3 SPIR-V validation; all 18 render outputs
+publish successfully. The earlier resolve compiler profile warning remains; no
+new language fallback is used. Three independent CPU tests verify target/near/far
+projection (f32 near-plane tolerance 4e-6), aspect/Y direction and center-ray
+occlusion with perspective-correct attributes. Twelve renderer tests, fmt and
+denied-warning Clippy pass. Runtime checks D32 attachment support and 64-byte
+mesh push capacity; pipeline/image ownership handles creation failures.
+
+RX 7900 XTX terrain/cell camera WSI smoke: five page replacements, 120 frames,
+ten generations, **zero warnings/errors including teardown**. The near/far camera
+fixture and all eight prior rendering paths pass 120-frame regression smokes
+with zero diagnostics. Missing camera mesh after geometry arena/upload and D32
+image creation exits 1, releasing resources without diagnostics.
+
+Separate RenderDoc capture/replay checks full selected GPU bytes, meshlet/command
+counts and 81 perspective color/depth samples each against CPU reconstruction:
+
+| Capture | Selected meshlets | Covered sample points | Depth/color checks |
+|---|---:|---:|---:|
+| Curved coarse terrain / frame 10 | 2 | 16 | 81 |
+| Curved full terrain / frame 30 | 8 | 16 | 81 |
+| Empty full-terrain input | 0 | 0 | 81 |
+| Near-before-far occlusion | 1 | 14 | 81 |
+
+Replay uses absolute depth tolerance 2e-6 and RGB tolerance two byte levels.
+The depth fixture is 884 encoded bytes/eight vertices/four triangles/one meshlet,
+ID `f68a89311dff920a430fdb9752219c4996a8a734e8dd9b6d0d974f7f2d71bfff`.
+The cooker deliberately orders z=0.65 triangles before z=0.35 triangles after
+native optimization, and verifies that order and the complete triangle multiset.
+Thus later far geometry must fail depth in the overlap. This diagnostic ordering
+is recorded in provenance and is not a generic optimization policy.
+
+Artifacts: `build/qualification/m4-camera-*` shader/cooker/WSI/regression/failure
+logs and `m4-camera-renderdoc-{lod,full,empty,occlusion}/report.json` with captures/
+PNGs. Each capture target presents 180 frames. Standalone validation and captures
+remain separate. CI recipe now includes the occlusion cook, but no hosted result
+or push is claimed. Changes are local.
+
+Limits: fixed camera, raw position color, one frame/queue; no controls, authored
+node transforms, material/UV import, M1/M2/M3 integration or performance claim.
+CPU oracle handles positive-w near/far-unclipped triangles only and rejects other
+cases; ordinary GPU clipping is active but broader clipping is unqualified.
+The first 2D viewer's earlier absence of depth remains historical. M4 stays open.

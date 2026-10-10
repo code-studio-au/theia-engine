@@ -60,6 +60,7 @@ jobs:
           python3 -m unittest discover -s tools -p test_height_lod.py
           python3 tools/cook_meshlet_fixture.py --fixture terrain16 --library "$RUNNER_TEMP/meshopt-build/libmeshoptimizer.so" --source-archive "$RUNNER_TEMP/meshoptimizer.tar.gz"
           python3 tools/cook_meshlet_fixture.py --fixture terrain16 --simplify-ratio .25 --library "$RUNNER_TEMP/meshopt-build/libmeshoptimizer.so" --source-archive "$RUNNER_TEMP/meshoptimizer.tar.gz"
+          python3 tools/cook_meshlet_fixture.py --fixture occlusion --library "$RUNNER_TEMP/meshopt-build/libmeshoptimizer.so" --source-archive "$RUNNER_TEMP/meshoptimizer.tar.gz"
           python3 - <<'PY'
           import json, subprocess, sys
           full = json.load(open('build/assets/terrain16-report.json'))['path']

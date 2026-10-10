@@ -2,15 +2,15 @@
 use crate::{Result, indirect::IndirectWork, pipeline::Pipeline};
 use ash::vk;
 use std::path::Path;
-struct Image {
+pub(super) struct Image {
     device: ash::Device,
-    handle: vk::Image,
+    pub(super) handle: vk::Image,
     memory: vk::DeviceMemory,
-    view: vk::ImageView,
+    pub(super) view: vk::ImageView,
     aspect: vk::ImageAspectFlags,
 }
 impl Image {
-    fn new(
+    pub(super) fn new(
         device: &ash::Device,
         memory: &vk::PhysicalDeviceMemoryProperties,
         extent: vk::Extent2D,
@@ -71,7 +71,7 @@ impl Image {
         }
         Ok(image)
     }
-    fn range(&self) -> vk::ImageSubresourceRange {
+    pub(super) fn range(&self) -> vk::ImageSubresourceRange {
         vk::ImageSubresourceRange::default()
             .aspect_mask(self.aspect)
             .level_count(1)

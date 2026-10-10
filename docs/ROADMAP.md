@@ -81,6 +81,7 @@ implemented/tested, with dedicated upload fences, single-frame retirement and
 actual dedicated-allocation budget pressure. Bounded offline heightfield LOD now
 preserves exact boundaries and passes independent sampled-error checks. A bounded
 fixed geometry arena now qualifies aligned ranges, retirement/reuse and physical
-capacity rejection. Qualify authored geometry/camera contracts next. General
+capacity rejection. A fixed perspective/depth camera now passes CPU/replay checks.
+Qualify authored glTF geometry/node transforms and scene contracts next. General
 LOD/hierarchy errors, broader page dependencies/readers and virtual texture
 residency remain open. Retain the current viewer/fixture checks; M5 GI stays deferred.

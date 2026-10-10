@@ -230,7 +230,10 @@ impl Context {
             options.gpu.as_deref(),
             options.render_mode() == RenderMode::Spatial,
             options.render_mode() == RenderMode::Visibility,
-            options.render_mode() == RenderMode::Asset,
+            matches!(
+                options.render_mode(),
+                RenderMode::Asset | RenderMode::AssetCamera
+            ),
         )?;
         // SAFETY: Features were queried on the selected device; all queue indices support the intended
         // operations. Create-info backing storage remains live and handles immediately gain RAII ownership.
@@ -570,6 +573,7 @@ struct Swapchain {
     extent: vk::Extent2D,
     pipeline: Option<Pipeline>,
     visibility: Option<crate::visibility::Target>,
+    depth: Option<crate::visibility::Image>,
 }
 fn choose_extent(
     capabilities: &vk::SurfaceCapabilitiesKHR,
@@ -679,8 +683,28 @@ impl Swapchain {
                 extent,
                 pipeline: None,
                 visibility: None,
+                depth: None,
             };
             if let Some(shader_dir) = shader_dir {
+                if mode == RenderMode::AssetCamera {
+                    let instance = ctx.instance.as_ref().unwrap();
+                    if !instance
+                        .get_physical_device_format_properties(ctx.physical, vk::Format::D32_SFLOAT)
+                        .optimal_tiling_features
+                        .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
+                    {
+                        return Err("Camera mode requires D32 depth attachment support".into());
+                    }
+                    let memory = instance.get_physical_device_memory_properties(ctx.physical);
+                    chain.depth = Some(crate::visibility::Image::new(
+                        device,
+                        &memory,
+                        extent,
+                        vk::Format::D32_SFLOAT,
+                        vk::ImageAspectFlags::DEPTH,
+                        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+                    )?);
+                }
                 if mode == RenderMode::Visibility {
                     let memory = ctx
                         .instance
@@ -831,7 +855,11 @@ impl Renderer {
         };
         if matches!(
             renderer.mode,
-            RenderMode::Indirect | RenderMode::Spatial | RenderMode::Visibility | RenderMode::Asset
+            RenderMode::Indirect
+                | RenderMode::Spatial
+                | RenderMode::Visibility
+                | RenderMode::Asset
+                | RenderMode::AssetCamera
         ) {
             // SAFETY: The selected physical device belongs to the retained live instance.
             let memory = unsafe {
@@ -866,7 +894,7 @@ impl Renderer {
                 .or(cell_asset);
             if let Some(bytes) = &asset {
                 // SAFETY: Selected physical device belongs to the retained live instance.
-                let limit = unsafe {
+                let limits = unsafe {
                     renderer
                         .ctx
                         .instance
@@ -874,10 +902,12 @@ impl Renderer {
                         .unwrap()
                         .get_physical_device_properties(renderer.ctx.physical)
                         .limits
-                        .max_storage_buffer_range
                 };
-                if bytes.len() > limit as usize {
+                if bytes.len() > limits.max_storage_buffer_range as usize {
                     return Err("Cooked asset exceeds selected GPU storage-buffer range".into());
+                }
+                if renderer.mode == RenderMode::AssetCamera && limits.max_push_constants_size < 64 {
+                    return Err("Camera mode requires 64 mesh-stage push constant bytes".into());
                 }
             }
             if let Some(stream) = &mut renderer.stream {
@@ -969,7 +999,7 @@ impl Renderer {
             self.work_items
         };
         if self.work.is_some() && self.last_input != Some(input) {
-            if self.mode == RenderMode::Asset {
+            if matches!(self.mode, RenderMode::Asset | RenderMode::AssetCamera) {
                 println!(
                     "Cooked mesh qualification scenario: {input} (0 empty, 1 first meshlet, 2 all; GPU reads asset header/counts; no count readback)"
                 );
@@ -1019,7 +1049,8 @@ impl Renderer {
         let device = ctx.device.as_ref().unwrap();
         // SAFETY: A single frame in flight; its fence protects command buffer/acquire semaphore reuse.
         // Image-specific presentation semaphores are reused only after acquire and a presentation-fence
-        // wait. Barriers order color writes and the present transition. Swapchain owns all referenced views.
+        // wait. Barriers order color writes/presentation and depth reuse after earlier fragment tests.
+        // Camera push constants match the qualified 64-byte mesh layout. Swapchain owns all referenced views.
         unsafe {
             // Inject before acquire so an out-of-date probe cannot leave its semaphore signaled.
             let acquire = if self.probes.hit(Probe::AcquireOutOfDate, self.presented) {
@@ -1056,6 +1087,35 @@ impl Renderer {
             if let Some(work) = &self.work {
                 work.generate(ctx.command, input);
             }
+            if let Some(depth) = &chain.depth {
+                let barriers = [vk::ImageMemoryBarrier2::default()
+                    .src_stage_mask(
+                        vk::PipelineStageFlags2::EARLY_FRAGMENT_TESTS
+                            | vk::PipelineStageFlags2::LATE_FRAGMENT_TESTS,
+                    )
+                    .src_access_mask(
+                        vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_READ
+                            | vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                    )
+                    .dst_stage_mask(
+                        vk::PipelineStageFlags2::EARLY_FRAGMENT_TESTS
+                            | vk::PipelineStageFlags2::LATE_FRAGMENT_TESTS,
+                    )
+                    .dst_access_mask(
+                        vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_READ
+                            | vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                    )
+                    .old_layout(vk::ImageLayout::UNDEFINED)
+                    .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .image(depth.handle)
+                    .subresource_range(depth.range())];
+                device.cmd_pipeline_barrier2(
+                    ctx.command,
+                    &vk::DependencyInfo::default().image_memory_barriers(&barriers),
+                );
+            }
             if let Some(target) = &chain.visibility {
                 target.record_identity(
                     ctx.command,
@@ -1088,16 +1148,30 @@ impl Renderer {
                         float32: [0.025, 0.07, 0.12, 1.0],
                     },
                 })];
-            device.cmd_begin_rendering(
-                ctx.command,
-                &vk::RenderingInfo::default()
-                    .render_area(vk::Rect2D {
-                        offset: vk::Offset2D::default(),
-                        extent: chain.extent,
+            let depth_attachment = chain.depth.as_ref().map(|depth| {
+                vk::RenderingAttachmentInfo::default()
+                    .image_view(depth.view)
+                    .image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                    .load_op(vk::AttachmentLoadOp::CLEAR)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .clear_value(vk::ClearValue {
+                        depth_stencil: vk::ClearDepthStencilValue {
+                            depth: 1.,
+                            stencil: 0,
+                        },
                     })
-                    .layer_count(1)
-                    .color_attachments(&attachments),
-            );
+            });
+            let mut rendering = vk::RenderingInfo::default()
+                .render_area(vk::Rect2D {
+                    offset: vk::Offset2D::default(),
+                    extent: chain.extent,
+                })
+                .layer_count(1)
+                .color_attachments(&attachments);
+            if let Some(depth) = &depth_attachment {
+                rendering = rendering.depth_attachment(depth);
+            }
+            device.cmd_begin_rendering(ctx.command, &rendering);
             if let Some(target) = &chain.visibility {
                 target.record_resolve(ctx.command, ctx.mesh_commands.as_ref().unwrap());
             } else if let Some(pipeline) = &chain.pipeline {
@@ -1124,6 +1198,20 @@ impl Renderer {
                     }],
                 );
                 let commands = ctx.mesh_commands.as_ref().unwrap();
+                if self.mode == RenderMode::AssetCamera {
+                    let rows = crate::camera::rows(chain.extent.width, chain.extent.height)?;
+                    let mut bytes = [0u8; 64];
+                    for (i, value) in rows.iter().flatten().enumerate() {
+                        bytes[i * 4..i * 4 + 4].copy_from_slice(&value.to_ne_bytes());
+                    }
+                    device.cmd_push_constants(
+                        ctx.command,
+                        pipeline.layout,
+                        vk::ShaderStageFlags::MESH_EXT,
+                        0,
+                        &bytes,
+                    );
+                }
                 if let Some(work) = &self.work {
                     work.draw(ctx.command, pipeline.layout, commands);
                 } else {

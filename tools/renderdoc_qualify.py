@@ -44,6 +44,9 @@ def qualify(report):
     visibility = os.environ.get('THEIA_CAPTURE_VISIBILITY') == '1'
     asset_path = os.environ.get('THEIA_CAPTURE_ASSET')
     cell_path = os.environ.get('THEIA_CAPTURE_CELL')
+    camera = os.environ.get('THEIA_CAPTURE_CAMERA') == '1'
+    if camera and not asset_path:
+        raise RuntimeError('Camera capture requires expected mesh page')
     if cell_path and not asset_path:
         raise RuntimeError('Cell capture requires expected bound page in THEIA_CAPTURE_ASSET')
     if sum([spatial, visibility, bool(asset_path)]) > 1:
@@ -52,6 +55,8 @@ def qualify(report):
     if scenario not in (0, 1, 2):
         raise RuntimeError('Capture scenario must be 0, 1 or 2')
     arguments = '--frames 180 --gpu 7900 --no-validation'
+    if camera:
+        arguments += ' --camera-test'
     if spatial:
         arguments += f' --spatial-test --work-items {scenario}'
     if visibility:
@@ -195,7 +200,10 @@ def qualify(report):
         if visibility:
             verify_surface(controller, executable, root, present.copyDestination, scenario, report)
         if asset_path:
-            verify_asset(controller, present.copyDestination, source, count, report)
+            if camera:
+                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report)
+            else:
+                verify_asset(controller, present.copyDestination, source, count, report)
         save = rd.TextureSave()
         save.resourceId = present.copyDestination
         save.destType = rd.FileType.PNG
@@ -308,6 +316,37 @@ def verify_asset(controller, color_id, source, count, report):
                 raise RuntimeError(f'Cooked mesh raster coverage/color mismatch at {pixel}: {actual}, expected {expected}')
             samples.append({'pixel':pixel,'covered':covered,'color':actual})
     report.update(asset_surface_samples=samples, asset_surface_verified=True, selected_triangles=len(geometry))
+
+
+def verify_camera(controller, executable, root, color_id, asset_path, scenario, report):
+    textures = controller.GetTextures()
+    color = next(texture for texture in textures if texture.resourceId == color_id)
+    depths = [texture for texture in textures if texture.format.compType == rd.CompType.Depth
+              and texture.format.compByteWidth == 4]
+    if len(depths) != 1:
+        raise RuntimeError('Expected one camera depth target')
+    rgb = controller.GetTextureData(color_id, rd.Subresource())
+    depth = controller.GetTextureData(depths[0].resourceId, rd.Subresource())
+    if len(rgb) != color.width*color.height*4 or len(depth) != color.width*color.height*4:
+        raise RuntimeError('Unexpected camera readback layout')
+    def srgb(value):
+        value = max(0, min(1, value))
+        return round((value*12.92 if value <= .0031308 else 1.055*value**(1/2.4)-.055)*255)
+    samples = []
+    for y in range(1,10):
+        for x in range(1,10):
+            pixel = (int(color.width*x/10), int(color.height*y/10))
+            expected = json.loads(subprocess.check_output([str(executable), '--camera-reference', asset_path,
+                                  str(pixel[0]), str(pixel[1]), str(color.width), str(color.height), str(scenario)], cwd=root))
+            offset = pixel[1]*color.width+pixel[0]
+            actual_color = list(rgb[offset*4:offset*4+3])
+            if color.format.BGRAOrder():
+                actual_color.reverse()
+            actual_depth = struct.unpack_from('<f', depth, offset*4)[0]
+            if abs(actual_depth-expected['depth']) > 2e-6 or any(abs(a-srgb(b)) > 2 for a,b in zip(actual_color,expected['color'])):
+                raise RuntimeError(f'Perspective camera color/depth mismatch at {pixel}: {actual_color}/{actual_depth}, expected {expected}')
+            samples.append({'pixel':pixel,'covered':expected['covered'],'color':actual_color,'depth':actual_depth})
+    report.update(camera_samples=samples, camera_verified=True)
 
 report = {'renderdoc': rd.GetVersionString(), 'validation_enabled_in_capture': False}
 code = 0

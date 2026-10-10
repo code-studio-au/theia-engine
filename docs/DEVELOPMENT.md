@@ -223,3 +223,24 @@ centroids and a 65x65 grid; it does not bound unsampled error. Exact boundary
 edges, winding and projected area must also pass. Meshlets preserve the simplified
 input's complete triangle multiset; simplification intentionally changes the
 original triangulation. Existing fixture recipes/content addresses remain intact.
+
+### M4 perspective/depth qualification
+
+Add `--camera-test` to `--asset` or `--cell`. The fixed Z-up rig looks from
+(0,-1.7,1.5) toward (0,0,0.5), with 60-degree vertical FOV, 0.1/10 near/far,
+Vulkan 0..1 depth and an explicit Y flip for a positive-height viewport. Aspect
+changes with the actual swapchain extent. D32 depth uses LESS and clears to one.
+The XY qualification viewer remains the default without this flag.
+
+For capture add `THEIA_CAPTURE_CAMERA=1` to the existing expected page/arena
+settings. The helper checks 81 perspective color/depth samples against the Rust
+CPU oracle (`--camera-reference <mesh-file> <x y width height scenario>`). It
+rejects inputs requiring near/far triangle clipping; this oracle is bounded,
+while ordinary Vulkan clipping still applies to the GPU path. Captures remain
+separate from standalone validation.
+
+Cook `--fixture occlusion` with the existing native tool settings for a one-meshlet
+near/far test. Its four triangles are deliberately ordered near (z=0.65) before
+far (z=0.35), verified after meshlet optimization, so subsequent far primitives
+must fail depth where overlapped. This is a diagnostic recipe, not a general
+triangle reordering policy. CPU analytic tests also verify the center ray result.

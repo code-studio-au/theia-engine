@@ -138,3 +138,20 @@ qualify general meshlet LOD/error/seams, immutable cell manifests, asynchronous
 I/O/staged publication/retirement, actual per-arena resident budgets/protected
 fallbacks, terrain and texture page residency. No M4 completion or GI work follows
 from this first cooked-asset slice.
+
+### Fixed perspective camera reference
+
+`--camera-test` leaves page schema/data unchanged and adds a dedicated camera mesh
+entry. Four float4 rows (64 bytes) are pushed to the mesh stage, with explicit
+layout and queried capacity. The fixed Z-up rig, RH perspective, Vulkan depth
+0..1, positive viewport/Y flip and actual aspect are specified in DEVELOPMENT.
+One D32 depth attachment belongs to each swapchain generation; barriers order
+prior depth access/discard and current fragment tests. Depth uses LESS/clear one.
+The fragment path still outputs diagnostic position color, without M3 material
+resolve. Existing default XY and M3 reference pipelines remain separate.
+
+CPU oracle interpolates screen-space depth and perspective-correct world attributes
+and selects the nearest triangle. Its analytic camera/center-ray tests and replay
+checks qualify unclipped positive-w fixtures; it rejects near/far clipping cases.
+This is not an authored camera schema, input controller, general CPU rasterizer,
+complete static scene database or visibility/material integration.

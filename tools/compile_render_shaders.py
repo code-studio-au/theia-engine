@@ -31,7 +31,8 @@ def main():
                ('resolve.slang', 'resolveFragment', 'fragment', 'resolve.frag.spv'),
                ('asset.slang', 'assetCompute', 'compute', 'asset.compute.spv'),
                ('asset.slang', 'assetTask', 'amplification', 'asset.task.spv'),
-               ('asset.slang', 'assetMesh', 'mesh', 'asset.mesh.spv')]
+               ('asset.slang', 'assetMesh', 'mesh', 'asset.mesh.spv'),
+               ('asset_camera.slang', 'assetCameraMesh', 'mesh', 'asset.camera.mesh.spv')]
     try:
         subprocess.run([args.slangc, '-version'], check=True)
         with tempfile.TemporaryDirectory(dir=args.output_dir) as temporary:

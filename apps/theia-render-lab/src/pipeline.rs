@@ -42,6 +42,7 @@ struct ShaderStages {
     task: Option<&'static str>,
     fragment: &'static str,
     depth: Option<vk::Format>,
+    camera: bool,
 }
 impl Pipeline {
     pub fn new(
@@ -53,9 +54,15 @@ impl Pipeline {
     ) -> Result<Self> {
         let task_amplification = matches!(
             mode,
-            RenderMode::Indirect | RenderMode::DirectTask | RenderMode::Spatial | RenderMode::Asset
+            RenderMode::Indirect
+                | RenderMode::DirectTask
+                | RenderMode::Spatial
+                | RenderMode::Asset
+                | RenderMode::AssetCamera
         );
-        let mesh_file = if mode == RenderMode::Asset {
+        let mesh_file = if mode == RenderMode::AssetCamera {
+            "asset.camera.mesh.spv"
+        } else if mode == RenderMode::Asset {
             "asset.mesh.spv"
         } else if mode == RenderMode::Spatial {
             "spatial.mesh.spv"
@@ -65,15 +72,17 @@ impl Pipeline {
             "triangle.mesh.spv"
         };
         let task_file = if task_amplification {
-            Some(if mode == RenderMode::Asset {
-                "asset.task.spv"
-            } else if mode == RenderMode::Spatial {
-                "spatial.task.spv"
-            } else if mode == RenderMode::Indirect {
-                "triangle.indirect.task.spv"
-            } else {
-                "triangle.task.spv"
-            })
+            Some(
+                if matches!(mode, RenderMode::Asset | RenderMode::AssetCamera) {
+                    "asset.task.spv"
+                } else if mode == RenderMode::Spatial {
+                    "spatial.task.spv"
+                } else if mode == RenderMode::Indirect {
+                    "triangle.indirect.task.spv"
+                } else {
+                    "triangle.task.spv"
+                },
+            )
         } else {
             None
         };
@@ -86,7 +95,8 @@ impl Pipeline {
                 mesh: mesh_file,
                 task: task_file,
                 fragment: "triangle.frag.spv",
-                depth: None,
+                depth: (mode == RenderMode::AssetCamera).then_some(vk::Format::D32_SFLOAT),
+                camera: mode == RenderMode::AssetCamera,
             },
         )?;
         println!("Graphics pipeline ready for {mode:?}");
@@ -107,6 +117,7 @@ impl Pipeline {
                 task: Some("visibility.task.spv"),
                 fragment: "visibility.frag.spv",
                 depth: Some(vk::Format::D32_SFLOAT),
+                camera: false,
             },
         )
     }
@@ -126,6 +137,7 @@ impl Pipeline {
                 task: None,
                 fragment: "resolve.frag.spv",
                 depth: None,
+                camera: false,
             },
         )
     }
@@ -152,8 +164,19 @@ impl Pipeline {
         // on error Drop releases the layout and partial Vulkan pipeline outputs are destroyed below.
         unsafe {
             let layouts: Vec<_> = descriptor_layout.into_iter().collect();
+            let push: Vec<_> = shaders
+                .camera
+                .then(|| {
+                    vk::PushConstantRange::default()
+                        .stage_flags(vk::ShaderStageFlags::MESH_EXT)
+                        .size(64)
+                })
+                .into_iter()
+                .collect();
             pipeline.layout = device.create_pipeline_layout(
-                &vk::PipelineLayoutCreateInfo::default().set_layouts(&layouts),
+                &vk::PipelineLayoutCreateInfo::default()
+                    .set_layouts(&layouts)
+                    .push_constant_ranges(&push),
                 None,
             )?;
             // Slang's SPIR-V entry-point name is "main", independently of source function names.
