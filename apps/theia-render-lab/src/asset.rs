@@ -90,7 +90,16 @@ pub struct Buffer {
     pub handle: vk::Buffer,
     memory: vk::DeviceMemory,
     pub bytes: u64,
+    pub allocated_bytes: u64,
 }
+#[derive(Debug)]
+pub struct AllocationBudgetExceeded;
+impl std::fmt::Display for AllocationBudgetExceeded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Cooked buffer exceeds physical allocation budget")
+    }
+}
+impl std::error::Error for AllocationBudgetExceeded {}
 impl Buffer {
     fn allocate(
         device: &ash::Device,
@@ -98,12 +107,14 @@ impl Buffer {
         bytes: u64,
         usage: vk::BufferUsageFlags,
         flags: vk::MemoryPropertyFlags,
+        budget: u64,
     ) -> Result<Self> {
         let mut buffer = Self {
             device: device.clone(),
             handle: vk::Buffer::null(),
             memory: vk::DeviceMemory::null(),
             bytes,
+            allocated_bytes: 0,
         };
         // SAFETY: Device/create-info storage is live. Every created object immediately gains RAII ownership.
         unsafe {
@@ -115,6 +126,10 @@ impl Buffer {
                 None,
             )?;
             let requirements = device.get_buffer_memory_requirements(buffer.handle);
+            if requirements.size > budget {
+                return Err(AllocationBudgetExceeded.into());
+            }
+            buffer.allocated_bytes = requirements.size;
             let index = (0..memory.memory_type_count)
                 .find(|&i| {
                     requirements.memory_type_bits & (1 << i) != 0
@@ -139,43 +154,75 @@ impl Buffer {
         bytes: &[u8],
         family: u32,
         queue: vk::Queue,
+        resident_budget: u64,
     ) -> Result<Self> {
-        let destination = Self::allocate(
+        Upload::begin(device, memory, bytes, family, queue, resident_budget)?.finish()
+    }
+}
+
+/// Owns pending copy work and both buffers until its dedicated upload fence retires.
+/// No queue/device idle wait is used on the successful path.
+pub struct Upload {
+    // Fields drop in this order: submitted work must retire before its buffers.
+    transfer: Transfer,
+    staging: Buffer,
+    destination: Option<Buffer>,
+}
+impl Upload {
+    pub fn begin(
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        bytes: &[u8],
+        family: u32,
+        queue: vk::Queue,
+        resident_budget: u64,
+    ) -> Result<Self> {
+        let destination = Buffer::allocate(
             device,
             memory,
             bytes.len() as u64,
             vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            resident_budget,
         )?;
-        let staging = Self::allocate(
+        let staging = Buffer::allocate(
             device,
             memory,
             bytes.len() as u64,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            DEFAULT_BUDGET as u64,
         )?;
-        let mut transfer = Transfer {
-            device: device.clone(),
-            pool: vk::CommandPool::null(),
+        let mut upload = Self {
+            transfer: Transfer {
+                device: device.clone(),
+                pool: vk::CommandPool::null(),
+                fence: vk::Fence::null(),
+                submitted: false,
+            },
+            staging,
+            destination: Some(destination),
         };
-        // SAFETY: Mapped staging allocation covers exactly bytes; one startup submission owns all
-        // resources. Transfer guard retires submitted work before command/staging destruction on errors.
+        let destination = upload.destination.as_ref().unwrap();
+        // SAFETY: Upload owns all referenced objects. Host mapping is coherent and bounded.
+        // The transfer guard waits the dedicated fence before destroying commands or buffers.
         unsafe {
             let pointer = device.map_memory(
-                staging.memory,
+                upload.staging.memory,
                 0,
-                staging.bytes,
+                upload.staging.bytes,
                 vk::MemoryMapFlags::empty(),
             )?;
             std::ptr::copy_nonoverlapping(bytes.as_ptr(), pointer.cast::<u8>(), bytes.len());
-            device.unmap_memory(staging.memory);
-            transfer.pool = device.create_command_pool(
+            device.unmap_memory(upload.staging.memory);
+            upload.transfer.pool = device.create_command_pool(
                 &vk::CommandPoolCreateInfo::default().queue_family_index(family),
                 None,
             )?;
+            upload.transfer.fence = device.create_fence(&vk::FenceCreateInfo::default(), None)?;
             let command = device.allocate_command_buffers(
                 &vk::CommandBufferAllocateInfo::default()
-                    .command_pool(transfer.pool)
+                    .command_pool(upload.transfer.pool)
                     .command_buffer_count(1),
             )?[0];
             device.begin_command_buffer(
@@ -185,7 +232,7 @@ impl Buffer {
             )?;
             device.cmd_copy_buffer(
                 command,
-                staging.handle,
+                upload.staging.handle,
                 destination.handle,
                 &[vk::BufferCopy::default().size(destination.bytes)],
             );
@@ -210,13 +257,34 @@ impl Buffer {
             device.queue_submit2(
                 queue,
                 &[vk::SubmitInfo2::default().command_buffer_infos(&commands)],
-                vk::Fence::null(),
+                upload.transfer.fence,
             )?;
-            device.queue_wait_idle(queue)?;
+            upload.transfer.submitted = true;
         }
+        Ok(upload)
+    }
+    pub fn ready(&self) -> Result<bool> {
+        // SAFETY: Fence is live and belongs to this upload's retained device.
+        Ok(unsafe { self.transfer.device.get_fence_status(self.transfer.fence)? })
+    }
+    pub fn resident_bytes(&self) -> u64 {
+        self.destination.as_ref().unwrap().allocated_bytes
+    }
+    pub fn staging_bytes(&self) -> u64 {
+        self.staging.allocated_bytes
+    }
+    pub fn finish(mut self) -> Result<Buffer> {
+        // SAFETY: Fence tracks this upload only and owns all submitted resources.
+        unsafe {
+            self.transfer
+                .device
+                .wait_for_fences(&[self.transfer.fence], true, u64::MAX)?;
+        }
+        self.transfer.submitted = false;
+        let destination = self.destination.take().unwrap();
         println!(
-            "Immutable GPU mesh uploaded once: {} bytes; no runtime native-library dependency",
-            destination.bytes
+            "Immutable GPU mesh upload complete: {} encoded bytes, {} resident allocation bytes, {} staging allocation bytes; dedicated fence retired",
+            destination.bytes, destination.allocated_bytes, self.staging.allocated_bytes
         );
         Ok(destination)
     }
@@ -224,18 +292,30 @@ impl Buffer {
 struct Transfer {
     device: ash::Device,
     pool: vk::CommandPool,
+    fence: vk::Fence,
+    submitted: bool,
 }
 impl Drop for Transfer {
     fn drop(&mut self) {
-        // SAFETY: Guard outlives submitted command/staging uses; queue failure still needs ordered cleanup.
+        // SAFETY: This guard drops before staging/destination buffers. After device loss pending
+        // work cannot continue; other unexpected fence errors get a final device-retirement attempt.
         unsafe {
-            let _ = self.device.device_wait_idle();
+            if self.submitted
+                && let Err(error) = self.device.wait_for_fences(&[self.fence], true, u64::MAX)
+            {
+                eprintln!("Upload fence retirement failed: {error}");
+                let _ = self.device.device_wait_idle();
+            }
+            if self.fence != vk::Fence::null() {
+                self.device.destroy_fence(self.fence, None);
+            }
             if self.pool != vk::CommandPool::null() {
                 self.device.destroy_command_pool(self.pool, None);
             }
         }
     }
 }
+
 impl Drop for Buffer {
     fn drop(&mut self) {
         // SAFETY: Transfer guard/work owner has retired uses; parent device remains live.

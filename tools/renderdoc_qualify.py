@@ -43,6 +43,9 @@ def qualify(report):
     spatial = os.environ.get('THEIA_CAPTURE_SPATIAL') == '1'
     visibility = os.environ.get('THEIA_CAPTURE_VISIBILITY') == '1'
     asset_path = os.environ.get('THEIA_CAPTURE_ASSET')
+    cell_path = os.environ.get('THEIA_CAPTURE_CELL')
+    if cell_path and not asset_path:
+        raise RuntimeError('Cell capture requires expected bound page in THEIA_CAPTURE_ASSET')
     if sum([spatial, visibility, bool(asset_path)]) > 1:
         raise RuntimeError('Select only one qualification capture mode')
     scenario = int(os.environ.get('THEIA_CAPTURE_SCENARIO', '2'))
@@ -56,9 +59,19 @@ def qualify(report):
     if asset_path:
         asset_path = str(Path(asset_path).resolve())
         quoted = subprocess.list2cmdline([asset_path]) if os.name == 'nt' else shlex.quote(asset_path)
-        arguments += f' --asset {quoted} --work-items {scenario}'
+        if cell_path:
+            cell_path = str(Path(cell_path).resolve())
+            quoted_cell = subprocess.list2cmdline([cell_path]) if os.name == 'nt' else shlex.quote(cell_path)
+            arguments += f' --cell {quoted_cell} --work-items {scenario}'
+            resident_budget = os.environ.get('THEIA_CAPTURE_RESIDENT_BUDGET')
+            if resident_budget:
+                arguments += f' --resident-budget {int(resident_budget)}'
+        else:
+            arguments += f' --asset {quoted} --work-items {scenario}'
         fallback = os.environ.get('THEIA_CAPTURE_FALLBACK')
         budget = os.environ.get('THEIA_CAPTURE_BUDGET')
+        if cell_path and (fallback or budget):
+            raise RuntimeError('Cell capture uses physical resident budget, not asset fallback arguments')
         if fallback:
             fallback = str(Path(fallback).resolve())
             quoted = subprocess.list2cmdline([fallback]) if os.name == 'nt' else shlex.quote(fallback)
@@ -78,7 +91,10 @@ def qualify(report):
         raise RuntimeError('Could not connect to capture target')
     capture = None
     try:
-        target.QueueCapture(10, 1)
+        capture_frame = int(os.environ.get('THEIA_CAPTURE_FRAME', '10'))
+        if not 0 <= capture_frame < 150:
+            raise RuntimeError('Capture frame must be 0..149')
+        target.QueueCapture(capture_frame, 1)
         deadline = time.monotonic() + 30
         while target.Connected() and time.monotonic() < deadline:
             message = target.ReceiveMessage(None)
@@ -158,6 +174,8 @@ def qualify(report):
             if len(geometry) != 1 or controller.GetBufferData(geometry[0].resourceId,0,len(source)) != source:
                 raise RuntimeError('Immutable GPU asset bytes differ from cooked source')
             report.update(scenario=scenario, meshlet_count=count, immutable_asset_bytes_verified=True)
+            if cell_path:
+                report.update(cell_manifest=cell_path, expected_page=asset_path, capture_frame=capture_frame)
         elif visibility:
             count = struct.unpack_from('<I', data, 36)[0]
             draws = int(scenario != 0)

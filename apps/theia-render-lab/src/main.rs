@@ -3,6 +3,7 @@ mod gpu;
 mod indirect;
 mod pipeline;
 mod spatial;
+mod streaming;
 mod surface_reference;
 mod visibility;
 mod wsi;
@@ -46,6 +47,8 @@ struct Options {
     asset: Option<std::path::PathBuf>,
     fallback: Option<std::path::PathBuf>,
     asset_budget: Option<usize>,
+    cell: Option<std::path::PathBuf>,
+    resident_budget: Option<u64>,
 }
 impl Options {
     fn render_mode(&self) -> RenderMode {
@@ -105,6 +108,26 @@ impl Options {
                             .into(),
                     );
                 }
+                "--cell" => {
+                    if result.mode.replace(RenderMode::Asset).is_some() {
+                        return Err("Render modes are mutually exclusive".into());
+                    }
+                    result.cell = Some(
+                        args.next()
+                            .ok_or("--cell needs a hash-named cell manifest")?
+                            .into(),
+                    );
+                }
+                "--resident-budget" => {
+                    let bytes: u64 = args
+                        .next()
+                        .ok_or("--resident-budget needs physical geometry bytes")?
+                        .parse()?;
+                    if bytes == 0 {
+                        return Err("Resident budget must be positive".into());
+                    }
+                    result.resident_budget = Some(bytes);
+                }
                 "--work-items" => {
                     let count = args.next().ok_or("--work-items needs 0, 1 or 2")?.parse()?;
                     if count > 2 {
@@ -149,12 +172,15 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
                 _ => return Err(format!("Unknown argument: {arg}").into()),
             }
+        }
+        if result.resident_budget.is_some() && result.cell.is_none() {
+            return Err("--resident-budget requires --cell".into());
         }
         if result.asset.is_none() && (result.fallback.is_some() || result.asset_budget.is_some()) {
             return Err("--fallback/--asset-budget require --asset".into());

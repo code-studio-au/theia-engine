@@ -4,6 +4,31 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M4 bounded asynchronous cell residency — independently executed
+
+Render Lab `--cell` reads two validated mesh pages on a bounded I/O worker and
+submits one fenced staging upload at a time. It publishes a replacement only
+after upload completion and the sole rendering frame fence, then retires the
+old descriptor/buffer and CPU reader. Successful uploads use no queue/device idle
+wait. Geometry budget counts Vulkan allocation requirements, including overlap
+of active and pending pages; one staging allocation has a separate 64 MiB cap.
+
+RX 7900 XTX passes default and exact-capacity WSI smokes with five replacements,
+120 frames, ten swapchain generations and zero validation diagnostics including
+teardown. The grid is 7,244 encoded / 7,248 allocated bytes; the quad is 848 for
+both. A budget of 8,092 bytes defers five replacements and preserves the coarse
+page; 8,096 bytes permits them. Shutdown with an unpublished upload and startup
+below the coarse allocation requirement both clean up without diagnostics.
+Four separate captures verify immutable GPU bytes/counts and 81 pixel samples
+each across coarse/fine/coarse replacement and protected budget deferral.
+All seven prior render modes pass 120-frame regressions with zero diagnostics;
+Render Lab's nine unit tests, formatting and denied-warning Clippy pass.
+
+This qualifies two-page, single-frame, same-queue fixture residency. Production
+preallocated arenas, multi-frame reader overlap, general dependencies/LOD,
+authored scenes, terrain and virtual textures remain open; M4 is incomplete.
+See [updated evidence](validation/M4_COOKED_MESHLETS.md).
+
 ## M4 immutable page lifetime CPU contract — locally tested
 
 Added bounded hash-addressed cell manifests and a pure Rust residency oracle.

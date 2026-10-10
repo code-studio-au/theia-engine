@@ -89,6 +89,29 @@ per-arena budget required by M4. The file-backed example verifies a retained
 7,244-byte grid blocks another page within that budget, then releases it and
 publishes an 848-byte quad. This tests retirement, not automatic LOD fallback.
 
+### Two-page Vulkan publication prototype
+
+Render Lab `--cell` accepts exactly two mesh pages of distinct sizes, validates
+the coarse source link/bounds, and boots the smaller page. Every 20 presented
+frames it requests the other page on one bounded file worker. One upload owns
+its staging/destination buffers, command pool and dedicated fence; completion
+publishes transfer writes to compute/mesh reads. The frame loop polls that fence
+and keeps the current descriptor while upload is incomplete. It updates binding
+1 only after the sole frame fence retires, releases its CPU snapshot, and frees
+the old GPU allocation after replacement. Shader counts remain GPU-generated.
+
+`--resident-budget` (default 16 MiB) bounds actual dedicated geometry allocation
+bytes, including the current page and pending replacement. Staging is separately
+bounded to one allocation of at most 64 MiB. Other Vulkan memory is excluded.
+This is a physical allocation budget prototype, not a preallocated arena or whole
+VRAM manager. Capacity rejection preserves the current page; other upload errors
+remain fatal. At startup both fixtures are synchronously validated to qualify the
+coarse relation; subsequent replacement reads and uploads are asynchronous.
+Only one frame and one graphics/compute/transfer queue are qualified. A worker
+read cannot be cancelled mid-read; teardown joins it and retires upload/frame
+work before destroying their allocations. CPU store retains at most 128 MiB of
+encoded pages, separately from decoder/file-read overhead.
+
 Integrate authored geometry/material/camera contracts and the M1/M2/M3 data paths;
 qualify general meshlet LOD/error/seams, immutable cell manifests, asynchronous
 I/O/staged publication/retirement, actual per-arena resident budgets/protected

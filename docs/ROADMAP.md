@@ -76,9 +76,9 @@ LOD hierarchy, cell/page manager, terrain or virtual texture system.
 
 ## Next local M4 unit
 
-The immutable cell/page manifest and CPU residency lifetime contract is now
-implemented/tested. Connect a bounded load/unload/fallback slice to the existing
-renderer with GPU upload completion and retained-frame safety. Qualify actual
-resident allocation budgets and staged I/O;
-retain the current viewer/fixture checks. General LOD/error/seams, authored content
-and virtual texture residency follow. M5 GI remains deferred while M4 gates are open.
+The immutable cell/page contract and two-page asynchronous GPU replacement are
+implemented/tested, with dedicated upload fences, single-frame retirement and
+actual dedicated-allocation budget pressure. Qualify authored geometry/camera
+contracts and general offline LOD/error/boundary preservation next. Production
+arenas, broader page dependencies/readers and virtual texture residency remain
+open. Retain the current viewer/fixture checks; M5 GI remains deferred.

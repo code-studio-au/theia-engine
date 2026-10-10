@@ -99,3 +99,51 @@ staged publication/retirement, real per-arena resident budgets and protected pag
 fallbacks, terrain, virtual texture feedback/pages, cross-platform execution and
 performance. Raw float positions/u8 indices are not a compression/LOD implementation.
 No locked ADR changed. Commands: [developer workflow](../DEVELOPMENT.md#m4-offline-cooked-fixtures).
+
+## Subsequent two-page residency qualification — 2026-10-10
+
+The original `--asset` path above is preserved. New `--cell` qualifies the bounded
+manifest/lifetime contract against actual GPU replacement. Cell 7's manifest ID
+is `3f98084e509f69cf620e23b9a8612d24127edf5fe8bffdfaeeea717d550facdd`.
+It references the grid/linked quad and begins with the protected coarse page.
+Subsequent file reads run on one bounded worker; one pending upload uses a
+separate command pool/fence and coherent staging buffer. Success never waits the
+whole queue/device idle. Descriptor replacement is ordered after both upload
+completion and the sole frame fence; immutable CPU snapshots retire with that
+frame. Teardown still waits swapchain/work resources conservatively.
+
+Actual Vulkan allocation requirements: grid 7,248 bytes (encoded 7,244), quad
+848 bytes; maximum overlapping geometry is **8,096 bytes**. Dedicated geometry
+budget includes both active and pending allocation. Staging has a separate
+64 MiB allocation cap; it uses 7,248/848 bytes here. This is not an arena heap,
+whole VRAM accounting or performance result.
+
+| Run | Observed result | Validation including teardown |
+|---|---|---|
+| Default 16 MiB / WSI | Five replacements, 120 frames, ten generations | 0 warnings / 0 errors |
+| Geometry budget 8,096 / WSI | Five replacements, 120 frames, ten generations | 0 / 0 |
+| Geometry budget 8,092 / WSI | Five deferrals, protected coarse retained, 120 frames | 0 / 0 |
+| 22-frame shutdown | Pending unpublished GPU upload retired during teardown | 0 / 0 |
+| Geometry budget 847 | Startup exits 1 before coarse memory allocation | 0 / 0 |
+
+Four separate RenderDoc 1.46 captures (validation disabled) verify selected
+immutable GPU bytes, command/count, meshlet count and 81 pixel samples each:
+initial coarse/frame 10 (one meshlet/two triangles), fine/frame 30 (eight/512),
+replacement coarse/frame 50 (one/two), and protected coarse/frame 30 under
+8,092-byte budget (one/two). All target runs present 180 frames. The capture helper
+requires explicit expected page content, so unexpected upload timing/page identity
+fails qualification instead of being assumed correct.
+
+Local artifacts: `build/qualification/m4-cell-{wsi,tight,exact,pending-shutdown,too-small}.log`
+and `m4-cell-renderdoc-{coarse,fine,retired-fine,budget}/report.json` with captures/PNGs.
+All seven prior modes pass 120-frame synchronization-validation regressions.
+Render Lab's nine unit tests, fmt and denied-warning Clippy pass. No shader change
+was required. Work remains local; no hosted CI/push/review result is claimed.
+
+Limitations: bootstrap synchronously validates both fixture files/source relation;
+subsequent I/O is asynchronous. One graphics/compute/transfer queue and one frame
+are used, so multi-frame readers/dedicated transfer queues are unqualified. The
+CPU oracle independently tests retained readers, but the renderer releases its
+reader after its actual fence. No cancellable file reads, general dependency graph,
+spatial cell selection, production arenas, general LOD/error/seams, authored scene,
+terrain or virtual textures are implemented by this unit. M4 stays open.

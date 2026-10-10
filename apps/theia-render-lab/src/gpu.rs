@@ -790,6 +790,7 @@ pub struct Renderer {
     // Rust drops fields in declaration order after Drop::drop. Keep graphics children
     // before work resources, and their device-owning context last as a lifetime backstop.
     chain: Option<Swapchain>,
+    stream: Option<crate::streaming::Stream>,
     work: Option<IndirectWork>,
     pub recreate: bool,
     generations: u64,
@@ -812,6 +813,7 @@ impl Renderer {
         let mut renderer = Self {
             ctx,
             chain: None,
+            stream: None,
             recreate: true,
             generations: 0,
             mode: options.render_mode(),
@@ -840,6 +842,16 @@ impl Renderer {
                     .unwrap()
                     .get_physical_device_memory_properties(renderer.ctx.physical)
             };
+            let cell_asset = if let Some(path) = &options.cell {
+                let (stream, bytes) = crate::streaming::Stream::new(
+                    path,
+                    options.resident_budget.unwrap_or(16 * 1024 * 1024),
+                )?;
+                renderer.stream = Some(stream);
+                Some(bytes)
+            } else {
+                None
+            };
             let asset = options
                 .asset
                 .as_deref()
@@ -850,7 +862,8 @@ impl Renderer {
                         options.asset_budget.unwrap_or(theia_assets::DEFAULT_BUDGET),
                     )
                 })
-                .transpose()?;
+                .transpose()?
+                .or(cell_asset);
             if let Some(bytes) = &asset {
                 // SAFETY: Selected physical device belongs to the retained live instance.
                 let limit = unsafe {
@@ -873,8 +886,19 @@ impl Renderer {
                 renderer.shader_dir.as_ref().unwrap(),
                 renderer.mode == RenderMode::Spatial,
                 asset.as_deref(),
-                (renderer.ctx.graphics_family, renderer.ctx.graphics),
+                (
+                    renderer.ctx.graphics_family,
+                    renderer.ctx.graphics,
+                    if renderer.stream.is_some() {
+                        options.resident_budget.unwrap_or(16 * 1024 * 1024)
+                    } else {
+                        u64::MAX
+                    },
+                ),
             )?);
+            if let Some(stream) = &renderer.stream {
+                stream.check_initial(renderer.work.as_ref().unwrap())?;
+            }
         }
         renderer.rebuild(renderer.ctx.window.inner_size())?;
         Ok(renderer)
@@ -937,6 +961,36 @@ impl Renderer {
             }
             self.last_input = Some(input);
         }
+        // SAFETY: This fence covers the only frame in flight. Retire old descriptor/buffer readers
+        // before cell publication; no submitted command may observe a descriptor update.
+        unsafe {
+            self.ctx.device.as_ref().unwrap().wait_for_fences(
+                &[self.ctx.complete],
+                true,
+                u64::MAX,
+            )?;
+        }
+        if let Some(stream) = &mut self.stream {
+            // SAFETY: Selected physical device belongs to the live instance retained in Context.
+            let (memory, limit) = unsafe {
+                let instance = self.ctx.instance.as_ref().unwrap();
+                (
+                    instance.get_physical_device_memory_properties(self.ctx.physical),
+                    instance
+                        .get_physical_device_properties(self.ctx.physical)
+                        .limits
+                        .max_storage_buffer_range,
+                )
+            };
+            stream.tick(
+                self.presented,
+                self.work.as_mut().unwrap(),
+                self.ctx.device.as_ref().unwrap(),
+                &memory,
+                (self.ctx.graphics_family, self.ctx.graphics),
+                limit,
+            )?;
+        }
         let chain = self.chain.as_mut().unwrap();
         let ctx = &self.ctx;
         let device = ctx.device.as_ref().unwrap();
@@ -944,7 +998,6 @@ impl Renderer {
         // Image-specific presentation semaphores are reused only after acquire and a presentation-fence
         // wait. Barriers order color writes and the present transition. Swapchain owns all referenced views.
         unsafe {
-            device.wait_for_fences(&[ctx.complete], true, u64::MAX)?;
             // Inject before acquire so an out-of-date probe cannot leave its semaphore signaled.
             let acquire = if self.probes.hit(Probe::AcquireOutOfDate, self.presented) {
                 Err(vk::Result::ERROR_OUT_OF_DATE_KHR)
@@ -1088,6 +1141,9 @@ impl Renderer {
                     .command_buffer_infos(&commands)],
                 ctx.complete,
             )?;
+            if let Some(stream) = &mut self.stream {
+                stream.submitted();
+            }
             let present_waits = [chain.ready[i]];
             let chains = [chain.handle];
             let indices = [index];
@@ -1122,6 +1178,18 @@ impl Renderer {
         }
     }
     pub fn qualification_complete(&self) -> Result<()> {
+        if let Some(stream) = &self.stream {
+            println!(
+                "Cell qualification: {} publications, {} physical-budget deferrals",
+                stream.publications, stream.rejections
+            );
+            if self.cycle_work && stream.publications < 2 && stream.rejections == 0 {
+                return Err(
+                    "Cell smoke did not qualify page replacement or physical-budget deferral"
+                        .into(),
+                );
+            }
+        }
         if self.probes.remaining() != 0 {
             return Err("WSI qualification ended before all four recovery probes ran".into());
         }
@@ -1133,6 +1201,7 @@ impl Drop for Renderer {
         // Destroy graphics pipelines before their work descriptor layout, then work resources
         // before Context destroys the device. This also runs when new() fails in rebuild().
         drop(self.chain.take());
+        drop(self.stream.take());
         drop(self.work.take());
         println!(
             "Render Lab teardown: {} swapchain generations",

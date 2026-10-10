@@ -176,3 +176,26 @@ The example expects exactly two pages colocated with the manifest. It validates
 hash-named files and demonstrates retained-reader budget pressure and release.
 It performs CPU publication only; the quad is a second page in this test, with
 no automatic fallback or GPU upload. Shader/viewer workflows above stay separate.
+
+### M4 asynchronous two-page GPU residency
+
+Run the same two-page manifest with:
+
+```bash
+cargo run --locked --manifest-path apps/theia-render-lab/Cargo.toml -- --cell <cell-file> --gpu 7900 --wsi-smoke-test
+```
+
+`--resident-budget` controls actual geometry allocation bytes, including active
+and pending pages. On the qualified RX 7900 XTX fixture, 8,096 bytes permits
+replacement and 8,092 defers it while retaining the coarse page. Limits are
+device requirements, not universal constants. Default geometry budget is 16 MiB;
+one staging allocation is separately bounded to 64 MiB. Omit smoke/frames to keep
+the qualification cycling in a window. This is a bounded same-queue/single-frame
+prototype, not complete world streaming.
+
+For capture set `THEIA_CAPTURE_CELL=<cell-file>` plus `THEIA_CAPTURE_ASSET=<expected-bound-page>`
+and `THEIA_CAPTURE_FRAME=<frame>` (0..149). Frame 10 verifies initial coarse, frame
+30 fine, and frame 50 replacement coarse on the observed local run. Use
+`THEIA_CAPTURE_RESIDENT_BUDGET=8092` with coarse expected at frame 30 for pressure.
+Upload timing is checked by matching actual captured bytes/counts/pixels; an
+unexpected page fails the capture check. Keep capture separate from validation.

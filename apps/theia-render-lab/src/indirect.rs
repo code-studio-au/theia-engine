@@ -25,7 +25,7 @@ impl IndirectWork {
         shader_dir: &Path,
         spatial: bool,
         asset: Option<&[u8]>,
-        queue: (u32, vk::Queue),
+        queue: (u32, vk::Queue, u64),
     ) -> Result<Self> {
         let bytes = if spatial { 9728 } else { BUFFER_BYTES };
         let shader = ShaderModule::load(
@@ -101,6 +101,7 @@ impl IndirectWork {
                     bytes,
                     queue.0,
                     queue.1,
+                    queue.2,
                 )?);
                 bindings.push(
                     vk::DescriptorSetLayoutBinding::default()
@@ -270,6 +271,30 @@ impl IndirectWork {
                 &vk::DependencyInfo::default().buffer_memory_barriers(&publish),
             );
         }
+    }
+    pub fn resident_bytes(&self) -> u64 {
+        self.asset.as_ref().map_or(0, |asset| asset.allocated_bytes)
+    }
+    /// Caller must have retired every command using this descriptor set and old buffer.
+    pub fn replace_asset(&mut self, asset: crate::asset::Buffer) -> crate::asset::Buffer {
+        let info = [vk::DescriptorBufferInfo::default()
+            .buffer(asset.handle)
+            .range(asset.bytes)];
+        // SAFETY: Renderer waits its sole frame fence before calling. Binding 1 is present in
+        // Asset mode; its layout does not change and the new upload has completed its fence.
+        unsafe {
+            self.device.update_descriptor_sets(
+                &[vk::WriteDescriptorSet::default()
+                    .dst_set(self.set)
+                    .dst_binding(1)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .buffer_info(&info)],
+                &[],
+            );
+        }
+        self.asset
+            .replace(asset)
+            .expect("asset replacement requires Asset mode")
     }
     pub fn draw(
         &self,
