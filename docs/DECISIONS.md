@@ -28,7 +28,7 @@
 | ADR-022 | PROPOSED | Linux Vulkan client via ash/winit/ash-window | Actual builds/driver compatibility validated per platform |
 | ADR-023 | PROPOSED | Debug layers, reference tests, client/server telemetry, rolling deploy path | Tooling staged with milestones |
 | ADR-024 | LOCKED | Engine name: Theia; `theia-engine` repo naming | Trademark/branding clearance not performed |
-| ADR-025 | VERIFIED ENVIRONMENT | RX 7900 XTX on Mesa RADV, Slang compute + Vulkan execution | See CURRENT_STATUS; compute + mesh-only triangle executed on RADV; task execution pending |
+| ADR-025 | VERIFIED ENVIRONMENT | RX 7900 XTX on Mesa RADV, Slang compute + Vulkan execution | See CURRENT_STATUS; compute, mesh-only and task-amplified triangles executed on RADV; indirect work pending |
 
 ## Superseded choices / important reversals
 

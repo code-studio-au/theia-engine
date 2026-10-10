@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile and validate the M0-D Slang shaders; publish only after both pass."""
+"""Compile and validate the M0-D Slang shaders; publish only after all pass."""
 import argparse
 from pathlib import Path
 import subprocess
@@ -15,22 +15,24 @@ def main():
     parser.add_argument('--output-dir', type=Path, default=ROOT / 'build' / 'shaders')
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    shaders = [('meshMain', 'mesh', 'triangle.mesh.spv'),
-               ('fragmentMain', 'fragment', 'triangle.frag.spv')]
+    shaders = [('triangle.slang', 'meshMain', 'mesh', 'triangle.mesh.spv'),
+               ('triangle.slang', 'fragmentMain', 'fragment', 'triangle.frag.spv'),
+               ('amplified.slang', 'taskMain', 'amplification', 'triangle.task.spv'),
+               ('amplified.slang', 'amplifiedMeshMain', 'mesh', 'triangle.amplified.mesh.spv')]
     try:
         subprocess.run([args.slangc, '-version'], check=True)
         with tempfile.TemporaryDirectory(dir=args.output_dir) as temporary:
-            for entry, stage, filename in shaders:
+            for source, entry, stage, filename in shaders:
                 output = Path(temporary) / filename
-                command = [args.slangc, str(ROOT / 'shaders/render/triangle.slang'),
+                command = [args.slangc, str(ROOT / 'shaders/render' / source),
                            '-entry', entry, '-stage', stage, '-target', 'spirv',
                            '-profile', 'spirv_1_6', '-o', str(output)]
-                if stage == 'mesh':
+                if stage in ('mesh', 'amplification'):
                     command += ['-capability', 'spvMeshShadingEXT']
                 subprocess.run(command, check=True)
                 subprocess.run([args.spirv_val, '--target-env', 'vulkan1.3', str(output)], check=True)
                 print(f'Compiled and validated {stage}: {filename}', flush=True)
-            for _, _, filename in shaders:
+            for _, _, _, filename in shaders:
                 (Path(temporary) / filename).replace(args.output_dir / filename)
         print(f'Shaders ready in {args.output_dir}')
     except (OSError, subprocess.CalledProcessError) as error:

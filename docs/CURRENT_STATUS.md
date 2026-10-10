@@ -4,14 +4,41 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
-## M0-D mesh-only triangle — independently executed
+## M0-D task amplification — independently executed
+
+- Slang task + payload-consuming mesh shaders compile to SPIR-V 1.6 and pass
+  Vulkan 1.3 validation. Task output uses `TaskEXT`, `TaskPayloadWorkgroupEXT`,
+  and `OpEmitMeshTasksEXT(2,1,1)`; both stages use 32 lanes.
+- Default Render Lab submits one task group, which launches two mesh groups and
+  supplies two offsets plus a scale. Each group generates an RGB triangle with
+  no vertex/index buffers. `--mesh-only` preserves the qualified single-triangle
+  path; `--clear-only` preserves the bootstrap.
+- RX 7900 XTX / RADV / X11: task smoke passes 120 frames and six swapchain
+  generations, with zero validation warnings/errors including teardown. A
+  300-frame run also passes; own-window checks verify both triangle centers,
+  six color regions and the clear gap between them.
+- Slang 2026.19 crashed for the documented `out payload` task-parameter form.
+  Explicit `groupshared` payload storage compiles, validates and executes; no
+  HLSL/GLSL fallback or locked architecture change occurred.
+- Formatting, Clippy with denied warnings and both extent tests pass. Mesh-only,
+  clear-only and unchanged headless compute regressions pass; missing task module
+  errors clean up the already-created mesh/fragment modules without diagnostics.
+  Shader CI now includes task and both mesh variants.
+
+Evidence and limitations: [task amplification qualification](validation/M0D_TASK_AMPLIFICATION.md).
+Next outstanding task: **compute-written GPU work descriptors and indirect
+mesh/task dispatch**, with explicit barriers and no host count readback. **M0-D
+remains open.** Windows/Wayland GPU execution, other vendors and GPU-assisted
+validation remain unqualified; no performance claim is made.
+
+## M0-D mesh-only triangle — previously qualified
 
 - Slang 2026.19 compiles mesh + fragment stages to SPIR-V 1.6; both pass
   `spirv-val --target-env vulkan1.3`. Mesh uses `MeshShadingEXT` / `MeshEXT`,
   local size 32x1x1, three output vertices and one primitive. No language fallback.
 - Render Lab now creates a mesh-only graphics pipeline and executes
   `vkCmdDrawMeshTasksEXT(1,1,1)` on RX 7900 XTX / RADV / X11. There is no vertex
-  shader, vertex buffer or index buffer. **Task shaders have not executed yet.**
+  shader, vertex buffer or index buffer. **At this qualification, task shaders had not executed yet.**
 - Mesh smoke: 120 queued presentations, six swapchain generations, zero validation
   warnings/errors including teardown. A 300-frame run also passes; own-window image
   checks verify the clear background, interpolated center and red/green/blue regions.
@@ -23,8 +50,8 @@ executed in the local checkout on 2026-10-10.
   shaders with the official Slang release, pinned by SHA-256.
 
 Evidence and limitations: [mesh triangle qualification](validation/M0D_MESH_TRIANGLE.md).
-Next outstanding M0-D task: **Slang task-shader amplification**, followed by
-compute-written indirect mesh/task work. **M0-D remains open.** Windows/Wayland GPU
+The subsequent task amplification qualification is recorded above;
+compute-written indirect mesh/task work remains outstanding. **M0-D remains open.** Windows/Wayland GPU
 execution, other vendors and GPU-assisted validation remain unqualified.
 
 ## M0-D bootstrap — previously qualified

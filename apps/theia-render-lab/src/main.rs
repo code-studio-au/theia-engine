@@ -23,6 +23,7 @@ struct Options {
     frames: Option<u64>,
     smoke: bool,
     clear_only: bool,
+    mesh_only: bool,
     shader_dir: Option<std::path::PathBuf>,
 }
 impl Options {
@@ -43,6 +44,7 @@ impl Options {
                     }
                     result.frames = Some(count);
                 }
+                "--mesh-only" => result.mesh_only = true,
                 "--clear-only" => result.clear_only = true,
                 "--shader-dir" => {
                     result.shader_dir =
@@ -51,12 +53,15 @@ impl Options {
                 "--smoke-test" => result.smoke = true,
                 "--help" => {
                     println!(
-                        "Theia Render Lab: Slang mesh triangle qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --shader-dir <directory>  compiled SPIR-V directory\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: Slang task/mesh amplification qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --shader-dir <directory>  compiled SPIR-V directory\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
                 _ => return Err(format!("Unknown argument: {arg}").into()),
             }
+        }
+        if result.mesh_only && result.clear_only {
+            return Err("--mesh-only and --clear-only are mutually exclusive".into());
         }
         if result.smoke {
             if result.no_validation || result.frames.is_some() {

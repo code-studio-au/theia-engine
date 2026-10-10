@@ -4,7 +4,7 @@ This is an experimental GPU-first engine. **Consensus on an architecture is not 
 
 | Risk | Why it matters | Validation / fallback |
 |---|---|---|
-| Slang task/mesh support | Mesh shader codegen and driver behavior may vary | First real task+mesh+fragment test on RADV; alternate HLSL/GLSL specific modules if needed |
+| Slang task/mesh support | Mesh shader codegen and driver behavior may vary | Minimal task+mesh+fragment executed on RADV (see CURRENT_STATUS); broader features/vendors remain gates. Slang 2026.19 task output-parameter crash worked around with groupshared; alternate HLSL/GLSL modules only for specific failed features |
 | GPU archetype structural mutation | allocator races, fragmentation, stale handles, compaction barriers | CPU reference oracle, randomized mutation fuzzing and safety checks; constrain dynamic composition / specialized stores if needed |
 | GPU ECS epochs | in-flight references after relocation/eviction | per-resource lifetime tracking, multi-frame hazard tests; version selected mutable streams only |
 | GPU workload DAG | performance lost to many barriers/dispatches | measure total critical path and compare direct/task/indirect variants |

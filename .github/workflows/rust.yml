@@ -34,7 +34,7 @@ jobs:
           echo "bd7afcb0956dee9304f44ed115e9aaa7140704271b5c3294bcb237e3ae67adc7  $RUNNER_TEMP/slang.tar.gz" | sha256sum --check -
           mkdir "$RUNNER_TEMP/slang"
           tar -xzf "$RUNNER_TEMP/slang.tar.gz" -C "$RUNNER_TEMP/slang"
-      - name: Compile and validate Slang mesh/fragment shaders
+      - name: Compile and validate Slang task/mesh/fragment shaders
         run: python3 tools/compile_render_shaders.py --slangc "$RUNNER_TEMP/slang/bin/slangc"
       - name: Validate preserved compute shader
         run: |

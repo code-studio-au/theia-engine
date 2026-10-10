@@ -1,4 +1,4 @@
-//! Minimal mesh-only pipeline ownership. No vertex/index buffers or descriptors.
+//! Minimal task/mesh pipeline ownership. No vertex/index buffers or descriptors.
 use crate::Result;
 use ash::vk;
 use std::{fs::File, io::BufReader, path::Path};
@@ -38,9 +38,27 @@ pub struct Pipeline {
     layout: vk::PipelineLayout,
 }
 impl Pipeline {
-    pub fn new(device: &ash::Device, format: vk::Format, shader_dir: &Path) -> Result<Self> {
-        let mesh = ShaderModule::load(device, &shader_dir.join("triangle.mesh.spv"))?;
+    pub fn new(
+        device: &ash::Device,
+        format: vk::Format,
+        shader_dir: &Path,
+        task_amplification: bool,
+    ) -> Result<Self> {
+        let mesh_file = if task_amplification {
+            "triangle.amplified.mesh.spv"
+        } else {
+            "triangle.mesh.spv"
+        };
+        let mesh = ShaderModule::load(device, &shader_dir.join(mesh_file))?;
         let fragment = ShaderModule::load(device, &shader_dir.join("triangle.frag.spv"))?;
+        let task = if task_amplification {
+            Some(ShaderModule::load(
+                device,
+                &shader_dir.join("triangle.task.spv"),
+            )?)
+        } else {
+            None
+        };
         let mut pipeline = Self {
             device: device.clone(),
             handle: vk::Pipeline::null(),
@@ -53,7 +71,7 @@ impl Pipeline {
             pipeline.layout =
                 device.create_pipeline_layout(&vk::PipelineLayoutCreateInfo::default(), None)?;
             // Slang's SPIR-V entry-point name is "main", independently of source function names.
-            let stages = [
+            let mut stages = vec![
                 vk::PipelineShaderStageCreateInfo::default()
                     .stage(vk::ShaderStageFlags::MESH_EXT)
                     .module(mesh.handle)
@@ -63,6 +81,15 @@ impl Pipeline {
                     .module(fragment.handle)
                     .name(c"main"),
             ];
+            if let Some(task) = &task {
+                stages.insert(
+                    0,
+                    vk::PipelineShaderStageCreateInfo::default()
+                        .stage(vk::ShaderStageFlags::TASK_EXT)
+                        .module(task.handle)
+                        .name(c"main"),
+                );
+            }
             let viewport = vk::PipelineViewportStateCreateInfo::default()
                 .viewport_count(1)
                 .scissor_count(1);
@@ -99,16 +126,19 @@ impl Pipeline {
                             device.destroy_pipeline(handle, None);
                         }
                     }
-                    return Err(format!(
-                        "Slang mesh/fragment graphics pipeline creation failed: {error}"
-                    )
-                    .into());
+                    return Err(format!("Slang graphics pipeline creation failed: {error}").into());
                 }
             }
         }
-        println!(
-            "Mesh-only triangle pipeline created: MeshEXT + fragment, 32 lanes, 3 vertices, 1 primitive; no vertex/index buffers"
-        );
+        if task_amplification {
+            println!(
+                "Task amplification pipeline created: TaskEXT -> 2 MeshEXT groups -> fragment; 32 lanes per stage, 20-byte transform payload; no vertex/index buffers"
+            );
+        } else {
+            println!(
+                "Mesh-only triangle pipeline created: MeshEXT + fragment, 32 lanes, 3 vertices, 1 primitive; no vertex/index buffers"
+            );
+        }
         Ok(pipeline)
     }
 }
