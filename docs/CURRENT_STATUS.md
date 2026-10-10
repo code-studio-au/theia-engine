@@ -4,6 +4,29 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M4 bounded offline heightfield LOD — independently executed
+
+Official meshoptimizer 1.3 simplifies a synthetic curved 16x16 terrain patch
+from 512 to 128 triangles, then cooks two meshlets (5,528 encoded bytes).
+An independent checker verifies all 64 original boundary edges, positive XY
+winding, manifold edge counts, equal projected area, coverage and height at
+5,059 points. Maximum sampled vertical difference is 0.0122543, below the 0.03
+qualification limit; the native absolute metric separately reports 0.00903259.
+These are distinct metrics; sampling does not prove a Hausdorff/global error bound.
+
+Four analytic/adversarial Python tests pass. A stricter 0.001 height limit rejects
+the cook. Repeated terrain cooking is identical; the original grid fixture's
+digest is preserved. Rust reader/file-backed lifetime checks pass on new files.
+RX 7900 XTX cell-stream and capacity-fallback WSI runs each present 120 frames
+with zero validation diagnostics; streaming replaces five pages. Separate
+captures verify full/coarse GPU bytes/counts and 81 XY color/coverage pixels each.
+The viewer has no depth attachment, so these captures do not validate terrain
+depth or perspective appearance. Full/coarse physical allocation sizes are
+7,248/5,536 bytes. CI recipe is updated locally, without a hosted result claim.
+
+General authored meshes, conservative hierarchy errors, projected-error GPU LOD,
+cross-cell seam transitions and production geometry arenas remain open.
+
 ## M4 bounded asynchronous cell residency — independently executed
 
 Render Lab `--cell` reads two validated mesh pages on a bounded I/O worker and

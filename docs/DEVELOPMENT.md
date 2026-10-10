@@ -199,3 +199,21 @@ and `THEIA_CAPTURE_FRAME=<frame>` (0..149). Frame 10 verifies initial coarse, fr
 `THEIA_CAPTURE_RESIDENT_BUDGET=8092` with coarse expected at frame 30 for pressure.
 Upload timing is checked by matching actual captured bytes/counts/pixels; an
 unexpected page fails the capture check. Keep capture separate from validation.
+
+### M4 bounded offline heightfield LOD
+
+```bash
+python3 -m unittest discover -s tools -p test_height_lod.py
+python3 tools/cook_meshlet_fixture.py --fixture terrain16 --library <meshoptimizer-library> --source-archive <qualified-archive>
+python3 tools/cook_meshlet_fixture.py --fixture terrain16 --simplify-ratio .25 --library <meshoptimizer-library> --source-archive <qualified-archive>
+```
+
+Full/coarse paths appear in `build/assets/terrain16-report.json` and
+`terrain16-lod-report.json`. Package them with cell 8 and use the cell workflows
+above. `--simplify-error` is the native absolute metric (default 0.02);
+`--max-height-error` is the independent sampled vertical limit (default 0.03).
+They are different metrics. Sampling includes vertices, both triangulations'
+centroids and a 65x65 grid; it does not bound unsampled error. Exact boundary
+edges, winding and projected area must also pass. Meshlets preserve the simplified
+input's complete triangle multiset; simplification intentionally changes the
+original triangulation. Existing fixture recipes/content addresses remain intact.

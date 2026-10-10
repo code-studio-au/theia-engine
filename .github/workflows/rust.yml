@@ -55,3 +55,16 @@ jobs:
           python3 tools/cook_meshlet_fixture.py --library "$RUNNER_TEMP/meshopt-build/libmeshoptimizer.so" --source-archive "$RUNNER_TEMP/meshoptimizer.tar.gz"
           python3 tools/cook_meshlet_fixture.py --fixture quad --library "$RUNNER_TEMP/meshopt-build/libmeshoptimizer.so" --source-archive "$RUNNER_TEMP/meshoptimizer.tar.gz"
           cargo run --locked --manifest-path crates/theia-assets/Cargo.toml --example inspect -- "$(python3 -c 'import json; print(json.load(open("build/assets/grid16-report.json"))["path"])')"
+      - name: Qualify bounded terrain LOD and page lifetime contract
+        run: |
+          python3 -m unittest discover -s tools -p test_height_lod.py
+          python3 tools/cook_meshlet_fixture.py --fixture terrain16 --library "$RUNNER_TEMP/meshopt-build/libmeshoptimizer.so" --source-archive "$RUNNER_TEMP/meshoptimizer.tar.gz"
+          python3 tools/cook_meshlet_fixture.py --fixture terrain16 --simplify-ratio .25 --library "$RUNNER_TEMP/meshopt-build/libmeshoptimizer.so" --source-archive "$RUNNER_TEMP/meshoptimizer.tar.gz"
+          python3 - <<'PY'
+          import json, subprocess, sys
+          full = json.load(open('build/assets/terrain16-report.json'))['path']
+          coarse = json.load(open('build/assets/terrain16-lod-report.json'))['path']
+          manifest = subprocess.check_output([sys.executable, 'tools/package_cell.py', '--cell', '8', full, coarse], text=True).strip()
+          subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'inspect', '--', coarse], check=True)
+          subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'residency', '--', manifest], check=True)
+          PY

@@ -8,9 +8,11 @@ from collections import Counter
 import ctypes as c
 import hashlib
 import json
+import math
 from pathlib import Path
 import struct
 import subprocess
+from qualify_height_lod import qualify
 
 
 class Meshlet(c.Structure):
@@ -26,9 +28,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--library', type=Path, required=True)
     parser.add_argument('--source-archive', type=Path, required=True)
-    parser.add_argument('--fixture', choices=['grid16','triangle','quad'], default='grid16')
+    parser.add_argument('--fixture', choices=['grid16','triangle','quad','terrain16'], default='grid16')
+    parser.add_argument('--simplify-ratio', type=float, help='Bounded heightfield LOD target triangle ratio')
+    parser.add_argument('--simplify-error', type=float, default=.02, help='Native absolute position error limit')
+    parser.add_argument('--max-height-error', type=float, default=.03, help='Independent sampled vertical error limit')
     parser.add_argument('--output-dir', type=Path, default=Path('build/assets'))
     args = parser.parse_args()
+    if args.simplify_ratio is not None and (args.fixture not in ('grid16','terrain16') or not 0 < args.simplify_ratio < 1):
+        parser.error('Simplification requires grid16/terrain16 and ratio strictly between 0 and 1')
+    if any(not math.isfinite(value) or value < 0 for value in (args.simplify_error,args.max_height_error)):
+        parser.error('Error limits must be finite and nonnegative')
     archive_digest = hashlib.sha256(args.source_archive.read_bytes()).hexdigest()
     expected = 'd50a0b5e1323ba4379cdb32f89436c20652b7393445f8e18c88ae64445b67b77'
     if archive_digest != expected:
@@ -54,8 +63,31 @@ def main():
     if args.fixture == 'triangle':
         positions = [(-.7,.6,.5),(.7,.6,.5),(0,-.6,.5)]
         indices = [0,1,2]
+    if args.fixture == 'terrain16':
+        positions = [(x/16*1.6-.8,y/16*1.6-.8,.5+.12*math.sin(math.pi*x/16)*math.sin(2*math.pi*y/16)) for y in range(17) for x in range(17)]
     source = struct.pack(f'<{len(positions)*3}f', *(v for p in positions for v in p)) + struct.pack(f'<{len(indices)}I', *indices)
     vertices = (c.c_float * (len(positions)*3))(*(v for p in positions for v in p))
+    lod = None
+    original_source_digest = hashlib.sha256(source).hexdigest()
+    if args.simplify_ratio is not None:
+        library.meshopt_simplify.argtypes = [c.POINTER(c.c_uint),c.POINTER(c.c_uint),c.c_size_t,c.POINTER(c.c_float),c.c_size_t,c.c_size_t,c.c_size_t,c.c_float,c.c_uint,c.POINTER(c.c_float)]
+        library.meshopt_simplify.restype = c.c_size_t
+        destination = (c.c_uint*len(indices))()
+        input_indices = (c.c_uint*len(indices))(*indices)
+        reported_error = c.c_float()
+        target = max(3,int(len(indices)*args.simplify_ratio)//3*3)
+        # Official 1.3: LockBorder=1, ErrorAbsolute=4; output capacity is original index_count.
+        result = library.meshopt_simplify(destination,input_indices,len(indices),vertices,len(positions),12,target,args.simplify_error,5,c.byref(reported_error))
+        if not 0 < result < len(indices) or result % 3:
+            raise RuntimeError('Simplifier did not produce a reduced triangle list')
+        if not math.isfinite(reported_error.value) or reported_error.value > args.simplify_error+1e-6:
+            raise RuntimeError('Native simplification error exceeds configured limit')
+        canonical_positions = [tuple(vertices[i*3+axis] for axis in range(3)) for i in range(len(positions))]
+        simplified = list(destination[:result])
+        lod = qualify(canonical_positions,indices,simplified,args.max_height_error)
+        lod.update(target_ratio=args.simplify_ratio,target_triangles=target//3,native_absolute_error_limit=args.simplify_error,native_reported_absolute_error=reported_error.value,options='LockBorder|ErrorAbsolute')
+        indices = simplified
+        source = struct.pack(f'<{len(positions)*3}f', *vertices)+struct.pack(f'<{len(indices)}I', *indices)
     source_indices = (c.c_uint*len(indices))(*indices)
     bound = library.meshopt_buildMeshletsBound(len(indices),64,64)
     meshlets = (Meshlet*bound)()
@@ -88,6 +120,11 @@ def main():
     }
     if args.fixture == 'quad':
         metadata['fallback_for_source_sha256'] = hashlib.sha256(grid_source).hexdigest()
+    if lod is not None:
+        metadata['fallback_for_source_sha256'] = original_source_digest
+        metadata['producer'] = 'meshoptimizer-1.3/simplify+buildMeshlets+optimizeMeshlet'
+        metadata['recipe'] = args.fixture+'-lod-v1'
+        metadata['lod_qualification'] = lod
     meta = json.dumps(metadata, sort_keys=True, separators=(',',':')).encode()
     payload = meta + bytes((-len(meta)) % 4)
     payload += struct.pack(f'<{len(positions)*3}f', *vertices)
@@ -102,7 +139,10 @@ def main():
     destination.write_bytes(blob)
     report = {'path': str(destination), 'content_id': identifier, 'bytes': len(blob), 'vertices': len(positions),
               'meshlets': count, 'triangles': len(reconstructed), 'coverage_and_winding_verified': True, 'metadata': metadata}
-    (args.output_dir/(args.fixture+'-report.json')).write_text(json.dumps(report,indent=2)+'\n')
+    if lod is not None:
+        report['lod'] = lod
+    suffix = '-lod' if lod is not None else ''
+    (args.output_dir/(args.fixture+suffix+'-report.json')).write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report,indent=2))
 
 

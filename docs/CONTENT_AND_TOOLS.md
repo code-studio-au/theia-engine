@@ -27,6 +27,14 @@ Stream independent geometry, texture, collision, navigation, SDF, animation and 
 
 meshoptimizer primitives do not deliver a complete Nanite-class virtualized renderer. Theia must integrate hierarchical simplification/error, crack/seam correctness, cluster-page dependencies, streaming fallback and mesh-shader decode; GPU work selection and HZB across epochs. Benchmark rather than assume zero gaps.
 
+The bounded heightfield prototype now calls official meshoptimizer 1.3
+`meshopt_simplify` with `LockBorder|ErrorAbsolute`, then existing meshlet cooking.
+Native configuration/error is recorded with source/tool/library hashes. Independent
+checks preserve exact source boundary edges and measure sampled vertical error;
+this is not a general hierarchy, geometric error bound or authoring importer.
+See [meshoptimizer's simplification contract](https://github.com/zeux/meshoptimizer/blob/v1.3/README.md#simplification)
+and [local qualification evidence](validation/M4_COOKED_MESHLETS.md).
+
 ## No full editor first
 
 Begin with Blender/CLI exporters and focused visualization tools (asset viewer, world cell inspector, residency debugging, ECS inspection). Dedicated native Rust world editor only when clear authoring requirements exceed existing tools. Use immutable base world + authored overrides + mutable gameplay-state layer; but **environment physical geometry is static in gameplay**.

@@ -147,3 +147,50 @@ CPU oracle independently tests retained readers, but the renderer releases its
 reader after its actual fence. No cancellable file reads, general dependency graph,
 spatial cell selection, production arenas, general LOD/error/seams, authored scene,
 terrain or virtual textures are implemented by this unit. M4 stays open.
+
+## Subsequent offline heightfield LOD qualification — 2026-10-10
+
+Official meshoptimizer 1.3 `meshopt_simplify`, called offline through the pinned
+bulk ABI, uses LockBorder|ErrorAbsolute, triangle target ratio 0.25 and absolute
+native error limit 0.02. Existing meshlet construction then verifies the complete
+simplified input triangle multiset/winding. No native runtime dependency is added.
+
+| Fixture | Input/output triangles | Meshlets | Encoded bytes | Independent sampled height difference |
+|---|---:|---:|---:|---:|
+| Planar grid LOD | 512 / 128 | 2 | 5,528 | 1.67e-16 (5,062 points) |
+| Curved terrain LOD | 512 / 128 | 2 | 5,528 | 0.0122542699 (5,059 points) |
+| Full curved terrain | 512 / 512 | 8 | 7,248 | Reference |
+
+Both LODs preserve all **64 original boundary edges** by exact index/position
+identity. Independent Python checks require positive nondegenerate XY winding,
+no edge with more than two incident triangles, identical boundary edge set and
+projected area. It compares heights/coverage at every source vertex, both sets
+of triangle centroids and a 65x65 grid. Native terrain error is 0.00903258845,
+which is a different metric from vertical difference. No analytic/global Hausdorff
+bound follows from either these sampled checks or the fixture qualification.
+
+Four Python tests exercise a known 0.1 center peak, strict error rejection,
+changed boundary/reversed winding/nonmanifold edges, coverage holes, overlapping
+inconsistent heights and invalid/nonfinite inputs. Real terrain cook with sampled
+height limit 0.001 exits 1. Repeated terrain LOD cooking reproduces the exact file
+ID `2fea2220d96b718f5f4cba1055d89c0f49b91fd98e79932b5c0d433a8266cc21`.
+Full terrain ID: `ec117bdb76cfa189ad44957e80117497fb317fa56891edf363341e0679c3a7dd`.
+Original grid recipe still produces its previously qualified content ID.
+
+New cell 8 ID: `003dd7d145925e546db628f5333a61c8e542bd55bdf0253ad9f131ec4d80d860`.
+Rust inspect and file-backed lifetime example pass on these pages. RX 7900 XTX
+stream WSI and explicit 6,000-encoded-byte fallback WSI each present 120 frames,
+ten generations, zero warnings/errors including teardown; stream replaces five
+pages. Physical geometry allocations are full 7,248 / coarse **5,536** bytes;
+staging is separately tracked/capped. Two RenderDoc captures verify full/coarse
+GPU bytes/counts, 512/128 selected triangles and 81 XY color/coverage samples each.
+The current asset viewer has no depth attachment/perspective camera: GPU captures
+verify XY coverage/color and uploaded positions, not terrain depth appearance.
+
+Artifacts under ignored `build/qualification/m4-terrain-*` include cooker reports,
+strict-failure log, WSI logs and separate RenderDoc reports/captures/PNGs. Updated
+local CI configuration cooks both terrain pages, runs analytic tests and the Rust
+reader/lifetime example. Nothing was pushed; no hosted CI result is claimed.
+General authored geometry, material/UV preservation, conservative hierarchy error,
+projected-error selection, adjacent-cell transition seams and production arenas
+remain unqualified. M4 remains open.
