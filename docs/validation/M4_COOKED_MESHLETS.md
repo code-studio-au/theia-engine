@@ -297,3 +297,47 @@ node transforms, material/UV import, M1/M2/M3 integration or performance claim.
 CPU oracle handles positive-w near/far-unclipped triangles only and rejects other
 cases; ordinary GPU clipping is active but broader clipping is unqualified.
 The first 2D viewer's earlier absence of depth remains historical. M4 stays open.
+
+## Subsequent static glTF geometry qualification — 2026-10-10
+
+Separate offline Rust tool pins `gltf` 1.4.1; MIT/Apache-2.0 license declarations
+and license files were verified in the downloaded crate. Its utility/name features
+are enabled without runtime image import. Embedded base64, relative external and
+GLB binary buffers pass bounds/stride/padding checks before typed accessor decoding.
+Selected static scene nodes bake parent/local transforms, RH Y-up meters to RH
+Z-up `(x,-z,y)`, and reflection-aware index winding. GPU-facing mesh schema stays v1.
+
+Four tests pass: analytic nested rotation/translation/reflection, independent
+shared-mesh instances, invalid buffer/accessor/URI/tree/transform/material/topology
+cases, and external/embedded/padded-GLB geometry parity. Rust fmt and denied-warning
+Clippy pass. Source/root buffers are each capped at 64 MiB, output at 8,192 vertices/
+2,048 triangles and traversal at 4,096 nodes/128 edges depth. These are logical
+input/output bounds, not a total RSS budget or complete Khronos compliance validator.
+Unsupported attributes/materials/skin/morph/animation/extensions/cameras fail.
+
+Synthetic source `fixtures/gltf/transformed_scene.gltf` references one quad mesh
+from two nodes; parent translation plus reflected/rotated/raised second instance
+are baked. Result: **eight vertices/four triangles/one meshlet/2,072 encoded bytes**.
+Final qualified cooked ID:
+`985ee9f76a7ad0707749a4969de7b2617a4a2cc853c41b92af541053f6a9757f`.
+Normalizer metadata includes document/buffer hashes, node ranges/reflections,
+exact parser/tool, compiler/OS/arch/debug configuration and source/lock/binary
+hashes. Native cooker adds normalized JSON/source/configuration/library digests.
+The same normalizer binary/source produces byte-identical normalized JSON on repeat;
+rebuilds/other compilers are intentionally distinct producer identities.
+
+Rust container inspect succeeds. RX 7900 XTX camera WSI run: 120 frames, ten
+swapchain generations, **zero validation warnings/errors including teardown**.
+Separate 180-frame RenderDoc capture (validation disabled) verifies immutable GPU
+bytes, command/count, one meshlet and 81 perspective color/depth samples against
+CPU reconstruction. Artifacts: `build/qualification/m4-gltf-final-*` reports/logs/
+capture/PNG; normalized/cooked files remain ignored under `build/assets`.
+CI configuration adds Linux/Windows Rust checks for the tool and Linux offline
+import/cook/inspect; nothing is pushed and no hosted result is claimed.
+
+Limitations: geometry-only static subset; copies geometry per instance, no GPU
+instance table/material/UV/normal import, authored camera/control, collision/nav,
+page-demand/frustum selection or complete static scene database. Names/indices
+are source provenance, not durable world IDs. Arbitrary third-party exports and
+Windows runtime remain unqualified. M4 remains open. Workflow: DEVELOPMENT and
+[tool contract](../../tools/theia-gltf-import/README.md).

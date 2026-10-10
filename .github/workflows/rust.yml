@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        package: [apps/theia-gpu-test, apps/theia-render-lab, crates/theia-ecs, apps/theia-ecs-lab, crates/theia-assets]
+        package: [apps/theia-gpu-test, apps/theia-render-lab, crates/theia-ecs, apps/theia-ecs-lab, crates/theia-assets, tools/theia-gltf-import]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -68,4 +68,13 @@ jobs:
           manifest = subprocess.check_output([sys.executable, 'tools/package_cell.py', '--cell', '8', full, coarse], text=True).strip()
           subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'inspect', '--', coarse], check=True)
           subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'residency', '--', manifest], check=True)
+          PY
+      - name: Qualify bounded static glTF normalization and cooking
+        run: |
+          cargo run --locked --manifest-path tools/theia-gltf-import/Cargo.toml -- fixtures/gltf/transformed_scene.gltf build/assets/imported-scene.json
+          python3 tools/cook_meshlet_fixture.py --geometry build/assets/imported-scene.json --library "$RUNNER_TEMP/meshopt-build/libmeshoptimizer.so" --source-archive "$RUNNER_TEMP/meshoptimizer.tar.gz"
+          python3 - <<'PY'
+          import json, subprocess
+          asset = json.load(open('build/assets/imported-report.json'))['path']
+          subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'inspect', '--', asset], check=True)
           PY

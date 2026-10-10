@@ -82,6 +82,8 @@ actual dedicated-allocation budget pressure. Bounded offline heightfield LOD now
 preserves exact boundaries and passes independent sampled-error checks. A bounded
 fixed geometry arena now qualifies aligned ranges, retirement/reuse and physical
 capacity rejection. A fixed perspective/depth camera now passes CPU/replay checks.
-Qualify authored glTF geometry/node transforms and scene contracts next. General
+Position-only static glTF node transforms/reflections now feed the cooker/viewer
+with qualified source/tool provenance. Qualify GPU meshlet frustum selection and
+broader static scene/material contracts next. General
 LOD/hierarchy errors, broader page dependencies/readers and virtual texture
 residency remain open. Retain the current viewer/fixture checks; M5 GI stays deferred.

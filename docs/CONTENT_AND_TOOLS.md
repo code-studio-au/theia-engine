@@ -37,4 +37,11 @@ and [local qualification evidence](validation/M4_COOKED_MESHLETS.md).
 
 ## No full editor first
 
+`tools/theia-gltf-import` now evaluates pinned Rust `gltf` 1.4.1 offline for a
+bounded static position-only subset. It bakes node transforms/reflections into
+Z-up geometry and supplies the existing meshlet cooker, preserving tool/source
+provenance. Unsupported material/UV/normal/animation/extension/camera inputs fail;
+this is not a general glTF scene importer or GPU instancing implementation.
+[Workflow/limits](../tools/theia-gltf-import/README.md).
+
 Begin with Blender/CLI exporters and focused visualization tools (asset viewer, world cell inspector, residency debugging, ECS inspection). Dedicated native Rust world editor only when clear authoring requirements exceed existing tools. Use immutable base world + authored overrides + mutable gameplay-state layer; but **environment physical geometry is static in gameplay**.

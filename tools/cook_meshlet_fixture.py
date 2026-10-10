@@ -29,11 +29,14 @@ def main():
     parser.add_argument('--library', type=Path, required=True)
     parser.add_argument('--source-archive', type=Path, required=True)
     parser.add_argument('--fixture', choices=['grid16','triangle','quad','terrain16','occlusion'], default='grid16')
+    parser.add_argument('--geometry', type=Path, help='Position/index JSON from the bounded static glTF normalizer')
     parser.add_argument('--simplify-ratio', type=float, help='Bounded heightfield LOD target triangle ratio')
     parser.add_argument('--simplify-error', type=float, default=.02, help='Native absolute position error limit')
     parser.add_argument('--max-height-error', type=float, default=.03, help='Independent sampled vertical error limit')
     parser.add_argument('--output-dir', type=Path, default=Path('build/assets'))
     args = parser.parse_args()
+    if args.geometry and (args.fixture != 'grid16' or args.simplify_ratio is not None):
+        parser.error('Normalized geometry cannot combine with fixture selection/heightfield simplification')
     if args.simplify_ratio is not None and (args.fixture not in ('grid16','terrain16') or not 0 < args.simplify_ratio < 1):
         parser.error('Simplification requires grid16/terrain16 and ratio strictly between 0 and 1')
     if any(not math.isfinite(value) or value < 0 for value in (args.simplify_error,args.max_height_error)):
@@ -68,6 +71,23 @@ def main():
     if args.fixture == 'occlusion':
         positions = [(x,y,z) for z in (.65,.35) for x,y in ((-.6,-.6),(.6,-.6),(.6,.6),(-.6,.6))]
         indices = [0,1,2,0,2,3,4,5,6,4,6,7]
+    imported = None
+    if args.geometry:
+        with args.geometry.open('rb') as stream:
+            normalized = stream.read(64*1024*1024+1)
+        if len(normalized)>64*1024*1024:
+            parser.error('Normalized JSON exceeds 64 MiB')
+        imported = json.loads(normalized)
+        if type(imported.get('schema')) is not int or imported['schema']!=1 or not isinstance(imported.get('provenance'),dict):
+            parser.error('Unsupported normalized geometry schema/provenance')
+        positions = imported.get('positions',[])
+        indices = imported.get('indices',[])
+        if not 0<len(positions)<=8192 or not 0<len(indices)<=6144 or len(indices)%3:
+            parser.error('Normalized geometry exceeds count limits')
+        if any(not isinstance(p,list) or len(p)!=3 or any(type(v) not in (int,float) or not math.isfinite(v) or not math.isfinite(c.c_float(v).value) for v in p) for p in positions):
+            parser.error('Invalid finite float3 normalized positions')
+        if any(type(i) is not int or not 0<=i<len(positions) for i in indices):
+            parser.error('Normalized triangle indices out of bounds')
     source = struct.pack(f'<{len(positions)*3}f', *(v for p in positions for v in p)) + struct.pack(f'<{len(indices)}I', *indices)
     vertices = (c.c_float * (len(positions)*3))(*(v for p in positions for v in p))
     lod = None
@@ -135,6 +155,10 @@ def main():
         metadata['fallback_for_source_sha256'] = hashlib.sha256(grid_source).hexdigest()
     if args.fixture == 'occlusion':
         metadata['qualification_triangle_order'] = 'near-z0.65-before-far-z0.35'
+    if imported is not None:
+        metadata['recipe'] = 'normalized-static-gltf-v1'
+        metadata['normalization'] = imported['provenance']
+        metadata['normalized_json_sha256'] = hashlib.sha256(normalized).hexdigest()
     if lod is not None:
         metadata['fallback_for_source_sha256'] = original_source_digest
         metadata['producer'] = 'meshoptimizer-1.3/simplify+buildMeshlets+optimizeMeshlet'
@@ -157,7 +181,8 @@ def main():
     if lod is not None:
         report['lod'] = lod
     suffix = '-lod' if lod is not None else ''
-    (args.output_dir/(args.fixture+suffix+'-report.json')).write_text(json.dumps(report,indent=2)+'\n')
+    name = 'imported' if imported is not None else args.fixture+suffix
+    (args.output_dir/(name+'-report.json')).write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report,indent=2))
 
 

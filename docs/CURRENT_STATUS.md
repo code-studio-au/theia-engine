@@ -4,6 +4,30 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M4 bounded static glTF geometry — independently executed
+
+Offline Rust normalizer evaluates pinned `gltf` 1.4.1 (verified MIT/Apache-2.0)
+for static position-only triangles. It bakes parent/local transforms, converts
+RH Y-up meters to RH Z-up, and preserves intended winding for reflected nodes.
+Embedded, external and GLB buffers are bounded/checked before accessor decoding.
+Four tests cover analytic TRS/reflection, dense instance ranges, invalid inputs
+and buffer-container parity; fmt and denied-warning Clippy pass. Unsupported
+materials/attributes/animation/skin/extensions/cameras fail explicitly.
+
+Synthetic authored glTF fixture has two shared-mesh instances, one reflected,
+rotated and raised. Cooked output: eight vertices, four triangles, one meshlet,
+2,072 encoded bytes. Provenance includes original buffers/document, exact parser,
+normalizer source/lock/binary/compiler/target and native cooker/library hashes.
+Repeated normalization with the same binary/source is byte-identical.
+RX 7900 XTX camera WSI presents 120 frames/ten generations with zero validation
+diagnostics; separate replay verifies GPU bytes/counts and 81 perspective
+color/depth samples. CI configuration adds the offline package/workflow locally.
+
+This is a bounded geometry converter, not complete glTF/material import, GPU
+instancing or a complete static scene database. Names/indices are provenance,
+not persistent world IDs. M4 stays open; GPU frustum selection and broader scene
+contracts are next. [Tool contract](../tools/theia-gltf-import/README.md).
+
 ## M4 perspective/depth reference — independently executed
 
 Optional `--camera-test` transforms cooked meshlets with a fixed Z-up perspective

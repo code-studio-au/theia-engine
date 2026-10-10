@@ -244,3 +244,19 @@ near/far test. Its four triangles are deliberately ordered near (z=0.65) before
 far (z=0.35), verified after meshlet optimization, so subsequent far primitives
 must fail depth where overlapped. This is a diagnostic recipe, not a general
 triangle reordering policy. CPU analytic tests also verify the center ray result.
+
+### M4 bounded authored glTF geometry
+
+```bash
+cargo test --locked --manifest-path tools/theia-gltf-import/Cargo.toml
+cargo run --locked --manifest-path tools/theia-gltf-import/Cargo.toml -- fixtures/gltf/transformed_scene.gltf build/assets/imported-scene.json
+python3 tools/cook_meshlet_fixture.py --geometry build/assets/imported-scene.json --library <meshoptimizer-library> --source-archive <qualified-archive>
+```
+
+Use the path in `build/assets/imported-report.json` with `--asset <path>
+--camera-test --wsi-smoke-test`. For replay use `THEIA_CAPTURE_CAMERA=1` plus
+`THEIA_CAPTURE_ASSET=<path>` (no cell/arena variables for this standalone viewer).
+The source fixture tests shared-mesh static nodes, nested transforms, reflection,
+rotation and differing height. This converter rejects assigned materials, other
+attributes, skin/animation, extensions and authored cameras. Full workflow and
+source/buffer/geometry bounds: [normalizer contract](../tools/theia-gltf-import/README.md).

@@ -155,3 +155,21 @@ and selects the nearest triangle. Its analytic camera/center-ray tests and repla
 checks qualify unclipped positive-w fixtures; it rejects near/far clipping cases.
 This is not an authored camera schema, input controller, general CPU rasterizer,
 complete static scene database or visibility/material integration.
+
+### Bounded static glTF normalization
+
+The offline Rust tool evaluates `gltf` 1.4.1 with a validated position-only subset;
+THEIAMES v1 remains unchanged. Each static mesh instance bakes parent/local matrix
+composition and explicit RH Y-up to Z-up conversion. Negative world determinant
+swaps indices 1/2 to retain intended face orientation. Instances currently
+materialize separate dense vertex/index ranges; no GPU instance table is implied.
+Original node indices/names are provenance only, not persistent world identities.
+
+Normalized JSON schema 1 carries positions/indices and document/buffer/tool hashes,
+node ranges/reflection records, compiler/target/debug configuration and exact
+normalizer source/lock/binary digests. The cooker incorporates that provenance and
+JSON digest alongside existing meshoptimizer/library/configuration hashes. Native
+meshlet triangle-multiset checks apply to the normalized geometry. The normalizer
+has no runtime dependency and rejects unsupported source features instead of
+silently discarding them. Bounds, file/geometry caps and supported containers:
+[offline tool contract](../tools/theia-gltf-import/README.md).
