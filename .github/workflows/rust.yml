@@ -22,3 +22,21 @@ jobs:
         run: cargo clippy --locked --manifest-path apps/${{ matrix.app }}/Cargo.toml --all-targets -- -D warnings
       - name: Unit tests and build
         run: cargo test --locked --manifest-path apps/${{ matrix.app }}/Cargo.toml
+  shaders:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SPIR-V tools
+        run: sudo apt-get update && sudo apt-get install -y spirv-tools
+      - name: Fetch qualified Slang compiler
+        run: |
+          curl --fail --location --retry 3 https://github.com/shader-slang/slang/releases/download/v2026.19/slang-2026.19-linux-x86_64-glibc-2.28.tar.gz -o "$RUNNER_TEMP/slang.tar.gz"
+          echo "bd7afcb0956dee9304f44ed115e9aaa7140704271b5c3294bcb237e3ae67adc7  $RUNNER_TEMP/slang.tar.gz" | sha256sum --check -
+          mkdir "$RUNNER_TEMP/slang"
+          tar -xzf "$RUNNER_TEMP/slang.tar.gz" -C "$RUNNER_TEMP/slang"
+      - name: Compile and validate Slang mesh/fragment shaders
+        run: python3 tools/compile_render_shaders.py --slangc "$RUNNER_TEMP/slang/bin/slangc"
+      - name: Validate preserved compute shader
+        run: |
+          "$RUNNER_TEMP/slang/bin/slangc" shaders/compute/buffer_test.slang -entry computeMain -stage compute -target spirv -profile spirv_1_6 -o build/shaders/buffer_test.spv
+          spirv-val --target-env vulkan1.3 build/shaders/buffer_test.spv

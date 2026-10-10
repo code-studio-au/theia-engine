@@ -1,4 +1,5 @@
 mod gpu;
+mod pipeline;
 
 use std::{
     error::Error,
@@ -21,6 +22,8 @@ struct Options {
     gpu: Option<String>,
     frames: Option<u64>,
     smoke: bool,
+    clear_only: bool,
+    shader_dir: Option<std::path::PathBuf>,
 }
 impl Options {
     fn parse() -> Result<Self> {
@@ -40,10 +43,15 @@ impl Options {
                     }
                     result.frames = Some(count);
                 }
+                "--clear-only" => result.clear_only = true,
+                "--shader-dir" => {
+                    result.shader_dir =
+                        Some(args.next().ok_or("--shader-dir needs a directory")?.into())
+                }
                 "--smoke-test" => result.smoke = true,
                 "--help" => {
                     println!(
-                        "Theia Render Lab: Vulkan clear-screen qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: Slang mesh triangle qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --shader-dir <directory>  compiled SPIR-V directory\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -90,7 +98,7 @@ impl ApplicationHandler for App {
             let window = Arc::new(
                 event_loop.create_window(
                     Window::default_attributes()
-                        .with_title("Theia Render Lab — M0-D clear screen")
+                        .with_title("Theia Render Lab — M0-D mesh triangle")
                         .with_inner_size(PhysicalSize::new(960, 540)),
                 )?,
             );
