@@ -112,6 +112,27 @@ read cannot be cancelled mid-read; teardown joins it and retires upload/frame
 work before destroying their allocations. CPU store retains at most 128 MiB of
 encoded pages, separately from decoder/file-read overhead.
 
+### Fixed geometry arena update
+
+The current cell path supersedes per-page geometry allocations with one fixed
+device-local storage/transfer buffer. Its Vulkan allocation requirement must fit
+`--resident-budget`; there is no silent rounding above the budget. Host range
+leases round page lengths to max(4, minStorageBufferOffsetAlignment), retain
+ownership across pending uploads/readers, and coalesce free ranges only after the
+last lease releases. Descriptor binding 1 uses each range's offset/encoded length;
+shader byte offsets remain relative to the page. Copy/publish barriers are scoped
+to that range. GPU handles and range offsets never become persistent asset IDs.
+
+Physical backing allocation stays fixed through replacement. Active/pending range
+charges are distinct from that allocation's size; staging remains separately
+bounded to 64 MiB. On this GPU descriptor alignment is 4, so grid/quad ranges
+charge 7,244/848 bytes despite the old grid dedicated allocation needing 7,248.
+An 8,096-byte arena permits replacement; an 8,080-byte arena preserves coarse.
+The 8,092-byte arena request fails because Vulkan rounds backing to 8,096 bytes.
+Range exhaustion/fragmentation preserves the current page. The CPU arena oracle
+tests retained clones and randomized nonoverlap/reuse independently. Actual GPU
+reader retirement still uses the sole frame fence; multi-frame overlap is open.
+
 Integrate authored geometry/material/camera contracts and the M1/M2/M3 data paths;
 qualify general meshlet LOD/error/seams, immutable cell manifests, asynchronous
 I/O/staged publication/retirement, actual per-arena resident budgets/protected

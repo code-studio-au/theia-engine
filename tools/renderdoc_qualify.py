@@ -170,12 +170,19 @@ def qualify(report):
             draws = int(count != 0)
             if struct.unpack_from('<I', data, 36)[0] != count or command != (draws,1,1,draws):
                 raise RuntimeError('Cooked mesh indirect count differs from asset header/scenario')
-            geometry = [buffer for buffer in controller.GetBuffers() if buffer.length == len(source)]
-            if len(geometry) != 1 or controller.GetBufferData(geometry[0].resourceId,0,len(source)) != source:
+            arena_size = os.environ.get('THEIA_CAPTURE_ARENA_BYTES')
+            arena_offset = int(os.environ.get('THEIA_CAPTURE_ARENA_OFFSET', '0'))
+            geometry_size = int(arena_size) if arena_size else len(source)
+            if arena_offset < 0 or arena_offset + len(source) > geometry_size:
+                raise RuntimeError('Expected geometry range exceeds capture buffer')
+            geometry = [buffer for buffer in controller.GetBuffers() if buffer.length == geometry_size]
+            if len(geometry) != 1 or controller.GetBufferData(geometry[0].resourceId,arena_offset,len(source)) != source:
                 raise RuntimeError('Immutable GPU asset bytes differ from cooked source')
             report.update(scenario=scenario, meshlet_count=count, immutable_asset_bytes_verified=True)
             if cell_path:
                 report.update(cell_manifest=cell_path, expected_page=asset_path, capture_frame=capture_frame)
+                if arena_size:
+                    report.update(geometry_arena_bytes=geometry_size, verified_page_offset=arena_offset)
         elif visibility:
             count = struct.unpack_from('<I', data, 36)[0]
             draws = int(scenario != 0)

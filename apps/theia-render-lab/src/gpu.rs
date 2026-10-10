@@ -880,12 +880,38 @@ impl Renderer {
                     return Err("Cooked asset exceeds selected GPU storage-buffer range".into());
                 }
             }
+            if let Some(stream) = &mut renderer.stream {
+                // SAFETY: Live instance and selected physical device; descriptor offsets use its queried limit.
+                let alignment = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits
+                        .min_storage_buffer_offset_alignment
+                };
+                stream.initialize_arena(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    alignment,
+                )?;
+            }
             renderer.work = Some(IndirectWork::new(
                 renderer.ctx.device.as_ref().unwrap(),
                 &memory,
                 renderer.shader_dir.as_ref().unwrap(),
                 renderer.mode == RenderMode::Spatial,
-                asset.as_deref(),
+                asset.as_deref().map(|bytes| {
+                    (
+                        bytes,
+                        renderer
+                            .stream
+                            .as_ref()
+                            .and_then(|stream| stream.arena.as_ref()),
+                    )
+                }),
                 (
                     renderer.ctx.graphics_family,
                     renderer.ctx.graphics,
@@ -896,9 +922,6 @@ impl Renderer {
                     },
                 ),
             )?);
-            if let Some(stream) = &renderer.stream {
-                stream.check_initial(renderer.work.as_ref().unwrap())?;
-            }
         }
         renderer.rebuild(renderer.ctx.window.inner_size())?;
         Ok(renderer)

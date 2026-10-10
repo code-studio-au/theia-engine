@@ -185,10 +185,11 @@ Run the same two-page manifest with:
 cargo run --locked --manifest-path apps/theia-render-lab/Cargo.toml -- --cell <cell-file> --gpu 7900 --wsi-smoke-test
 ```
 
-`--resident-budget` controls actual geometry allocation bytes, including active
-and pending pages. On the qualified RX 7900 XTX fixture, 8,096 bytes permits
-replacement and 8,092 defers it while retaining the coarse page. Limits are
-device requirements, not universal constants. Default geometry budget is 16 MiB;
+`--resident-budget` controls the fixed geometry arena's physical allocation cap
+and logical capacity. On the qualified RX 7900 XTX fixture, 8,096 bytes permits
+replacement and 8,080 defers it while retaining the coarse page. An 8,092 request
+fails because backing requires 8,096 physical bytes. Limits are device
+requirements, not universal constants. Default geometry budget is 16 MiB;
 one staging allocation is separately bounded to 64 MiB. Omit smoke/frames to keep
 the qualification cycling in a window. This is a bounded same-queue/single-frame
 prototype, not complete world streaming.
@@ -196,7 +197,12 @@ prototype, not complete world streaming.
 For capture set `THEIA_CAPTURE_CELL=<cell-file>` plus `THEIA_CAPTURE_ASSET=<expected-bound-page>`
 and `THEIA_CAPTURE_FRAME=<frame>` (0..149). Frame 10 verifies initial coarse, frame
 30 fine, and frame 50 replacement coarse on the observed local run. Use
-`THEIA_CAPTURE_RESIDENT_BUDGET=8092` with coarse expected at frame 30 for pressure.
+`THEIA_CAPTURE_RESIDENT_BUDGET=8080` with coarse expected at frame 30 for pressure.
+Set `THEIA_CAPTURE_ARENA_BYTES` to arena logical capacity (default 16777216) and
+`THEIA_CAPTURE_ARENA_OFFSET` to the expected page range: quad 0/grid 848 for
+observed cell 7; terrain LOD 0/full 5528 for cell 8 on this GPU's 4-byte alignment.
+For pressure use arena bytes 8080. These offsets are checked against replay data;
+inspect runtime range logs on other devices rather than assuming alignment.
 Upload timing is checked by matching actual captured bytes/counts/pixels; an
 unexpected page fails the capture check. Keep capture separate from validation.
 

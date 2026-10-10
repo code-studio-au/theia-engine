@@ -24,7 +24,7 @@ impl IndirectWork {
         memory_properties: &vk::PhysicalDeviceMemoryProperties,
         shader_dir: &Path,
         spatial: bool,
-        asset: Option<&[u8]>,
+        asset: Option<(&[u8], Option<&crate::asset::GeometryArena>)>,
         queue: (u32, vk::Queue, u64),
     ) -> Result<Self> {
         let bytes = if spatial { 9728 } else { BUFFER_BYTES };
@@ -94,7 +94,7 @@ impl IndirectWork {
                             },
                     ),
             ];
-            if let Some(bytes) = asset {
+            if let Some((bytes, arena)) = asset {
                 work.asset = Some(crate::asset::Buffer::upload(
                     device,
                     memory_properties,
@@ -102,6 +102,7 @@ impl IndirectWork {
                     queue.0,
                     queue.1,
                     queue.2,
+                    arena,
                 )?);
                 bindings.push(
                     vk::DescriptorSetLayoutBinding::default()
@@ -147,6 +148,7 @@ impl IndirectWork {
             if let Some(asset) = &work.asset {
                 let info = [vk::DescriptorBufferInfo::default()
                     .buffer(asset.handle)
+                    .offset(asset.offset)
                     .range(asset.bytes)];
                 device.update_descriptor_sets(
                     &[vk::WriteDescriptorSet::default()
@@ -273,12 +275,13 @@ impl IndirectWork {
         }
     }
     pub fn resident_bytes(&self) -> u64 {
-        self.asset.as_ref().map_or(0, |asset| asset.allocated_bytes)
+        self.asset.as_ref().map_or(0, |asset| asset.reserved_bytes)
     }
     /// Caller must have retired every command using this descriptor set and old buffer.
     pub fn replace_asset(&mut self, asset: crate::asset::Buffer) -> crate::asset::Buffer {
         let info = [vk::DescriptorBufferInfo::default()
             .buffer(asset.handle)
+            .offset(asset.offset)
             .range(asset.bytes)];
         // SAFETY: Renderer waits its sole frame fence before calling. Binding 1 is present in
         // Asset mode; its layout does not change and the new upload has completed its fence.

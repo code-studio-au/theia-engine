@@ -194,3 +194,53 @@ reader/lifetime example. Nothing was pushed; no hosted CI result is claimed.
 General authored geometry, material/UV preservation, conservative hierarchy error,
 projected-error selection, adjacent-cell transition seams and production arenas
 remain unqualified. M4 remains open.
+
+## Subsequent fixed geometry arena qualification — 2026-10-10
+
+Current cell streaming supersedes dedicated per-page geometry allocations with
+one fixed device-local storage/transfer buffer. A Rust aligned-range allocator
+leases subranges; pending uploads and current descriptors own those leases until
+upload/frame fences retire. Last-owner release coalesces adjacent ranges. Three
+additional tests check retained clones, fragmentation, checked overflow/ticket
+exhaustion and 5,000 randomized reservations against an independent occupancy
+bitmap. Eleven asset tests and nine renderer tests pass; fmt and denied-warning
+Clippy pass for both packages. Range identities are internal, never asset IDs.
+
+Actual RX 7900 XTX storage descriptor alignment is **4 bytes**. The grid reserves
+7,244 bytes at offset 848; quad reserves 848 at offset 0. Default arena allocates
+16,777,216 bytes once. Both upload copy destinations and descriptor binding 1
+include page offsets, and transfer publication barriers cover only that range.
+Staging still uses a separately capped allocation per upload (64 MiB maximum).
+Physical backing size, live reserved range bytes and staging are distinct charges.
+No normal upload/replacement performs queue/device idle waits.
+
+| Run | Observed result | Validation including teardown |
+|---|---|---|
+| 16 MiB arena / WSI | Five replacements, 120 frames, ten generations | 0 warnings / 0 errors |
+| 8,096-byte arena / WSI | Five replacements | 0 / 0 |
+| 8,080-byte arena / WSI | Five deferrals; coarse retained | 0 / 0 |
+| 8,092-byte backing request | Vulkan needs 8,096 bytes; startup exits 1 within strict cap | 0 / 0 |
+| 832-byte arena | Coarse range does not fit; startup exits 1 | 0 / 0 |
+| 22-frame shutdown | Pending unpublished range upload retires safely | 0 / 0 |
+| Missing asset mesh shader after arena/upload | Construction exits 1; shared allocation released safely | 0 / 0 |
+
+Four RenderDoc captures independently verify range bytes, GPU-generated counts
+and 81 XY color/coverage samples each: initial quad offset 0/frame 10, grid
+**offset 848**/frame 30, reused quad offset 0/frame 50, and retained quad under
+8,080-byte capacity pressure. Expected arena size/range offsets are explicit
+capture inputs and checked against replay bytes and resulting counts/pixels.
+All seven older render modes pass 120-frame validation regressions. Curved-terrain
+cell streaming also passes (five replacements, zero diagnostics) in the arena.
+Shader code is unchanged. Captures remain separate from validation.
+
+Artifacts: `build/qualification/m4-arena-*` logs and
+`m4-arena-renderdoc-{coarse,fine-offset,reused,budget}/report.json` with captures/PNGs.
+The earlier 8,092-byte *dedicated-page* deferral result above remains historical;
+the current arena request of that size fails its physical backing cap. Current
+commands are updated in DEVELOPMENT. Changes remain local without hosted CI claims.
+
+This qualifies a bounded host range allocator, fixed GPU allocation, range-scoped
+upload, descriptor publication and safe reuse on one frame/queue. GPU demand/
+allocation queues, multi-frame readers, diverse arena classes, staging reuse,
+authored geometry/cameras, general hierarchy/LOD/seams and virtual textures remain
+open. No throughput/latency or cross-platform qualification is claimed; M4 stays open.

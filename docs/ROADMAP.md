@@ -79,7 +79,8 @@ LOD hierarchy, cell/page manager, terrain or virtual texture system.
 The immutable cell/page contract and two-page asynchronous GPU replacement are
 implemented/tested, with dedicated upload fences, single-frame retirement and
 actual dedicated-allocation budget pressure. Bounded offline heightfield LOD now
-preserves exact boundaries and passes independent sampled-error checks. Qualify
-production geometry arenas and authored geometry/camera contracts next. General
+preserves exact boundaries and passes independent sampled-error checks. A bounded
+fixed geometry arena now qualifies aligned ranges, retirement/reuse and physical
+capacity rejection. Qualify authored geometry/camera contracts next. General
 LOD/hierarchy errors, broader page dependencies/readers and virtual texture
 residency remain open. Retain the current viewer/fixture checks; M5 GI stays deferred.

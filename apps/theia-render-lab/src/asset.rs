@@ -1,7 +1,7 @@
 //! One immutable cooked mesh buffer and a bounded, one-time staging upload.
 use crate::Result;
 use ash::vk;
-use std::{fs, io::Read, path::Path};
+use std::{fs, io::Read, path::Path, sync::Arc};
 use theia_assets::{DEFAULT_BUDGET, Mesh};
 pub fn select(requested: &Path, fallback: Option<&Path>, budget: usize) -> Result<Vec<u8>> {
     let primary = load(requested)?;
@@ -85,21 +85,85 @@ pub fn load(path: &Path) -> Result<Vec<u8>> {
     );
     Ok(bytes)
 }
-pub struct Buffer {
+struct Allocation {
     device: ash::Device,
+    handle: vk::Buffer,
+    memory: vk::DeviceMemory,
+}
+pub struct Buffer {
+    _allocation: Arc<Allocation>,
+    _lease: Option<theia_assets::arena::Lease>,
+    pub offset: u64,
     pub handle: vk::Buffer,
     memory: vk::DeviceMemory,
     pub bytes: u64,
     pub allocated_bytes: u64,
+    pub reserved_bytes: u64,
 }
 #[derive(Debug)]
 pub struct AllocationBudgetExceeded;
 impl std::fmt::Display for AllocationBudgetExceeded {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Cooked buffer exceeds physical allocation budget")
+        f.write_str("Cooked geometry allocation or range budget exhausted")
     }
 }
 impl std::error::Error for AllocationBudgetExceeded {}
+/// One fixed device-local allocation. Page ranges are leased until safe retirement.
+pub struct GeometryArena {
+    backing: Buffer,
+    ranges: theia_assets::arena::Arena,
+}
+impl GeometryArena {
+    pub fn new(
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        budget: u64,
+        alignment: u64,
+    ) -> Result<Self> {
+        let backing = Buffer::allocate(
+            device,
+            memory,
+            budget,
+            vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            budget,
+        )?;
+        let ranges = theia_assets::arena::Arena::new(budget, alignment)?;
+        println!(
+            "Fixed geometry arena: {} allocation bytes, {} logical bytes, descriptor offset alignment {alignment}",
+            backing.allocated_bytes, backing.bytes
+        );
+        Ok(Self { backing, ranges })
+    }
+    pub fn live_bytes(&self) -> Result<u64> {
+        Ok(self.ranges.live_bytes()?)
+    }
+    pub fn allocated_bytes(&self) -> u64 {
+        self.backing.allocated_bytes
+    }
+    fn page(&self, bytes: u64) -> Result<Buffer> {
+        let lease = self
+            .ranges
+            .reserve(bytes)
+            .map_err(|error| -> Box<dyn std::error::Error> {
+                if error.0 == "arena has no contiguous aligned range" {
+                    AllocationBudgetExceeded.into()
+                } else {
+                    error.into()
+                }
+            })?;
+        Ok(Buffer {
+            _allocation: self.backing._allocation.clone(),
+            handle: self.backing.handle,
+            memory: self.backing.memory,
+            bytes,
+            offset: lease.offset(),
+            allocated_bytes: self.backing.allocated_bytes,
+            reserved_bytes: lease.reserved(),
+            _lease: Some(lease),
+        })
+    }
+}
 impl Buffer {
     fn allocate(
         device: &ash::Device,
@@ -109,27 +173,27 @@ impl Buffer {
         flags: vk::MemoryPropertyFlags,
         budget: u64,
     ) -> Result<Self> {
-        let mut buffer = Self {
+        let mut allocation = Allocation {
             device: device.clone(),
             handle: vk::Buffer::null(),
             memory: vk::DeviceMemory::null(),
-            bytes,
-            allocated_bytes: 0,
         };
-        // SAFETY: Device/create-info storage is live. Every created object immediately gains RAII ownership.
+        let allocated_bytes;
+        // SAFETY: Live device/create-info storage. Allocation immediately owns each created handle;
+        // failed construction drops this guard, releasing buffer before its backing memory.
         unsafe {
-            buffer.handle = device.create_buffer(
+            allocation.handle = device.create_buffer(
                 &vk::BufferCreateInfo::default()
                     .size(bytes)
                     .usage(usage)
                     .sharing_mode(vk::SharingMode::EXCLUSIVE),
                 None,
             )?;
-            let requirements = device.get_buffer_memory_requirements(buffer.handle);
+            let requirements = device.get_buffer_memory_requirements(allocation.handle);
             if requirements.size > budget {
                 return Err(AllocationBudgetExceeded.into());
             }
-            buffer.allocated_bytes = requirements.size;
+            allocated_bytes = requirements.size;
             let index = (0..memory.memory_type_count)
                 .find(|&i| {
                     requirements.memory_type_bits & (1 << i) != 0
@@ -138,15 +202,24 @@ impl Buffer {
                             .contains(flags)
                 })
                 .ok_or("No memory type for cooked asset buffer")?;
-            buffer.memory = device.allocate_memory(
+            allocation.memory = device.allocate_memory(
                 &vk::MemoryAllocateInfo::default()
                     .allocation_size(requirements.size)
                     .memory_type_index(index),
                 None,
             )?;
-            device.bind_buffer_memory(buffer.handle, buffer.memory, 0)?;
+            device.bind_buffer_memory(allocation.handle, allocation.memory, 0)?;
         }
-        Ok(buffer)
+        Ok(Self {
+            handle: allocation.handle,
+            memory: allocation.memory,
+            _allocation: Arc::new(allocation),
+            _lease: None,
+            offset: 0,
+            bytes,
+            allocated_bytes,
+            reserved_bytes: allocated_bytes,
+        })
     }
     pub fn upload(
         device: &ash::Device,
@@ -155,8 +228,9 @@ impl Buffer {
         family: u32,
         queue: vk::Queue,
         resident_budget: u64,
+        arena: Option<&GeometryArena>,
     ) -> Result<Self> {
-        Upload::begin(device, memory, bytes, family, queue, resident_budget)?.finish()
+        Upload::begin(device, memory, bytes, family, queue, resident_budget, arena)?.finish()
     }
 }
 
@@ -176,15 +250,20 @@ impl Upload {
         family: u32,
         queue: vk::Queue,
         resident_budget: u64,
+        arena: Option<&GeometryArena>,
     ) -> Result<Self> {
-        let destination = Buffer::allocate(
-            device,
-            memory,
-            bytes.len() as u64,
-            vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            resident_budget,
-        )?;
+        let destination = if let Some(arena) = arena {
+            arena.page(bytes.len() as u64)?
+        } else {
+            Buffer::allocate(
+                device,
+                memory,
+                bytes.len() as u64,
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                resident_budget,
+            )?
+        };
         let staging = Buffer::allocate(
             device,
             memory,
@@ -234,7 +313,9 @@ impl Upload {
                 command,
                 upload.staging.handle,
                 destination.handle,
-                &[vk::BufferCopy::default().size(destination.bytes)],
+                &[vk::BufferCopy::default()
+                    .dst_offset(destination.offset)
+                    .size(destination.bytes)],
             );
             let publish = [vk::BufferMemoryBarrier2::default()
                 .src_stage_mask(vk::PipelineStageFlags2::TRANSFER)
@@ -247,6 +328,7 @@ impl Upload {
                 .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                 .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                 .buffer(destination.handle)
+                .offset(destination.offset)
                 .size(destination.bytes)];
             device.cmd_pipeline_barrier2(
                 command,
@@ -268,7 +350,7 @@ impl Upload {
         Ok(unsafe { self.transfer.device.get_fence_status(self.transfer.fence)? })
     }
     pub fn resident_bytes(&self) -> u64 {
-        self.destination.as_ref().unwrap().allocated_bytes
+        self.destination.as_ref().unwrap().reserved_bytes
     }
     pub fn staging_bytes(&self) -> u64 {
         self.staging.allocated_bytes
@@ -283,8 +365,12 @@ impl Upload {
         self.transfer.submitted = false;
         let destination = self.destination.take().unwrap();
         println!(
-            "Immutable GPU mesh upload complete: {} encoded bytes, {} resident allocation bytes, {} staging allocation bytes; dedicated fence retired",
-            destination.bytes, destination.allocated_bytes, self.staging.allocated_bytes
+            "Immutable GPU mesh upload complete: {} encoded bytes, offset {}, {} charged range bytes in {} backing allocation bytes, {} staging allocation bytes; dedicated fence retired",
+            destination.bytes,
+            destination.offset,
+            destination.reserved_bytes,
+            destination.allocated_bytes,
+            self.staging.allocated_bytes
         );
         Ok(destination)
     }
@@ -316,7 +402,7 @@ impl Drop for Transfer {
     }
 }
 
-impl Drop for Buffer {
+impl Drop for Allocation {
     fn drop(&mut self) {
         // SAFETY: Transfer guard/work owner has retired uses; parent device remains live.
         unsafe {

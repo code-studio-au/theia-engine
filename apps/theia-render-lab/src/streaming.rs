@@ -20,6 +20,7 @@ use theia_assets::{
 pub struct Stream {
     // Pending upload drops (and retires its fence) before its CPU reservation.
     pending: Option<(Upload, StagedPage, PageId)>,
+    pub arena: Option<asset::GeometryArena>,
     loader: Option<Loader>,
     manifest: Manifest,
     directory: PathBuf,
@@ -91,6 +92,7 @@ impl Stream {
         Ok((
             Self {
                 pending: None,
+                arena: None,
                 loader: None,
                 manifest,
                 directory,
@@ -106,10 +108,18 @@ impl Stream {
             coarse,
         ))
     }
-    pub fn check_initial(&self, work: &IndirectWork) -> Result<()> {
-        if work.resident_bytes() > self.budget {
-            return Err("Initial coarse page exceeds physical geometry budget".into());
-        }
+    pub fn initialize_arena(
+        &mut self,
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        alignment: u64,
+    ) -> Result<()> {
+        self.arena = Some(asset::GeometryArena::new(
+            device,
+            memory,
+            self.budget,
+            alignment.max(4),
+        )?);
         Ok(())
     }
     /// Called after the sole frame fence retires, before any new recording.
@@ -134,13 +144,16 @@ impl Stream {
             let new = upload.finish()?;
             self.store.publish(Some(staged), &[self.active])?;
             let retired = work.replace_asset(new);
-            println!(
-                "Cell page published at frame {frame}, epoch {}; old {} allocation bytes retired after frame fence; live resident {} bytes",
-                self.store.snapshot().epoch(),
-                retired.allocated_bytes,
-                work.resident_bytes()
-            );
+            let old_offset = retired.offset;
+            let old_bytes = retired.reserved_bytes;
             drop(retired);
+            println!(
+                "Cell page published at frame {frame}, epoch {}; old range offset {old_offset}, {old_bytes} reserved bytes retired after frame fence; active {} reserved bytes, arena live {} / {} allocated bytes",
+                self.store.snapshot().epoch(),
+                work.resident_bytes(),
+                self.arena.as_ref().unwrap().live_bytes()?,
+                self.arena.as_ref().unwrap().allocated_bytes()
+            );
             self.active = id;
             self.publications += 1;
         }
@@ -158,10 +171,18 @@ impl Stream {
                         .budget
                         .checked_sub(work.resident_bytes())
                         .ok_or("Resident budget accounting underflow")?;
-                    match Upload::begin(device, memory, &bytes, queue.0, queue.1, remaining) {
+                    match Upload::begin(
+                        device,
+                        memory,
+                        &bytes,
+                        queue.0,
+                        queue.1,
+                        remaining,
+                        self.arena.as_ref(),
+                    ) {
                         Ok(upload) => {
                             println!(
-                                "Cell upload queued: active {} + pending {} physical geometry bytes <= {}; staging {} bytes separately; CPU live encoded {} bytes",
+                                "Cell upload queued: active {} + pending {} reserved geometry range bytes <= {}; staging {} bytes separately; CPU live encoded {} bytes",
                                 work.resident_bytes(),
                                 upload.resident_bytes(),
                                 self.budget,

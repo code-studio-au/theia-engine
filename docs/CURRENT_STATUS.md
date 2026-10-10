@@ -4,6 +4,29 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M4 fixed geometry arena — independently executed
+
+Cell streaming now allocates one fixed device-local geometry buffer and leases
+aligned page ranges inside it. Immutable ranges remain owned through pending
+upload/frame retirement; last-owner release coalesces reusable space. A pure Rust
+range oracle passes retained-lease, fragmentation, overflow/exhaustion and 5,000
+randomized occupancy checks. All eleven asset tests and nine Render Lab tests,
+formatting and denied-warning Clippy pass locally.
+
+RX 7900 XTX requires 4-byte storage descriptor offsets. The 16 MiB arena smoke
+passes five replacements, 120 frames, ten generations, zero validation warnings/
+errors. The grid uses a 7,244-byte range at offset 848; the quad uses 848 at offset
+0. Four separate captures verify selected range bytes/counts and 81 pixel samples
+each, including nonzero offsets and safely reused ranges. An 8,096-byte arena
+permits replacement; 8,080 preserves coarse with five deferrals. An 8,092-byte
+request requires 8,096 physical bytes and fails its strict allocation budget.
+Pending-upload shutdown and an arena too small for coarse also clean up safely.
+
+This is a bounded host-allocated range prototype. Staging still uses a separately
+capped allocation per upload. General arena classes, GPU allocation/demand queues,
+multi-frame overlap, authored scene/camera integration and virtual textures remain
+open. M4 remains incomplete. The older dedicated-page evidence below is historical.
+
 ## M4 bounded offline heightfield LOD — independently executed
 
 Official meshoptimizer 1.3 simplifies a synthetic curved 16x16 terrain patch

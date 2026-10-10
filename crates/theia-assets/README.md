@@ -23,3 +23,9 @@ oracle. Snapshots and staged tokens retain encoded allocations across eviction;
 the byte budget counts all unique live pages. This does not model Vulkan upload
 completion or physical GPU memory. See the contract for schema and exclusions.
 The `residency` example runs the retained-reader sequence on two real cooked files.
+
+`arena` provides aligned host-backed range leases with last-owner release and
+free-range coalescing. Retained clones prevent reuse. Tests cover fragmentation,
+overflow/ticket exhaustion and 5,000 randomized operations against an independent
+occupancy bitmap. Renderer use still needs explicit GPU upload/frame completion;
+the CPU allocator does not infer GPU completion from a dropped lease.
