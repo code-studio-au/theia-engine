@@ -484,3 +484,30 @@ Default expanded Slang interface remains available; shared-vertex interoperabili
 is now locally qualified through this specific fallback, not through Slang
 fragment codegen. Authored attributes/materials and broader scene contracts remain
 open; M4 remains incomplete.
+
+## Bounded opaque material contract (2026-10-10; CPU/offline only)
+
+THEIAMAT v1 binds an exact geometry file digest to <=256 finite opaque linear
+float4 factors and dense per-meshlet/per-triangle material indices. Four reader
+tests cover valid binding/lookup, two-meshlet local-index separation with reversed
+material indices, every truncation/header/count/digest/budget/geometry mismatch,
+and correctly rehashed invalid factor/alpha/UTF-8/padding/offset/reference data.
+All 15 asset tests, formatting and denied-warning Clippy pass.
+
+The independent Python cooker consumes the hand-authored imported geometry
+assignment fixture (materials red/green/blue, triangle assignment [0,1,2,0]).
+460-byte output hash `fb06e0d920f4748240a3f1bcf72985cb4912da13f9380fbe26206a2eb2e985fa`
+is bound to geometry `985ee9f76a7ad0707749a4969de7b2617a4a2cc853c41b92af541053f6a9757f`.
+Rust file-backed example independently validates all four triangle colors.
+Repeated cooking is byte-identical. Wrong geometry/alpha, boolean assignment,
+invalid material index/count/factor fail; Rust rejects binding to the old quad.
+Logs: `build/qualification/m4-material-contract-{cook.json,reader.log,negative.json}`.
+CI configuration repeats cooking/reader validation against its synthetic imported
+fixture; normalizer build provenance varies, so test assignment binds that exact
+build's generated hash. No hosted execution or GPU success is claimed here.
+
+This is an opaque unlit factor-only prototype, not glTF material/texture/UV/normal
+import, PBR lighting, transparency, material arena/residency or scene material
+identities. Explicit assignments use cooked triangle order and exact file hash.
+Geometry recooking requires a new explicit assignment source. GPU lookup/resolve
+is the next bounded gate; M4 remains incomplete.

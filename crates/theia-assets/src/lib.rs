@@ -2,6 +2,7 @@
 use sha2::{Digest, Sha256};
 use std::{error::Error, fmt};
 pub mod arena;
+pub mod material;
 pub mod residency;
 pub const HEADER_BYTES: usize = 76;
 pub const DEFAULT_BUDGET: usize = 64 * 1024 * 1024;

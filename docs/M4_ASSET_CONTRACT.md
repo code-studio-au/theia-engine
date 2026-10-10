@@ -225,3 +225,43 @@ Use `--material-test --shader-dir build/shaders-shared` for runtime qualificatio
 Default compiler invocation and expanded Slang path are unchanged. The lab's
 conservative 192-vertex/8192-byte admission remains, even for this alternate pair.
 This is not a finalized minimum GPU profile, storage change or performance result.
+
+### THEIAMAT v1 opaque unlit sidecar (CPU/offline prototype)
+
+This independent, content-addressed file leaves THEIAMES/THEIACEL v1 unchanged.
+Its filename is full-file SHA-256 plus `.theia-material`. Little-endian header:
+
+| Offset | Type | Meaning |
+|---:|---|---|
+| 0 | bytes[8] | THEIAMAT magic |
+| 8 | u32 | schema 1 |
+| 12 | u32 | provenance UTF-8 byte length |
+| 16 | u32 | material count, 1..256 |
+| 20 | u32 | bound meshlet count, 1..4096 |
+| 24 | u32 | total decoded triangle count |
+| 28 | u32 | payload byte length |
+| 32 | bytes[32] | exact THEIAMES full-file content hash |
+| 64 | bytes[32] | payload SHA-256 |
+
+Payload: UTF-8 provenance plus zero padding to four bytes; material float4 factors;
+`meshlet_count + 1` u32 triangle-prefix offsets; one u32 material index per triangle,
+in meshlet/local-triangle order. Prefixes must exactly equal cumulative counts
+from fully decoded bound geometry, starting zero/ending total. Factors are finite
+linear RGBA in [0,1], alpha exactly 1. No textures, vertex colors or lighting;
+opaque unlit output is the selected factor, following the bounded factor-only
+semantics of [KHR_materials_unlit](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_materials_unlit/README.md).
+This is not glTF import support or general material-system approval.
+
+Reader enforces a caller byte budget (default 4 MiB), 1 MiB provenance limit,
+checked lengths, version/hash/UTF-8/padding/reference checks and exact geometry
+binding. Local triangle lookup returns None outside each meshlet's interval.
+Materials may be shared and assignment order need not match material index order.
+
+`tools/cook_material_page.py --mesh <hash.theia-mesh> --assignments <JSON>` reads
+schema 1 JSON with `geometry_sha256`, `base_colors` and `triangle_materials`.
+Assignments explicitly target this exact cooked file; they are not source glTF
+primitive IDs and must not be silently reused after recooking. The cooker records
+source and script hashes, shades only opaque linear factors, and has no native
+runtime dependency. Rust `--example material` independently validates its output.
+The cell loader currently accepts geometry pages only; material residency,
+dependency publication, GPU binding and general authoring conversion remain open.

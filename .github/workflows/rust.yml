@@ -85,3 +85,17 @@ jobs:
           asset = json.load(open('build/assets/imported-report.json'))['path']
           subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'inspect', '--', asset], check=True)
           PY
+      - name: Qualify bounded opaque material sidecar
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, subprocess, sys
+          mesh = json.load(open('build/assets/imported-report.json'))
+          assert mesh['triangles'] == 4
+          source = json.load(open('fixtures/materials/imported_unlit.json'))
+          # Synthetic test fixture: normalizer binary/compiler provenance varies per build.
+          source['geometry_sha256'] = mesh['content_id']
+          path = pathlib.Path('build/assets/test-unlit-assignments.json')
+          path.write_text(json.dumps(source, sort_keys=True))
+          page = json.loads(subprocess.check_output([sys.executable, 'tools/cook_material_page.py', '--mesh', mesh['path'], '--assignments', str(path)], text=True))
+          subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'material', '--', mesh['path'], page['path']], check=True)
+          PY

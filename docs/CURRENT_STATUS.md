@@ -4,6 +4,22 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M4 bounded opaque material contract — CPU/offline qualified
+
+THEIAMAT v1 sidecars bind exact immutable geometry hashes to finite opaque
+linear RGBA factors and explicit cooked-triangle material assignments. Dense
+meshlet prefix offsets are independently checked against the decoded geometry;
+lengths/digests/padding/counts/references are validated before use. No existing
+mesh or cell format changes. Four new asset tests (15 total), fmt and denied-
+warning Clippy pass. Python cooking produces a 460-byte, three-factor/four-
+triangle sidecar which Rust independently decodes; repeat cooking is identical.
+Six malformed assignment cases and a different-geometry binding fail explicitly.
+
+Assignments are hand-authored against cooked triangle IDs, not glTF primitive
+indices. No GPU material binding or glTF material import is implemented by this
+unit. GPU lookup/resolve qualification is next; textures/UVs/normals, lighting,
+alpha/transparency and material dependency residency remain open. M4 stays open.
+
 ## M4 optional shared primitive interface — independently executed
 
 A specific GLSL fragment fallback now qualifies Slang shared-vertex mesh output
