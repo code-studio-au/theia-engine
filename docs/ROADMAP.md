@@ -9,7 +9,7 @@ The goal is an **early end-to-end playable vertical slice**, not years of isolat
 | M0-D | Render Lab | Native window + Vulkan swapchain + task/mesh-generated triangle; validation and resize work |
 | M1 | GPU ECS minimal | [Bounded reference slice qualified on RADV](validation/M1_GPU_ECS.md); dense components, handles, mutations and retained epochs vs CPU oracle |
 | M2 | Flat 2.5D visibility | [Bounded reference slice qualified on RADV](validation/M2_SPATIAL_VISIBILITY.md); CSR candidates, height-aware bounds culling, GPU indirect mesh/task draws |
-| M3 | Visibility buffer/materials | Correct primitive identity/depth, material attribute reconstruction, bindless sampling |
+| M3 | Visibility buffer/materials | [Bounded reference slice qualified on RADV](validation/M3_VISIBILITY_MATERIALS.md); identity/depth, barycentric resolve, nonuniform sampled material array |
 | M4 | Static world/streaming | Cooked meshlets+LOD, terrain, virtual textures, immutable cells, resource budget/fallback |
 | M5 | GI/temporal | Static streamed SDF + dynamically updated shared radiance cache, motion vectors, reconstruction |
 | M6 | Characters/UI | GPU animation/skin, shared pose baseline, Bézier text, UI, host shaping/IME |
@@ -60,10 +60,19 @@ cell addressing; keep world identity independent of cell/storage placement.
 Static content streaming, HZB, virtualized geometry and production-scale tuning
 remain later slices. Preserve M0/M1 qualification apps and evidence.
 
-## Next local implementation — M3
+## M3 reference slice — locally qualified
 
 Start with a bounded visibility/depth target and frame-local primitive identity,
 then resolve material attributes against a CPU reference before adding bindless
 texture sampling. Preserve all previous qualification modes. Reconstruct geometry
 from explicit scene/primitive references; prove depth/overlap and barycentric
 correctness before broadening the material pipeline. No GI or streaming work yet.
+
+## Next local implementation — M4
+
+Begin a small immutable cooked-asset contract and offline tool qualification, then
+load a bounded static scene into GPU-owned buffers. Mature offline geometry tools
+remain the default. Content hashes, format versions and budget/fallback behavior
+must be verified before expanding into meshlet LOD, terrain or virtual textures.
+The existing procedural scenes remain regression/qualification fixtures, not a
+claim of implemented world content streaming.

@@ -113,3 +113,14 @@ resident bounds/CSR/candidate mask/visible IDs/indirect counts with the executab
 CPU-only `--spatial-reference` output, and exports the final presentation image.
 Bounds comparison uses explicit absolute tolerance `1e-6`; integer lists/masks and
 counts must match exactly. The three tested images contain 0, 8 and 32 triangles.
+
+For M3 use `THEIA_CAPTURE_VISIBILITY=1` (without the spatial variable), a scenario
+0/1/2 and separate `THEIA_CAPTURE_OUTPUT=build/qualification/m3-renderdoc-2`.
+The helper verifies 84 identity/depth/resolved-color samples against CPU-only
+`--visibility-reference`, including overlap, far-only and background. Depth
+uses absolute `1e-6`; sRGB byte colors allow two levels of quantization tolerance.
+
+FIFO desktop qualification can stall with the monitor powered off. An M3 smoke
+run resumed and completed cleanly after temporarily waking the display with
+`DISPLAY=:0 xset dpms force on`; permanent power settings were not changed.
+This is a desktop-environment condition, not device-loss recovery evidence.

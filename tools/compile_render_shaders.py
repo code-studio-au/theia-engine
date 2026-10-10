@@ -23,7 +23,12 @@ def main():
                ('indirect.slang', 'indirectTaskMain', 'amplification', 'triangle.indirect.task.spv'),
                ('spatial.slang', 'spatialCompute', 'compute', 'spatial.compute.spv'),
                ('spatial.slang', 'spatialTask', 'amplification', 'spatial.task.spv'),
-               ('spatial.slang', 'spatialMesh', 'mesh', 'spatial.mesh.spv')]
+               ('spatial.slang', 'spatialMesh', 'mesh', 'spatial.mesh.spv'),
+               ('visibility.slang', 'visibilityTask', 'amplification', 'visibility.task.spv'),
+               ('visibility.slang', 'visibilityMesh', 'mesh', 'visibility.mesh.spv'),
+               ('visibility.slang', 'visibilityFragment', 'fragment', 'visibility.frag.spv'),
+               ('resolve.slang', 'resolveMesh', 'mesh', 'resolve.mesh.spv'),
+               ('resolve.slang', 'resolveFragment', 'fragment', 'resolve.frag.spv')]
     try:
         subprocess.run([args.slangc, '-version'], check=True)
         with tempfile.TemporaryDirectory(dir=args.output_dir) as temporary:

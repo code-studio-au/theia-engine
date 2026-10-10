@@ -40,12 +40,17 @@ def qualify(report):
     options.apiValidation = False
     options.debugOutputMute = False
     spatial = os.environ.get('THEIA_CAPTURE_SPATIAL') == '1'
+    visibility = os.environ.get('THEIA_CAPTURE_VISIBILITY') == '1'
+    if spatial and visibility:
+        raise RuntimeError('Select only one qualification capture mode')
     scenario = int(os.environ.get('THEIA_CAPTURE_SCENARIO', '2'))
     if scenario not in (0, 1, 2):
         raise RuntimeError('Capture scenario must be 0, 1 or 2')
     arguments = '--frames 180 --gpu 7900 --no-validation'
     if spatial:
         arguments += f' --spatial-test --work-items {scenario}'
+    if visibility:
+        arguments += f' --visibility-test --work-items {scenario}'
     result = rd.ExecuteAndInject(
         str(executable), str(root), arguments, [],
         str(output / 'theia-indirect'), options, False)
@@ -84,8 +89,9 @@ def qualify(report):
                    for action in report['actions']):
             raise RuntimeError('Missing indirect count draw')
         mesh = [action for action in actions if action.flags & rd.ActionFlags.MeshDispatch
+                and action.flags & rd.ActionFlags.Indirect
                 and not action.flags & rd.ActionFlags.MultiAction]
-        if len(mesh) != (0 if spatial and scenario == 0 else 1):
+        if len(mesh) != (0 if (spatial or visibility) and scenario == 0 else 1):
             raise RuntimeError('Expected one indirect task dispatch')
         event = mesh[0] if mesh else next(action for action in actions if action.flags & rd.ActionFlags.Dispatch)
         controller.SetFrameEvent(event.eventId, True)
@@ -123,10 +129,17 @@ def qualify(report):
             draws = int(count != 0)
             if command != (draws, 1, 1, draws):
                 raise RuntimeError('GPU indirect command/count differs from visibility')
+        elif visibility:
+            count = struct.unpack_from('<I', data, 36)[0]
+            draws = int(scenario != 0)
+            if count != scenario or command != (draws, 1, 1, draws):
+                raise RuntimeError('Visibility fixture command/count mismatch')
         else:
             verify_indirect(data, command, report)
         present = next(action for action in actions if action.flags & rd.ActionFlags.Present)
         controller.SetFrameEvent(present.eventId, True)
+        if visibility:
+            verify_surface(controller, executable, root, present.copyDestination, scenario, report)
         save = rd.TextureSave()
         save.resourceId = present.copyDestination
         save.destType = rd.FileType.PNG
@@ -151,6 +164,48 @@ def verify_indirect(data, command, report):
     expected = (-0.5, 0.0, 0.5, 0.0, 0.45)
     if any(abs(actual - want) > 1e-6 for actual, want in zip(transforms, expected)):
         raise RuntimeError('Unexpected GPU transforms')
+
+
+def verify_surface(controller, executable, root, color_id, scenario, report):
+    textures = controller.GetTextures()
+    color = next(texture for texture in textures if texture.resourceId == color_id)
+    identities = [texture for texture in textures if texture.format.compType == rd.CompType.UInt
+                  and texture.format.compCount == 2 and texture.format.compByteWidth == 4]
+    depths = [texture for texture in textures if texture.format.compType == rd.CompType.Depth
+              and texture.format.compByteWidth == 4]
+    if len(identities) != 1 or len(depths) != 1:
+        raise RuntimeError('Expected one identity and depth image')
+    identity = identities[0]
+    depth = depths[0]
+    width, height = color.width, color.height
+    ids = controller.GetTextureData(identity.resourceId, rd.Subresource())
+    z = controller.GetTextureData(depth.resourceId, rd.Subresource())
+    rgb = controller.GetTextureData(color.resourceId, rd.Subresource())
+    if len(ids) != width*height*8 or len(z) != width*height*4 or len(rgb) != width*height*4:
+        raise RuntimeError('Unexpected texture readback layout')
+    def encode_color(value):
+        value = max(0, min(1, value))
+        srgb = value*12.92 if value <= 0.0031308 else 1.055*value**(1/2.4)-0.055
+        return round(srgb*255)
+    points = [(width//2, height//2), (int(width*.725), int(height*.65)), (int(width*.9), int(height*.1))]
+    points += [(int(width*x/10), int(height*y/10)) for y in range(1,10) for x in range(1,10)]
+    samples = []
+    for x,y in points:
+        expected = json.loads(subprocess.check_output([str(executable), '--visibility-reference',
+                              str(x), str(y), str(width), str(height), str(scenario)], cwd=root))
+        offset = y*width+x
+        actual_id = struct.unpack_from('<2I', ids, offset*8)
+        actual_depth = struct.unpack_from('<f', z, offset*4)[0]
+        actual_color = list(rgb[offset*4:offset*4+3])
+        if color.format.BGRAOrder():
+            actual_color.reverse()
+        expected_color = [encode_color(value) for value in expected['color']]
+        if list(actual_id) != expected['identity'] or abs(actual_depth-expected['depth']) > 1e-6:
+            raise RuntimeError(f'Identity/depth mismatch at {(x,y)}: {actual_id}/{actual_depth}, expected {expected}')
+        if any(abs(actual-want) > 2 for actual,want in zip(actual_color, expected_color)):
+            raise RuntimeError(f'Material resolve mismatch at {(x,y)}: {actual_color}, expected {expected_color}')
+        samples.append({'pixel': [x,y], 'identity': actual_id, 'depth': actual_depth, 'color': actual_color})
+    report.update(scenario=scenario, surface_samples=samples, surface_verified=True)
 
 report = {'renderdoc': rd.GetVersionString(), 'validation_enabled_in_capture': False}
 code = 0

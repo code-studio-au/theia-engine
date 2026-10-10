@@ -4,6 +4,21 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M3 bounded visibility/material reference — independently executed
+
+Render Lab `--visibility-test` writes integer instance/primitive identity and D32
+depth, then reconstructs barycentric color and samples two materials through a
+nonuniform runtime descriptor array. RX 7900 XTX passes the 120-frame WSI smoke
+with ten generations and zero validation diagnostics including teardown. Three
+separate captures each verify 84 identity/depth/sRGB pixels against the CPU oracle,
+including near/far occlusion, far material and background. Fourteen render shader
+outputs validate; nine unit tests and all five earlier render-mode regressions pass.
+
+This qualifies the bounded local M3 reference gate. General perspective/mip
+reconstruction, patterned materials, lighting, scene integration and other
+platforms remain unqualified. Evidence and compiler/display limitations:
+[M3 visibility/material qualification](validation/M3_VISIBILITY_MATERIALS.md).
+
 ## M2 bounded spatial/visibility reference slice — independently executed
 
 Render Lab `--spatial-test` builds direct-addressed XY CSR memberships and gathers

@@ -1,4 +1,4 @@
-# Theia Render Lab — M0-D and bounded M2 visibility
+# Theia Render Lab — M0-D / M2 / M3 reference slices
 
 A separate qualification application; the headless `theia-gpu-test` remains unchanged.
 The default path dispatches Slang compute to write an indirect command, draw count,
@@ -27,13 +27,20 @@ Wayland and Windows execution still require qualification.
   and `triangle.frag.spv`. Default: the build checkout's `build/shaders`, independent
   of working directory. Pass an explicit directory when relocating the executable.
 - `--work-items <0|1|2>` supplies a fixed qualification input to compute (default 2).
-  It requires indirect or spatial mode without the smoke test. This is a bounded
+  It requires indirect, spatial or visibility mode without the smoke test. This is a bounded
   test input, not an authoritative gameplay decision.
 - `--direct-task` runs the qualified two-triangle task path using `triangle.task.spv`.
 - `--spatial-test` runs the separate bounded M2 grid/height visibility path. Here
   `--work-items 0|1|2` selects empty, left/low or full views over 32 GPU-generated
   resident bounds. It does not provide a host object/draw list. Smoke tests cycle
   those views. See [M2 evidence](../../docs/validation/M2_SPATIAL_VISIBILITY.md).
+- `--visibility-test` runs M3 identity/depth and material resolve. GPU-generated
+  overlapping near/far triangles write `R32G32_UINT` frame-local instance/primitive
+  references and `D32_SFLOAT` depth. A fullscreen mesh pass reconstructs barycentrics
+  and samples two materials using a nonuniform runtime descriptor array.
+  `--work-items 0|1|2` selects empty, near-only or near+far geometry.
+- `--visibility-reference x y width height count` prints the independent CPU pixel
+  oracle without Vulkan. See [M3 evidence](../../docs/validation/M3_VISIBILITY_MATERIALS.md).
 - `--spatial-reference 0|1|2` prints independent CPU reference JSON and exits before
   creating a window/Vulkan instance; used only for offline correctness comparison.
 - `--mesh-only` runs the qualified single-triangle mesh path using `triangle.mesh.spv`.
@@ -95,7 +102,7 @@ are freed after pipeline creation; pipeline/layout RAII also handles partial fai
 
 `tools/compile_render_shaders.py` uses offline Slang 2026.19 and `spirv-val`, selecting
 `spvMeshShadingEXT` explicitly for task and mesh stages (not the NV mesh variant). It
-publishes all nine outputs only after they validate for Vulkan 1.3. Missing shaders,
+publishes all fourteen outputs only after they validate for Vulkan 1.3. Missing shaders,
 compiler errors and pipeline errors fail explicitly; no language fallback occurred.
 On Windows use Python 3 with Slang/SPIR-V tools on PATH or pass their executable
 paths to the script's `--slangc` / `--spirv-val` options.
@@ -174,3 +181,23 @@ recorded in [CURRENT_STATUS](../../docs/CURRENT_STATUS.md) and
 [the indirect work qualification record](../../docs/validation/M0D_INDIRECT_WORK.md).
 RenderDoc capture/replay commands and the validation interaction are documented
 in [DEVELOPMENT](../../docs/DEVELOPMENT.md#renderdoc-capture-and-replay).
+
+## Bounded M3 visibility/material mode
+
+Format support is checked for integer identity color+sampling, sampled D32 depth,
+and sampled/transfer-destination RGBA8 materials. Each swapchain generation owns
+identity/depth images, two 1×1 material images, sampler, descriptor sets and two
+pipelines. Attachment writes are published to fragment sampled reads; transfer
+clears initialize material images before sampling. RAII retires these resources
+with the swapchain and cleans up partial pipeline construction.
+
+Identity is `(instance+1, primitive)` with zero instance meaning background. Both
+fixture instances contain primitive zero; these values are not durable world IDs
+or approved production bit budgets. Depth selects the smaller near triangle over
+the larger far triangle. The resolve reconstructs affine barycentrics for fixed
+`w=1` geometry, validates depth/identity, and uses nonuniform material indexing into
+a runtime descriptor array with two populated entries and explicit LOD zero.
+Slots are fully populated; descriptor holes and updates during rendering are not
+qualified. Constant 1×1 textures qualify material selection, not UV patterns,
+mip gradients or production asset residency. General perspective reconstruction,
+compressed geometry/material tables and transparency remain later work.

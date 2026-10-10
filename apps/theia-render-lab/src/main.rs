@@ -2,6 +2,8 @@ mod gpu;
 mod indirect;
 mod pipeline;
 mod spatial;
+mod surface_reference;
+mod visibility;
 mod wsi;
 
 use std::{
@@ -23,6 +25,7 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 enum RenderMode {
     Indirect,
     Spatial,
+    Visibility,
     DirectTask,
     MeshOnly,
     Clear,
@@ -60,11 +63,13 @@ impl Options {
                     }
                     result.frames = Some(count);
                 }
-                "--mesh-only" | "--clear-only" | "--direct-task" | "--spatial-test" => {
+                "--mesh-only" | "--clear-only" | "--direct-task" | "--spatial-test"
+                | "--visibility-test" => {
                     let mode = match arg.as_str() {
                         "--mesh-only" => RenderMode::MeshOnly,
                         "--clear-only" => RenderMode::Clear,
                         "--spatial-test" => RenderMode::Spatial,
+                        "--visibility-test" => RenderMode::Visibility,
                         _ => RenderMode::DirectTask,
                     };
                     if result.mode.replace(mode).is_some() {
@@ -77,6 +82,21 @@ impl Options {
                         return Err("--work-items must be 0, 1 or 2".into());
                     }
                     result.work_items = Some(count);
+                }
+                "--visibility-reference" => {
+                    let mut values = [0u32; 5];
+                    for value in &mut values {
+                        *value = args
+                            .next()
+                            .ok_or("--visibility-reference needs x y width height count")?
+                            .parse()?;
+                    }
+                    let [x, y, width, height, count] = values;
+                    if width == 0 || height == 0 || x >= width || y >= height || count > 2 {
+                        return Err("Invalid visibility reference pixel/extent/count".into());
+                    }
+                    surface_reference::print_pixel(x, y, width, height, count);
+                    std::process::exit(0);
                 }
                 "--spatial-reference" => {
                     let scenario = args
@@ -100,7 +120,7 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -110,11 +130,11 @@ impl Options {
         if result.work_items.is_some()
             && (!matches!(
                 result.render_mode(),
-                RenderMode::Indirect | RenderMode::Spatial
+                RenderMode::Indirect | RenderMode::Spatial | RenderMode::Visibility
             ) || result.smoke)
         {
             return Err(
-                "--work-items requires indirect or spatial mode without --smoke-test (which cycles inputs)"
+                "--work-items requires indirect, spatial or visibility mode without --smoke-test (which cycles inputs)"
                     .into(),
             );
         }

@@ -37,6 +37,12 @@ pub struct Pipeline {
     pub handle: vk::Pipeline,
     pub layout: vk::PipelineLayout,
 }
+struct ShaderStages {
+    mesh: &'static str,
+    task: Option<&'static str>,
+    fragment: &'static str,
+    depth: Option<vk::Format>,
+}
 impl Pipeline {
     pub fn new(
         device: &ash::Device,
@@ -56,22 +62,82 @@ impl Pipeline {
         } else {
             "triangle.mesh.spv"
         };
-        let mesh = ShaderModule::load(device, &shader_dir.join(mesh_file))?;
-        let fragment = ShaderModule::load(device, &shader_dir.join("triangle.frag.spv"))?;
-        let task = if task_amplification {
-            Some(ShaderModule::load(
-                device,
-                &shader_dir.join(if mode == RenderMode::Spatial {
-                    "spatial.task.spv"
-                } else if mode == RenderMode::Indirect {
-                    "triangle.indirect.task.spv"
-                } else {
-                    "triangle.task.spv"
-                }),
-            )?)
+        let task_file = if task_amplification {
+            Some(if mode == RenderMode::Spatial {
+                "spatial.task.spv"
+            } else if mode == RenderMode::Indirect {
+                "triangle.indirect.task.spv"
+            } else {
+                "triangle.task.spv"
+            })
         } else {
             None
         };
+        let pipeline = Self::configured(
+            device,
+            format,
+            shader_dir,
+            descriptor_layout,
+            ShaderStages {
+                mesh: mesh_file,
+                task: task_file,
+                fragment: "triangle.frag.spv",
+                depth: None,
+            },
+        )?;
+        println!("Graphics pipeline ready for {mode:?}");
+        Ok(pipeline)
+    }
+    pub fn visibility(
+        device: &ash::Device,
+        shader_dir: &Path,
+        descriptor_layout: vk::DescriptorSetLayout,
+    ) -> Result<Self> {
+        Self::configured(
+            device,
+            vk::Format::R32G32_UINT,
+            shader_dir,
+            Some(descriptor_layout),
+            ShaderStages {
+                mesh: "visibility.mesh.spv",
+                task: Some("visibility.task.spv"),
+                fragment: "visibility.frag.spv",
+                depth: Some(vk::Format::D32_SFLOAT),
+            },
+        )
+    }
+    pub fn resolve(
+        device: &ash::Device,
+        format: vk::Format,
+        shader_dir: &Path,
+        descriptor_layout: vk::DescriptorSetLayout,
+    ) -> Result<Self> {
+        Self::configured(
+            device,
+            format,
+            shader_dir,
+            Some(descriptor_layout),
+            ShaderStages {
+                mesh: "resolve.mesh.spv",
+                task: None,
+                fragment: "resolve.frag.spv",
+                depth: None,
+            },
+        )
+    }
+    fn configured(
+        device: &ash::Device,
+        format: vk::Format,
+        shader_dir: &Path,
+        descriptor_layout: Option<vk::DescriptorSetLayout>,
+        shaders: ShaderStages,
+    ) -> Result<Self> {
+        let mesh = ShaderModule::load(device, &shader_dir.join(shaders.mesh))?;
+        let fragment = ShaderModule::load(device, &shader_dir.join(shaders.fragment))?;
+        let task = shaders
+            .task
+            .map(|path| ShaderModule::load(device, &shader_dir.join(path)))
+            .transpose()?;
         let mut pipeline = Self {
             device: device.clone(),
             handle: vk::Pipeline::null(),
@@ -122,9 +188,14 @@ impl Pipeline {
             let dynamics = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
             let dynamic = vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamics);
             let formats = [format];
-            let mut rendering =
-                vk::PipelineRenderingCreateInfo::default().color_attachment_formats(&formats);
-            // Mesh pipelines omit vertex input and input assembly. No depth attachment in this slice.
+            let mut rendering = vk::PipelineRenderingCreateInfo::default()
+                .color_attachment_formats(&formats)
+                .depth_attachment_format(shaders.depth.unwrap_or(vk::Format::UNDEFINED));
+            let depth = vk::PipelineDepthStencilStateCreateInfo::default()
+                .depth_test_enable(shaders.depth.is_some())
+                .depth_write_enable(shaders.depth.is_some())
+                .depth_compare_op(vk::CompareOp::LESS);
+            // Mesh pipelines omit conventional vertex input and input assembly.
             let info = vk::GraphicsPipelineCreateInfo::default()
                 .stages(&stages)
                 .viewport_state(&viewport)
@@ -133,6 +204,7 @@ impl Pipeline {
                 .color_blend_state(&blend)
                 .dynamic_state(&dynamic)
                 .layout(pipeline.layout)
+                .depth_stencil_state(&depth)
                 .push_next(&mut rendering);
             match device.create_graphics_pipelines(vk::PipelineCache::null(), &[info], None) {
                 Ok(handles) => pipeline.handle = handles[0],
@@ -145,23 +217,6 @@ impl Pipeline {
                     return Err(format!("Slang graphics pipeline creation failed: {error}").into());
                 }
             }
-        }
-        if mode == RenderMode::Spatial {
-            println!(
-                "GPU spatial pipeline created: CSR candidates -> bounds culling -> indirect task/mesh visibility; up to 32 mesh groups"
-            );
-        } else if mode == RenderMode::Indirect {
-            println!(
-                "GPU indirect graphics pipeline created: task reads compute-generated work descriptor; mesh uses shared transforms"
-            );
-        } else if task_amplification {
-            println!(
-                "Task amplification pipeline created: TaskEXT -> 2 MeshEXT groups -> fragment; 32 lanes per stage, 20-byte transform payload; no vertex/index buffers"
-            );
-        } else {
-            println!(
-                "Mesh-only triangle pipeline created: MeshEXT + fragment, 32 lanes, 3 vertices, 1 primitive; no vertex/index buffers"
-            );
         }
         Ok(pipeline)
     }

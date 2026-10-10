@@ -229,6 +229,7 @@ impl Context {
         self.select_device(
             options.gpu.as_deref(),
             options.render_mode() == RenderMode::Spatial,
+            options.render_mode() == RenderMode::Visibility,
         )?;
         // SAFETY: Features were queried on the selected device; all queue indices support the intended
         // operations. Create-info backing storage remains live and handles immediately gain RAII ownership.
@@ -305,7 +306,12 @@ impl Context {
         }
         Ok(())
     }
-    fn select_device(&mut self, requested: Option<&str>, spatial: bool) -> Result<()> {
+    fn select_device(
+        &mut self,
+        requested: Option<&str>,
+        spatial: bool,
+        visibility: bool,
+    ) -> Result<()> {
         let instance = self.instance.as_ref().unwrap();
         let surface = self.surface_loader.as_ref().unwrap();
         let mut candidates = Vec::new();
@@ -334,12 +340,38 @@ impl Context {
                     .push_next(&mut maintenance);
                 instance.get_physical_device_features2(physical, &mut features);
                 let extensions = instance.enumerate_device_extension_properties(physical)?;
+                let visibility_formats = !visibility
+                    || [
+                        (
+                            vk::Format::R32G32_UINT,
+                            vk::FormatFeatureFlags::COLOR_ATTACHMENT
+                                | vk::FormatFeatureFlags::SAMPLED_IMAGE,
+                        ),
+                        (
+                            vk::Format::R8G8B8A8_UNORM,
+                            vk::FormatFeatureFlags::SAMPLED_IMAGE
+                                | vk::FormatFeatureFlags::TRANSFER_DST,
+                        ),
+                        (
+                            vk::Format::D32_SFLOAT,
+                            vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT
+                                | vk::FormatFeatureFlags::SAMPLED_IMAGE,
+                        ),
+                    ]
+                    .iter()
+                    .all(|(format, required)| {
+                        instance
+                            .get_physical_device_format_properties(physical, *format)
+                            .optimal_tiling_features
+                            .contains(*required)
+                    });
                 println!(
                     "GPU candidate: {name}; driver {} / {}",
                     CStr::from_ptr(driver.driver_name.as_ptr()).to_string_lossy(),
                     CStr::from_ptr(driver.driver_info.as_ptr()).to_string_lossy()
                 );
                 let checks = [
+                    ("visibility identity/depth formats", visibility_formats),
                     ("Vulkan 1.3", properties.api_version >= vk::API_VERSION_1_3),
                     (
                         "VK_KHR_swapchain",
@@ -531,6 +563,7 @@ struct Swapchain {
     pending: Vec<bool>,
     extent: vk::Extent2D,
     pipeline: Option<Pipeline>,
+    visibility: Option<crate::visibility::Target>,
 }
 fn choose_extent(
     capabilities: &vk::SurfaceCapabilitiesKHR,
@@ -639,15 +672,32 @@ impl Swapchain {
                 pending: Vec::new(),
                 extent,
                 pipeline: None,
+                visibility: None,
             };
             if let Some(shader_dir) = shader_dir {
-                chain.pipeline = Some(Pipeline::new(
-                    device,
-                    format.format,
-                    shader_dir,
-                    mode,
-                    descriptor_layout,
-                )?);
+                if mode == RenderMode::Visibility {
+                    let memory = ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_memory_properties(ctx.physical);
+                    chain.visibility = Some(crate::visibility::Target::new(
+                        device,
+                        &memory,
+                        extent,
+                        format.format,
+                        shader_dir,
+                        descriptor_layout.ok_or("Visibility mode needs GPU work layout")?,
+                    )?);
+                } else {
+                    chain.pipeline = Some(Pipeline::new(
+                        device,
+                        format.format,
+                        shader_dir,
+                        mode,
+                        descriptor_layout,
+                    )?);
+                }
             }
             chain.images = chain.loader.get_swapchain_images(handle)?;
             for &image in &chain.images {
@@ -771,7 +821,10 @@ impl Renderer {
                 })
             }),
         };
-        if matches!(renderer.mode, RenderMode::Indirect | RenderMode::Spatial) {
+        if matches!(
+            renderer.mode,
+            RenderMode::Indirect | RenderMode::Spatial | RenderMode::Visibility
+        ) {
             // SAFETY: The selected physical device belongs to the retained live instance.
             let memory = unsafe {
                 renderer
@@ -888,6 +941,13 @@ impl Renderer {
             if let Some(work) = &self.work {
                 work.generate(ctx.command, input);
             }
+            if let Some(target) = &chain.visibility {
+                target.record_identity(
+                    ctx.command,
+                    ctx.mesh_commands.as_ref().unwrap(),
+                    self.work.as_ref().unwrap(),
+                );
+            }
             let to_color = [vk::ImageMemoryBarrier2::default()
                 .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
                 .src_access_mask(vk::AccessFlags2::NONE)
@@ -923,7 +983,9 @@ impl Renderer {
                     .layer_count(1)
                     .color_attachments(&attachments),
             );
-            if let Some(pipeline) = &chain.pipeline {
+            if let Some(target) = &chain.visibility {
+                target.record_resolve(ctx.command, ctx.mesh_commands.as_ref().unwrap());
+            } else if let Some(pipeline) = &chain.pipeline {
                 device.cmd_bind_pipeline(
                     ctx.command,
                     vk::PipelineBindPoint::GRAPHICS,

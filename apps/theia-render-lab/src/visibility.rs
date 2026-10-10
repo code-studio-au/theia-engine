@@ -1,0 +1,479 @@
+//! M3 identity/depth targets and material resolve, owned by one swapchain generation.
+use crate::{Result, indirect::IndirectWork, pipeline::Pipeline};
+use ash::vk;
+use std::path::Path;
+struct Image {
+    device: ash::Device,
+    handle: vk::Image,
+    memory: vk::DeviceMemory,
+    view: vk::ImageView,
+    aspect: vk::ImageAspectFlags,
+}
+impl Image {
+    fn new(
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        extent: vk::Extent2D,
+        format: vk::Format,
+        aspect: vk::ImageAspectFlags,
+        usage: vk::ImageUsageFlags,
+    ) -> Result<Self> {
+        let mut image = Self {
+            device: device.clone(),
+            handle: vk::Image::null(),
+            memory: vk::DeviceMemory::null(),
+            view: vk::ImageView::null(),
+            aspect,
+        };
+        // SAFETY: Device and create-info storage are live. Each successful handle is immediately retained.
+        unsafe {
+            image.handle = device.create_image(
+                &vk::ImageCreateInfo::default()
+                    .image_type(vk::ImageType::TYPE_2D)
+                    .format(format)
+                    .extent(vk::Extent3D {
+                        width: extent.width,
+                        height: extent.height,
+                        depth: 1,
+                    })
+                    .mip_levels(1)
+                    .array_layers(1)
+                    .samples(vk::SampleCountFlags::TYPE_1)
+                    .tiling(vk::ImageTiling::OPTIMAL)
+                    .usage(usage)
+                    .sharing_mode(vk::SharingMode::EXCLUSIVE),
+                None,
+            )?;
+            let requirements = device.get_image_memory_requirements(image.handle);
+            let index = (0..memory.memory_type_count)
+                .find(|&i| {
+                    requirements.memory_type_bits & (1 << i) != 0
+                        && memory.memory_types[i as usize]
+                            .property_flags
+                            .contains(vk::MemoryPropertyFlags::DEVICE_LOCAL)
+                })
+                .ok_or("No device-local visibility image memory")?;
+            image.memory = device.allocate_memory(
+                &vk::MemoryAllocateInfo::default()
+                    .allocation_size(requirements.size)
+                    .memory_type_index(index),
+                None,
+            )?;
+            device.bind_image_memory(image.handle, image.memory, 0)?;
+            image.view = device.create_image_view(
+                &vk::ImageViewCreateInfo::default()
+                    .image(image.handle)
+                    .view_type(vk::ImageViewType::TYPE_2D)
+                    .format(format)
+                    .subresource_range(image.range()),
+                None,
+            )?;
+        }
+        Ok(image)
+    }
+    fn range(&self) -> vk::ImageSubresourceRange {
+        vk::ImageSubresourceRange::default()
+            .aspect_mask(self.aspect)
+            .level_count(1)
+            .layer_count(1)
+    }
+}
+impl Drop for Image {
+    fn drop(&mut self) {
+        // SAFETY: Swapchain retirement has completed all users; parent device remains alive.
+        unsafe {
+            if self.view != vk::ImageView::null() {
+                self.device.destroy_image_view(self.view, None);
+            }
+            if self.handle != vk::Image::null() {
+                self.device.destroy_image(self.handle, None);
+            }
+            if self.memory != vk::DeviceMemory::null() {
+                self.device.free_memory(self.memory, None);
+            }
+        }
+    }
+}
+pub struct Target {
+    visibility: Option<Pipeline>,
+    resolve: Option<Pipeline>,
+    pool: vk::DescriptorPool,
+    layout: vk::DescriptorSetLayout,
+    set: vk::DescriptorSet,
+    identity: Image,
+    depth: Image,
+    extent: vk::Extent2D,
+    materials: [Image; 2],
+    sampler: vk::Sampler,
+    device: ash::Device,
+}
+impl Target {
+    pub fn new(
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        extent: vk::Extent2D,
+        color_format: vk::Format,
+        shaders: &Path,
+        work_layout: vk::DescriptorSetLayout,
+    ) -> Result<Self> {
+        let identity = Image::new(
+            device,
+            memory,
+            extent,
+            vk::Format::R32G32_UINT,
+            vk::ImageAspectFlags::COLOR,
+            vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::COLOR_ATTACHMENT,
+        )?;
+        let depth = Image::new(
+            device,
+            memory,
+            extent,
+            vk::Format::D32_SFLOAT,
+            vk::ImageAspectFlags::DEPTH,
+            vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        )?;
+        let material = || {
+            Image::new(
+                device,
+                memory,
+                vk::Extent2D {
+                    width: 1,
+                    height: 1,
+                },
+                vk::Format::R8G8B8A8_UNORM,
+                vk::ImageAspectFlags::COLOR,
+                vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+            )
+        };
+        let materials = [material()?, material()?];
+        let mut target = Self {
+            visibility: None,
+            resolve: None,
+            pool: vk::DescriptorPool::null(),
+            layout: vk::DescriptorSetLayout::null(),
+            set: vk::DescriptorSet::null(),
+            identity,
+            depth,
+            extent,
+            materials,
+            sampler: vk::Sampler::null(),
+            device: device.clone(),
+        };
+        // SAFETY: Images/layouts are live, arrays are retained through calls and handles gain RAII immediately.
+        unsafe {
+            target.sampler = device.create_sampler(
+                &vk::SamplerCreateInfo::default()
+                    .mag_filter(vk::Filter::NEAREST)
+                    .min_filter(vk::Filter::NEAREST)
+                    .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
+                    .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                    .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                    .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                    .max_lod(0.0),
+                None,
+            )?;
+            let bindings: Vec<_> = (0..4)
+                .map(|binding| {
+                    vk::DescriptorSetLayoutBinding::default()
+                        .binding(binding)
+                        .descriptor_type(if binding == 3 {
+                            vk::DescriptorType::SAMPLER
+                        } else {
+                            vk::DescriptorType::SAMPLED_IMAGE
+                        })
+                        .descriptor_count(if binding == 2 { 2 } else { 1 })
+                        .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+                })
+                .collect();
+            let flags = [
+                vk::DescriptorBindingFlags::empty(),
+                vk::DescriptorBindingFlags::empty(),
+                vk::DescriptorBindingFlags::PARTIALLY_BOUND,
+                vk::DescriptorBindingFlags::empty(),
+            ];
+            let mut binding_flags =
+                vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(&flags);
+            target.layout = device.create_descriptor_set_layout(
+                &vk::DescriptorSetLayoutCreateInfo::default()
+                    .bindings(&bindings)
+                    .push_next(&mut binding_flags),
+                None,
+            )?;
+            let sizes = [
+                vk::DescriptorPoolSize::default()
+                    .ty(vk::DescriptorType::SAMPLED_IMAGE)
+                    .descriptor_count(4),
+                vk::DescriptorPoolSize::default()
+                    .ty(vk::DescriptorType::SAMPLER)
+                    .descriptor_count(1),
+            ];
+            target.pool = device.create_descriptor_pool(
+                &vk::DescriptorPoolCreateInfo::default()
+                    .max_sets(1)
+                    .pool_sizes(&sizes),
+                None,
+            )?;
+            let layouts = [target.layout];
+            target.set = device.allocate_descriptor_sets(
+                &vk::DescriptorSetAllocateInfo::default()
+                    .descriptor_pool(target.pool)
+                    .set_layouts(&layouts),
+            )?[0];
+            let images = [
+                [vk::DescriptorImageInfo::default()
+                    .image_view(target.identity.view)
+                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)],
+                [vk::DescriptorImageInfo::default()
+                    .image_view(target.depth.view)
+                    .image_layout(vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL)],
+            ];
+            let mut writes: Vec<_> = images
+                .iter()
+                .enumerate()
+                .map(|(binding, image)| {
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(target.set)
+                        .dst_binding(binding as u32)
+                        .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                        .image_info(image)
+                })
+                .collect();
+            let material_infos: Vec<_> = target
+                .materials
+                .iter()
+                .map(|image| {
+                    vk::DescriptorImageInfo::default()
+                        .image_view(image.view)
+                        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                })
+                .collect();
+            let sampler = [vk::DescriptorImageInfo::default().sampler(target.sampler)];
+            writes.push(
+                vk::WriteDescriptorSet::default()
+                    .dst_set(target.set)
+                    .dst_binding(2)
+                    .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                    .image_info(&material_infos),
+            );
+            writes.push(
+                vk::WriteDescriptorSet::default()
+                    .dst_set(target.set)
+                    .dst_binding(3)
+                    .descriptor_type(vk::DescriptorType::SAMPLER)
+                    .image_info(&sampler),
+            );
+            device.update_descriptor_sets(&writes, &[]);
+        }
+        target.visibility = Some(Pipeline::visibility(device, shaders, work_layout)?);
+        target.resolve = Some(Pipeline::resolve(
+            device,
+            color_format,
+            shaders,
+            target.layout,
+        )?);
+        println!(
+            "M3 targets ready: R32G32_UINT instance/primitive + D32_SFLOAT depth; mesh material resolve"
+        );
+        Ok(target)
+    }
+    pub fn record_identity(
+        &self,
+        command: vk::CommandBuffer,
+        mesh: &ash::ext::mesh_shader::Device,
+        work: &IndirectWork,
+    ) {
+        let visibility = self.visibility.as_ref().unwrap();
+        // SAFETY: Caller owns/records the command buffer and waits the single frame fence. Targets
+        // are live; resource barriers order prior resolve reads, attachment writes and new resolve reads.
+        unsafe {
+            for (index, image) in self.materials.iter().enumerate() {
+                let begin = [vk::ImageMemoryBarrier2::default()
+                    .src_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                    .src_access_mask(vk::AccessFlags2::SHADER_SAMPLED_READ)
+                    .dst_stage_mask(vk::PipelineStageFlags2::TRANSFER)
+                    .dst_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
+                    .old_layout(vk::ImageLayout::UNDEFINED)
+                    .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .image(image.handle)
+                    .subresource_range(image.range())];
+                self.device.cmd_pipeline_barrier2(
+                    command,
+                    &vk::DependencyInfo::default().image_memory_barriers(&begin),
+                );
+                let tint = if index == 0 {
+                    [1.0; 4]
+                } else {
+                    [89.0 / 255.0, 153.0 / 255.0, 1.0, 1.0]
+                };
+                self.device.cmd_clear_color_image(
+                    command,
+                    image.handle,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    &vk::ClearColorValue { float32: tint },
+                    &[image.range()],
+                );
+                let end = [begin[0]
+                    .src_stage_mask(vk::PipelineStageFlags2::TRANSFER)
+                    .src_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
+                    .dst_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                    .dst_access_mask(vk::AccessFlags2::SHADER_SAMPLED_READ)
+                    .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                    .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
+                self.device.cmd_pipeline_barrier2(
+                    command,
+                    &vk::DependencyInfo::default().image_memory_barriers(&end),
+                );
+            }
+            let color = vk::ImageMemoryBarrier2::default()
+                .src_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                .src_access_mask(vk::AccessFlags2::SHADER_SAMPLED_READ)
+                .dst_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
+                .dst_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE)
+                .old_layout(vk::ImageLayout::UNDEFINED)
+                .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .image(self.identity.handle)
+                .subresource_range(self.identity.range());
+            let depth = vk::ImageMemoryBarrier2::default()
+                .src_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                .src_access_mask(vk::AccessFlags2::SHADER_SAMPLED_READ)
+                .dst_stage_mask(
+                    vk::PipelineStageFlags2::EARLY_FRAGMENT_TESTS
+                        | vk::PipelineStageFlags2::LATE_FRAGMENT_TESTS,
+                )
+                .dst_access_mask(
+                    vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_READ
+                        | vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                )
+                .old_layout(vk::ImageLayout::UNDEFINED)
+                .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .image(self.depth.handle)
+                .subresource_range(self.depth.range());
+            let begin = [color, depth];
+            self.device.cmd_pipeline_barrier2(
+                command,
+                &vk::DependencyInfo::default().image_memory_barriers(&begin),
+            );
+            let colors = [vk::RenderingAttachmentInfo::default()
+                .image_view(self.identity.view)
+                .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .clear_value(vk::ClearValue {
+                    color: vk::ClearColorValue { uint32: [0; 4] },
+                })];
+            let depth_attachment = vk::RenderingAttachmentInfo::default()
+                .image_view(self.depth.view)
+                .image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .clear_value(vk::ClearValue {
+                    depth_stencil: vk::ClearDepthStencilValue {
+                        depth: 1.0,
+                        stencil: 0,
+                    },
+                });
+            self.device.cmd_begin_rendering(
+                command,
+                &vk::RenderingInfo::default()
+                    .render_area(vk::Rect2D {
+                        offset: vk::Offset2D::default(),
+                        extent: self.extent,
+                    })
+                    .layer_count(1)
+                    .color_attachments(&colors)
+                    .depth_attachment(&depth_attachment),
+            );
+            self.device.cmd_bind_pipeline(
+                command,
+                vk::PipelineBindPoint::GRAPHICS,
+                visibility.handle,
+            );
+            self.device.cmd_set_viewport(
+                command,
+                0,
+                &[vk::Viewport::default()
+                    .width(self.extent.width as f32)
+                    .height(self.extent.height as f32)
+                    .min_depth(0.0)
+                    .max_depth(1.0)],
+            );
+            self.device.cmd_set_scissor(
+                command,
+                0,
+                &[vk::Rect2D {
+                    offset: vk::Offset2D::default(),
+                    extent: self.extent,
+                }],
+            );
+            work.draw(command, visibility.layout, mesh);
+            self.device.cmd_end_rendering(command);
+            let end = [
+                color
+                    .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
+                    .src_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE)
+                    .dst_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                    .dst_access_mask(vk::AccessFlags2::SHADER_SAMPLED_READ)
+                    .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL),
+                depth
+                    .src_stage_mask(
+                        vk::PipelineStageFlags2::EARLY_FRAGMENT_TESTS
+                            | vk::PipelineStageFlags2::LATE_FRAGMENT_TESTS,
+                    )
+                    .src_access_mask(vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE)
+                    .dst_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                    .dst_access_mask(vk::AccessFlags2::SHADER_SAMPLED_READ)
+                    .old_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                    .new_layout(vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL),
+            ];
+            self.device.cmd_pipeline_barrier2(
+                command,
+                &vk::DependencyInfo::default().image_memory_barriers(&end),
+            );
+        }
+    }
+    pub fn record_resolve(&self, command: vk::CommandBuffer, mesh: &ash::ext::mesh_shader::Device) {
+        let pipeline = self.resolve.as_ref().unwrap();
+        // SAFETY: Called inside compatible swapchain dynamic rendering; descriptor images have been published.
+        unsafe {
+            self.device.cmd_bind_pipeline(
+                command,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline.handle,
+            );
+            self.device.cmd_bind_descriptor_sets(
+                command,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline.layout,
+                0,
+                &[self.set],
+                &[],
+            );
+            mesh.cmd_draw_mesh_tasks(command, 1, 1, 1);
+        }
+    }
+}
+impl Drop for Target {
+    fn drop(&mut self) {
+        // SAFETY: Owning swapchain retired submissions. Pipelines precede descriptor layout and image destruction.
+        drop(self.resolve.take());
+        drop(self.visibility.take());
+        unsafe {
+            if self.pool != vk::DescriptorPool::null() {
+                self.device.destroy_descriptor_pool(self.pool, None);
+            }
+            if self.sampler != vk::Sampler::null() {
+                self.device.destroy_sampler(self.sampler, None);
+            }
+            if self.layout != vk::DescriptorSetLayout::null() {
+                self.device.destroy_descriptor_set_layout(self.layout, None);
+            }
+        }
+    }
+}
