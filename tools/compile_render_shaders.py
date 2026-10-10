@@ -18,7 +18,9 @@ def main():
     shaders = [('triangle.slang', 'meshMain', 'mesh', 'triangle.mesh.spv'),
                ('triangle.slang', 'fragmentMain', 'fragment', 'triangle.frag.spv'),
                ('amplified.slang', 'taskMain', 'amplification', 'triangle.task.spv'),
-               ('amplified.slang', 'amplifiedMeshMain', 'mesh', 'triangle.amplified.mesh.spv')]
+               ('amplified.slang', 'amplifiedMeshMain', 'mesh', 'triangle.amplified.mesh.spv'),
+               ('indirect.slang', 'generateWork', 'compute', 'work.compute.spv'),
+               ('indirect.slang', 'indirectTaskMain', 'amplification', 'triangle.indirect.task.spv')]
     try:
         subprocess.run([args.slangc, '-version'], check=True)
         with tempfile.TemporaryDirectory(dir=args.output_dir) as temporary:

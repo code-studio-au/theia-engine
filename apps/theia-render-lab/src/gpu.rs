@@ -1,4 +1,4 @@
-use crate::{Options, Result, pipeline::Pipeline};
+use crate::{Options, RenderMode, Result, indirect::IndirectWork, pipeline::Pipeline};
 use ash::{Entry, vk};
 use std::{
     ffi::{CStr, c_void},
@@ -250,6 +250,7 @@ impl Context {
                 ash::ext::swapchain_maintenance1::NAME.as_ptr(),
             ];
             let mut v12 = vk::PhysicalDeviceVulkan12Features::default()
+                .draw_indirect_count(true)
                 .timeline_semaphore(true)
                 .buffer_device_address(true)
                 .runtime_descriptor_array(true)
@@ -366,6 +367,7 @@ impl Context {
                     ("dynamicRendering", v13.dynamic_rendering == vk::TRUE),
                     ("synchronization2", v13.synchronization2 == vk::TRUE),
                     ("timelineSemaphore", v12.timeline_semaphore == vk::TRUE),
+                    ("drawIndirectCount", v12.draw_indirect_count == vk::TRUE),
                     ("bufferDeviceAddress", v12.buffer_device_address == vk::TRUE),
                     (
                         "runtimeDescriptorArray",
@@ -546,7 +548,8 @@ impl Swapchain {
         old: vk::SwapchainKHR,
         size: PhysicalSize<u32>,
         shader_dir: Option<&std::path::Path>,
-        task_amplification: bool,
+        mode: RenderMode,
+        descriptor_layout: Option<vk::DescriptorSetLayout>,
     ) -> Result<Option<Self>> {
         let device = ctx.device.as_ref().unwrap();
         let surface = ctx.surface_loader.as_ref().unwrap();
@@ -629,7 +632,8 @@ impl Swapchain {
                     device,
                     format.format,
                     shader_dir,
-                    task_amplification,
+                    mode,
+                    descriptor_layout,
                 )?);
             }
             chain.images = chain.loader.get_swapchain_images(handle)?;
@@ -714,12 +718,19 @@ fn color_range() -> vk::ImageSubresourceRange {
         .layer_count(1)
 }
 pub struct Renderer {
-    ctx: Context,
+    // Rust drops fields in declaration order after Drop::drop. Keep graphics children
+    // before work resources, and their device-owning context last as a lifetime backstop.
     chain: Option<Swapchain>,
+    work: Option<IndirectWork>,
     pub recreate: bool,
     generations: u64,
     shader_dir: Option<std::path::PathBuf>,
-    task_amplification: bool,
+    mode: RenderMode,
+    work_items: u32,
+    cycle_work: bool,
+    presented: u64,
+    last_input: Option<u32>,
+    ctx: Context,
 }
 impl Renderer {
     pub fn new(
@@ -733,13 +744,34 @@ impl Renderer {
             chain: None,
             recreate: true,
             generations: 0,
-            task_amplification: !options.mesh_only,
-            shader_dir: (!options.clear_only).then(|| {
+            mode: options.render_mode(),
+            work: None,
+            work_items: options.work_items.unwrap_or(2),
+            cycle_work: options.smoke,
+            presented: 0,
+            last_input: None,
+            shader_dir: (options.render_mode() != RenderMode::Clear).then(|| {
                 options.shader_dir.clone().unwrap_or_else(|| {
                     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/shaders")
                 })
             }),
         };
+        if renderer.mode == RenderMode::Indirect {
+            // SAFETY: The selected physical device belongs to the retained live instance.
+            let memory = unsafe {
+                renderer
+                    .ctx
+                    .instance
+                    .as_ref()
+                    .unwrap()
+                    .get_physical_device_memory_properties(renderer.ctx.physical)
+            };
+            renderer.work = Some(IndirectWork::new(
+                renderer.ctx.device.as_ref().unwrap(),
+                &memory,
+                renderer.shader_dir.as_ref().unwrap(),
+            )?);
+        }
         renderer.rebuild(renderer.ctx.window.inner_size())?;
         Ok(renderer)
     }
@@ -759,7 +791,8 @@ impl Renderer {
             old,
             size,
             self.shader_dir.as_deref(),
-            self.task_amplification,
+            self.mode,
+            self.work.as_ref().map(|work| work.descriptor_layout),
         )? {
             self.chain = Some(chain);
             self.recreate = false;
@@ -778,6 +811,17 @@ impl Renderer {
             if self.recreate {
                 return Ok(false);
             }
+        }
+        let input = if self.cycle_work {
+            ((self.presented / 20) % 3) as u32
+        } else {
+            self.work_items
+        };
+        if self.work.is_some() && self.last_input != Some(input) {
+            println!(
+                "Indirect qualification input: {input} work items (GPU produces command/count; no host readback)"
+            );
+            self.last_input = Some(input);
         }
         let chain = self.chain.as_mut().unwrap();
         let ctx = &self.ctx;
@@ -808,6 +852,9 @@ impl Renderer {
                 &vk::CommandBufferBeginInfo::default()
                     .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?;
+            if let Some(work) = &self.work {
+                work.generate(ctx.command, input);
+            }
             let to_color = [vk::ImageMemoryBarrier2::default()
                 .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
                 .src_access_mask(vk::AccessFlags2::NONE)
@@ -866,10 +913,12 @@ impl Renderer {
                         extent: chain.extent,
                     }],
                 );
-                ctx.mesh_commands
-                    .as_ref()
-                    .unwrap()
-                    .cmd_draw_mesh_tasks(ctx.command, 1, 1, 1);
+                let commands = ctx.mesh_commands.as_ref().unwrap();
+                if let Some(work) = &self.work {
+                    work.draw(ctx.command, pipeline.layout, commands);
+                } else {
+                    commands.cmd_draw_mesh_tasks(ctx.command, 1, 1, 1);
+                }
             }
             device.cmd_end_rendering(ctx.command);
             let to_present = [vk::ImageMemoryBarrier2::default()
@@ -918,6 +967,7 @@ impl Renderer {
             match chain.loader.queue_present(ctx.present, &info) {
                 Ok(present_suboptimal) => {
                     chain.pending[i] = true;
+                    self.presented += 1;
                     self.recreate |= suboptimal || present_suboptimal;
                     Ok(true)
                 }
@@ -942,7 +992,10 @@ impl Renderer {
 }
 impl Drop for Renderer {
     fn drop(&mut self) {
-        self.chain.take();
+        // Destroy graphics pipelines before their work descriptor layout, then work resources
+        // before Context destroys the device. This also runs when new() fails in rebuild().
+        drop(self.chain.take());
+        drop(self.work.take());
         println!(
             "Render Lab teardown: {} swapchain generations",
             self.generations

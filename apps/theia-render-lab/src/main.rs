@@ -1,4 +1,5 @@
 mod gpu;
+mod indirect;
 mod pipeline;
 
 use std::{
@@ -16,17 +17,28 @@ use winit::{
 };
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RenderMode {
+    Indirect,
+    DirectTask,
+    MeshOnly,
+    Clear,
+}
+
 #[derive(Default)]
 struct Options {
     no_validation: bool,
     gpu: Option<String>,
     frames: Option<u64>,
     smoke: bool,
-    clear_only: bool,
-    mesh_only: bool,
+    mode: Option<RenderMode>,
+    work_items: Option<u32>,
     shader_dir: Option<std::path::PathBuf>,
 }
 impl Options {
+    fn render_mode(&self) -> RenderMode {
+        self.mode.unwrap_or(RenderMode::Indirect)
+    }
     fn parse() -> Result<Self> {
         let mut result = Self::default();
         let mut args = std::env::args().skip(1);
@@ -44,8 +56,23 @@ impl Options {
                     }
                     result.frames = Some(count);
                 }
-                "--mesh-only" => result.mesh_only = true,
-                "--clear-only" => result.clear_only = true,
+                "--mesh-only" | "--clear-only" | "--direct-task" => {
+                    let mode = match arg.as_str() {
+                        "--mesh-only" => RenderMode::MeshOnly,
+                        "--clear-only" => RenderMode::Clear,
+                        _ => RenderMode::DirectTask,
+                    };
+                    if result.mode.replace(mode).is_some() {
+                        return Err("Regression modes are mutually exclusive".into());
+                    }
+                }
+                "--work-items" => {
+                    let count = args.next().ok_or("--work-items needs 0, 1 or 2")?.parse()?;
+                    if count > 2 {
+                        return Err("--work-items must be 0, 1 or 2".into());
+                    }
+                    result.work_items = Some(count);
+                }
                 "--shader-dir" => {
                     result.shader_dir =
                         Some(args.next().ok_or("--shader-dir needs a directory")?.into())
@@ -53,15 +80,20 @@ impl Options {
                 "--smoke-test" => result.smoke = true,
                 "--help" => {
                     println!(
-                        "Theia Render Lab: Slang task/mesh amplification qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --shader-dir <directory>  compiled SPIR-V directory\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --shader-dir <directory>  compiled SPIR-V directory\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
                 _ => return Err(format!("Unknown argument: {arg}").into()),
             }
         }
-        if result.mesh_only && result.clear_only {
-            return Err("--mesh-only and --clear-only are mutually exclusive".into());
+        if result.work_items.is_some()
+            && (result.render_mode() != RenderMode::Indirect || result.smoke)
+        {
+            return Err(
+                "--work-items requires indirect mode without --smoke-test (which cycles inputs)"
+                    .into(),
+            );
         }
         if result.smoke {
             if result.no_validation || result.frames.is_some() {

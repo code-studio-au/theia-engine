@@ -1,12 +1,11 @@
-# Theia Render Lab — M0-D task amplification
+# Theia Render Lab — M0-D GPU indirect work
 
 A separate qualification application; the headless `theia-gpu-test` remains unchanged.
-The default path submits one task workgroup. Slang task amplification launches two
-mesh groups and supplies their transforms through a shared payload; each generates
-an RGB triangle over the dark blue clear. Dynamic rendering and Sync2 are used.
-No vertex/index buffers or vertex shader are used. Compute-written indirect work
-remains outstanding. See
-[the roadmap](../../docs/ROADMAP.md) for the remaining M0-D gates.
+The default path dispatches Slang compute to write an indirect command, draw count,
+transforms and downstream mesh count into device-local storage. Vulkan reads the
+command/count and the task shader consumes the work descriptor; mesh groups generate
+the triangles. No vertex/index buffers, vertex shader, buffer mapping or CPU count
+readback are used. See [the roadmap](../../docs/ROADMAP.md) for M0-D closeout gates.
 
 ## Run
 
@@ -23,19 +22,23 @@ The driver override is optional and Linux specific. The application obtains nati
 Wayland/X11/Windows handles from winit/ash-window without hard-coded platform paths.
 Wayland and Windows execution still require qualification.
 
-- `--shader-dir <directory>` selects the compiled SPIR-V directory. Task mode uses
-  `triangle.task.spv`, `triangle.amplified.mesh.spv`, and `triangle.frag.spv`; mesh-only
-  mode uses `triangle.mesh.spv` and the same fragment shader.
-  Default: the build checkout's `build/shaders` directory, independent of launch
-  working directory. When relocating the executable, pass an explicit directory.
-- `--mesh-only` runs the previously qualified single-triangle pipeline without a task stage.
-  It cannot combine with `--clear-only`.
-- `--clear-only` runs the qualified bootstrap path without loading shader files.
+- `--shader-dir <directory>` selects compiled SPIR-V. Indirect mode uses
+  `work.compute.spv`, `triangle.indirect.task.spv`, `triangle.amplified.mesh.spv`,
+  and `triangle.frag.spv`. Default: the build checkout's `build/shaders`, independent
+  of working directory. Pass an explicit directory when relocating the executable.
+- `--work-items <0|1|2>` supplies a fixed qualification input to compute (default 2).
+  It requires indirect mode without the smoke test. This is a bounded test input,
+  not a scene culling algorithm or authoritative gameplay decision.
+- `--direct-task` runs the qualified two-triangle task path using `triangle.task.spv`.
+- `--mesh-only` runs the qualified single-triangle mesh path using `triangle.mesh.spv`.
+- `--clear-only` runs the bootstrap without loading shader files. These three
+  regression modes are mutually exclusive and do not create the indirect work buffer.
 - `--gpu <name substring>` restricts selection; otherwise prefer the reference RX
   7900 XTX, then any qualified discrete GPU, then other qualified devices.
 - `--frames <positive count>` exits after that many successfully queued presents.
 - `--smoke-test` requests two resizes, explicitly checks the zero-size draw path,
   requests minimize for 300 ms, restores/resizes, and exits after 120 frames.
+  Indirect mode also cycles inputs 0, 1, 2 every 20 presented frames, twice.
   Window-manager actions are requests; X11 need not report zero size on minimize.
 - `--no-validation` explicitly disables the layer. It cannot combine with the smoke
   test. The debug messenger and callback-delivery diagnostic remain active.
@@ -56,6 +59,7 @@ are logged for each candidate; the triangle additionally checks 32 mesh invocati
 and at least three output vertices / one primitive, plus 32 task invocations,
 the payload/shared-memory budget and two downstream mesh groups. Capability support is not
 shader-execution evidence.
+This lab also queries/enables Vulkan 1.2 `drawIndirectCount` for the count-buffer API.
 A graphics+compute queue and a presentation queue are required. Separate families
 use concurrent swapchain image sharing.
 
@@ -80,15 +84,37 @@ are freed after pipeline creation; pipeline/layout RAII also handles partial fai
 
 `tools/compile_render_shaders.py` uses offline Slang 2026.19 and `spirv-val`, selecting
 `spvMeshShadingEXT` explicitly for task and mesh stages (not the NV mesh variant). It
-publishes all four outputs only after they validate for Vulkan 1.3. Missing shaders,
+publishes all six outputs only after they validate for Vulkan 1.3. Missing shaders,
 compiler errors and pipeline errors fail explicitly; no language fallback occurred.
 On Windows use Python 3 with Slang/SPIR-V tools on PATH or pass their executable
 paths to the script's `--slangc` / `--spirv-val` options.
 
-The task shader writes two XY offsets and a scale (20 bytes of logical data) into
-`groupshared` payload storage, synchronizes the group, and calls `DispatchMesh(2,1,1)`.
-Each downstream mesh group selects its transform using `SV_GroupID.x`. The host
-still calls `vkCmdDrawMeshTasksEXT(1,1,1)` once; it does not submit two draws.
+Indirect mode uses one 64-byte `STORAGE_BUFFER | INDIRECT_BUFFER` allocation, bound
+once at set 0/binding 0 for compute and task stages. Compute writes every used field:
+
+| Byte offset | Value |
+|---|---|
+| 0..12 | `VkDrawMeshTasksIndirectCommandEXT`: task group X/Y/Z |
+| 12..16 | Draw count (0 or 1) |
+| 16..24 / 24..32 | Two XY offsets |
+| 32..36 | Scale |
+| 36..40 | Downstream mesh count (0..2) |
+
+The host pushes a four-byte test input and dispatches compute once. A buffer barrier
+orders prior indirect/task reads and compute writes before reuse; another publishes
+compute writes to `DRAW_INDIRECT/INDIRECT_COMMAND_READ` and
+`TASK_SHADER_EXT/SHADER_STORAGE_READ`. The graphics pipeline then records
+`vkCmdDrawMeshTasksIndirectCountEXT`, with one command slot and `maxDrawCount=1`.
+The GPU chooses both the draw count and task group dimensions. Zero input writes
+zero draws; positive input writes one task group, which launches one or two mesh
+groups using the compute-written transforms. The task publishes these transforms
+through synchronized `groupshared` payload storage. No host reads the work buffer.
+
+The work buffer, descriptor resources and compute pipeline survive swapchain extent
+changes. Teardown retires submissions and releases graphics pipelines before work
+resources, then destroys the Vulkan device. RAII also releases partially initialized
+buffer/memory/descriptors/pipelines on errors.
+
 The documented `out payload` task parameter form crashed Slang 2026.19 during
 qualification. The explicit `groupshared` form emits `TaskPayloadWorkgroupEXT`,
 compiles/validates/executes successfully, and preserves the Slang language choice.
@@ -111,7 +137,7 @@ cargo test --locked --manifest-path apps/theia-render-lab/Cargo.toml
 
 CI builds/lints/tests both applications on Linux and Windows. A Linux shader job
 fetches the [official Slang 2026.19 release](https://github.com/shader-slang/slang/releases/tag/v2026.19)
-with a pinned SHA-256 and compiles/validates task, both mesh variants, fragment and preserved compute
-shaders. Hosted CI does not execute GPU workloads. Actual target-GPU evidence is
+with a pinned SHA-256 and compiles/validates both task variants, both mesh variants,
+fragment, work-generation compute and the preserved headless compute shader. Hosted CI does not execute GPU workloads. Actual target-GPU evidence is
 recorded in [CURRENT_STATUS](../../docs/CURRENT_STATUS.md) and
-[the task amplification qualification record](../../docs/validation/M0D_TASK_AMPLIFICATION.md).
+[the indirect work qualification record](../../docs/validation/M0D_INDIRECT_WORK.md).
