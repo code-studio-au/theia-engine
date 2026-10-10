@@ -161,3 +161,18 @@ separate. Native cooker qualification is Linux-only; the Rust reader/viewer has
 no native-tool dependency and Windows runtime is still untested.
 
 [Format contract](M4_ASSET_CONTRACT.md), [executed evidence](validation/M4_COOKED_MESHLETS.md).
+
+### M4 cell/page CPU residency qualification
+
+Package the grid and quad paths from the cooker reports:
+
+```bash
+python3 tools/package_cell.py --cell 7 <grid-file> <quad-file>
+cargo run --locked --manifest-path crates/theia-assets/Cargo.toml --example residency -- <printed-cell-file>
+cargo test --locked --manifest-path crates/theia-assets/Cargo.toml
+```
+
+The example expects exactly two pages colocated with the manifest. It validates
+hash-named files and demonstrates retained-reader budget pressure and release.
+It performs CPU publication only; the quad is a second page in this test, with
+no automatic fallback or GPU upload. Shader/viewer workflows above stay separate.

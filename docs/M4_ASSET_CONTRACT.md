@@ -61,6 +61,34 @@ not included in that budget.
 
 ## Next M4 gates
 
+### Bounded cell/page CPU lifetime prototype
+
+`THEIACEL` v1 manifests use little-endian words: eight-byte magic, u32 version
+and page count, u64 logical cell identity, then 40-byte records containing a
+32-byte full mesh-file SHA-256 and u64 encoded length. Records must be strictly
+hash-sorted, unique, and number 1..4096; each page is 76 bytes..64 MiB. The
+manifest's full SHA-256 is its filename/content address. Cell identity is
+independent of a page's physical allocation. `tools/package_cell.py` packages
+existing hash-named files; the Rust reader additionally validates each mesh
+container before staging. This prototype has no dependency graph, spatial bounds,
+page offsets, material pages or automatic fallback selection.
+
+`theia_assets::residency` is a **CPU lifetime oracle**. Staging reserves immutable
+encoded bytes, deduplicated by content ID within one store. Publication produces
+a new read-only snapshot at a checked epoch. Removing a page from the current
+snapshot does not release its allocation while old snapshots or staged tokens
+retain it. Dropping the last owner releases its byte charge; failed publication
+leaves the current snapshot unchanged and consumes/discards its staged token.
+Tokens from another store are rejected. Rust ownership supplies reader release;
+there is no GPU fence/completion proof or asynchronous I/O in this unit.
+
+The budget covers unique live encoded page bytes, including staging and retained
+readers. It excludes decoded vectors, snapshot maps, Arc overhead, file-read
+buffers, Vulkan allocation alignment and GPU memory. It is not the actual
+per-arena budget required by M4. The file-backed example verifies a retained
+7,244-byte grid blocks another page within that budget, then releases it and
+publishes an 848-byte quad. This tests retirement, not automatic LOD fallback.
+
 Integrate authored geometry/material/camera contracts and the M1/M2/M3 data paths;
 qualify general meshlet LOD/error/seams, immutable cell manifests, asynchronous
 I/O/staged publication/retirement, actual per-arena resident budgets/protected

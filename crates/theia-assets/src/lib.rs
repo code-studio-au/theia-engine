@@ -1,6 +1,7 @@
 //! Bounded immutable meshlet container reader. Offline native cookers are not runtime dependencies.
 use sha2::{Digest, Sha256};
 use std::{error::Error, fmt};
+pub mod residency;
 pub const HEADER_BYTES: usize = 76;
 pub const DEFAULT_BUDGET: usize = 64 * 1024 * 1024;
 #[derive(Debug)]
@@ -193,7 +194,7 @@ impl Mesh {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn fixture() -> Vec<u8> {
+    pub(super) fn fixture() -> Vec<u8> {
         let mut payload = b"test".to_vec();
         for coordinate in [0f32, 0., 0., 1., 0., 0., 0., 1., 0.] {
             payload.extend(coordinate.to_bits().to_le_bytes());

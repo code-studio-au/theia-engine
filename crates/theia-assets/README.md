@@ -17,3 +17,9 @@ The lab additionally anchors the full-file digest to the filename. The inspect
 example accepts any filename and reports successful container validation. Tests
 cover valid data, digest/version/length/budget corruption, every truncated prefix,
 and correctly rehashed but invalid geometry/padding.
+
+`residency` adds a bounded immutable cell-manifest reader and CPU page lifetime
+oracle. Snapshots and staged tokens retain encoded allocations across eviction;
+the byte budget counts all unique live pages. This does not model Vulkan upload
+completion or physical GPU memory. See the contract for schema and exclusions.
+The `residency` example runs the retained-reader sequence on two real cooked files.

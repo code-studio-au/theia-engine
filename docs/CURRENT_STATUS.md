@@ -4,6 +4,22 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M4 immutable page lifetime CPU contract — locally tested
+
+Added bounded hash-addressed cell manifests and a pure Rust residency oracle.
+Immutable snapshots retain evicted pages; staged/retained bytes remain charged
+until their last owner releases them. Duplicate staging shares one allocation;
+foreign tokens, corrupt pages and invalid/duplicate removals fail safely.
+Eight asset tests pass, including 2,000 randomized lifetime operations against an
+independent live-page set. Formatting and Clippy with denied warnings pass.
+The file-backed cell-7 example protects the 7,244-byte grid after eviction, then
+releases the reader and publishes the 848-byte quad at epoch 3.
+
+This is a CPU contract, with an encoded-byte budget. Async I/O, Vulkan publication
+completion, frame-retirement fences, physical resident budgets and renderer
+load/unload integration are the next qualification unit. No new GPU capability or
+M4 completion is claimed. Changes remain local.
+
 ## M4 initial cooked-asset/viewer slice — independently executed
 
 Official meshoptimizer 1.3 (offline only) cooks/optimizes a 512-triangle grid into
