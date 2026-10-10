@@ -29,7 +29,7 @@ impl IndirectWork {
         queue: (u32, vk::Queue, u64),
     ) -> Result<Self> {
         let spatial = mode == RenderMode::Spatial;
-        let cull = mode == RenderMode::AssetCull;
+        let cull = matches!(mode, RenderMode::AssetCull | RenderMode::AssetResolve);
         let bytes = if spatial {
             9728
         } else if cull {
@@ -313,6 +313,16 @@ impl IndirectWork {
     }
     pub fn resident_bytes(&self) -> u64 {
         self.asset.as_ref().map_or(0, |asset| asset.reserved_bytes)
+    }
+    pub fn geometry_descriptor(&self) -> vk::DescriptorBufferInfo {
+        let asset = self
+            .asset
+            .as_ref()
+            .expect("Cooked resolve requires geometry");
+        vk::DescriptorBufferInfo::default()
+            .buffer(asset.handle)
+            .offset(asset.offset)
+            .range(asset.bytes)
     }
     /// Caller must have retired every command using this descriptor set and old buffer.
     pub fn replace_asset(&mut self, asset: crate::asset::Buffer) -> crate::asset::Buffer {

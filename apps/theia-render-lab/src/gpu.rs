@@ -229,12 +229,21 @@ impl Context {
         self.select_device(
             options.gpu.as_deref(),
             options.render_mode() == RenderMode::Spatial,
-            options.render_mode() == RenderMode::Visibility,
             matches!(
                 options.render_mode(),
-                RenderMode::Asset | RenderMode::AssetCamera | RenderMode::AssetCull
+                RenderMode::Visibility | RenderMode::AssetResolve
             ),
-            options.render_mode() == RenderMode::AssetCull,
+            matches!(
+                options.render_mode(),
+                RenderMode::Asset
+                    | RenderMode::AssetCamera
+                    | RenderMode::AssetCull
+                    | RenderMode::AssetResolve
+            ),
+            matches!(
+                options.render_mode(),
+                RenderMode::AssetCull | RenderMode::AssetResolve
+            ),
         )?;
         // SAFETY: Features were queried on the selected device; all queue indices support the intended
         // operations. Create-info backing storage remains live and handles immediately gain RAII ownership.
@@ -393,10 +402,18 @@ impl Context {
                         "mesh output/invocation limits",
                         limits.max_mesh_work_group_invocations >= if asset { 64 } else { 32 }
                             && limits.max_mesh_work_group_size[0] >= if asset { 64 } else { 32 }
-                            && limits.max_mesh_output_vertices >= if asset { 64 } else { 3 }
+                            && limits.max_mesh_output_vertices
+                                >= if visibility && asset {
+                                    192
+                                } else if asset {
+                                    64
+                                } else {
+                                    3
+                                }
                             && limits.max_mesh_output_primitives >= if asset { 64 } else { 1 }
                             && (!asset
-                                || (limits.max_mesh_output_memory_size >= 4096
+                                || (limits.max_mesh_output_memory_size
+                                    >= if visibility && asset { 8192 } else { 4096 }
                                     && limits.max_mesh_output_components >= 7)),
                     ),
                     ("taskShader", mesh.task_shader == vk::TRUE),
@@ -716,7 +733,7 @@ impl Swapchain {
                         vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
                     )?);
                 }
-                if mode == RenderMode::Visibility {
+                if matches!(mode, RenderMode::Visibility | RenderMode::AssetResolve) {
                     let memory = ctx
                         .instance
                         .as_ref()
@@ -729,6 +746,7 @@ impl Swapchain {
                         format.format,
                         shader_dir,
                         descriptor_layout.ok_or("Visibility mode needs GPU work layout")?,
+                        mode == RenderMode::AssetResolve,
                     )?);
                 } else {
                     chain.pipeline = Some(Pipeline::new(
@@ -872,6 +890,7 @@ impl Renderer {
                 | RenderMode::Asset
                 | RenderMode::AssetCamera
                 | RenderMode::AssetCull
+                | RenderMode::AssetResolve
         ) {
             // SAFETY: The selected physical device belongs to the retained live instance.
             let memory = unsafe {
@@ -920,7 +939,7 @@ impl Renderer {
                 }
                 if matches!(
                     renderer.mode,
-                    RenderMode::AssetCamera | RenderMode::AssetCull
+                    RenderMode::AssetCamera | RenderMode::AssetCull | RenderMode::AssetResolve
                 ) && limits.max_push_constants_size < 64
                 {
                     return Err("Camera mode requires 64 mesh-stage push constant bytes".into());
@@ -1015,13 +1034,16 @@ impl Renderer {
             self.work_items
         };
         if self.work.is_some() && self.last_input != Some(input) {
-            if self.mode == RenderMode::AssetCull {
+            if matches!(self.mode, RenderMode::AssetCull | RenderMode::AssetResolve) {
                 println!(
                     "GPU frustum qualification view: {input} (0 translated empty, 1 narrow left, 2 full; compute selects meshlet IDs/counts)"
                 );
             } else if matches!(
                 self.mode,
-                RenderMode::Asset | RenderMode::AssetCamera | RenderMode::AssetCull
+                RenderMode::Asset
+                    | RenderMode::AssetCamera
+                    | RenderMode::AssetCull
+                    | RenderMode::AssetResolve
             ) {
                 println!(
                     "Cooked mesh qualification scenario: {input} (0 empty, 1 first meshlet, 2 all; GPU reads asset header/counts; no count readback)"
@@ -1070,7 +1092,7 @@ impl Renderer {
         let chain = self.chain.as_mut().unwrap();
         let ctx = &self.ctx;
         let device = ctx.device.as_ref().unwrap();
-        let camera_rows = if self.mode == RenderMode::AssetCull {
+        let camera_rows = if matches!(self.mode, RenderMode::AssetCull | RenderMode::AssetResolve) {
             Some(crate::camera::view_rows(
                 chain.extent.width,
                 chain.extent.height,
@@ -1084,6 +1106,13 @@ impl Renderer {
         } else {
             None
         };
+        if self.mode == RenderMode::AssetResolve {
+            chain
+                .visibility
+                .as_mut()
+                .unwrap()
+                .bind_geometry(self.work.as_ref().unwrap().geometry_descriptor());
+        }
         // SAFETY: A single frame in flight; its fence protects command buffer/acquire semaphore reuse.
         // Image-specific presentation semaphores are reused only after acquire and a presentation-fence
         // wait. Barriers order color writes/presentation and depth reuse after earlier fragment tests.
@@ -1158,6 +1187,7 @@ impl Renderer {
                     ctx.command,
                     ctx.mesh_commands.as_ref().unwrap(),
                     self.work.as_ref().unwrap(),
+                    camera_rows,
                 );
             }
             let to_color = [vk::ImageMemoryBarrier2::default()
@@ -1210,7 +1240,11 @@ impl Renderer {
             }
             device.cmd_begin_rendering(ctx.command, &rendering);
             if let Some(target) = &chain.visibility {
-                target.record_resolve(ctx.command, ctx.mesh_commands.as_ref().unwrap());
+                target.record_resolve(
+                    ctx.command,
+                    ctx.mesh_commands.as_ref().unwrap(),
+                    camera_rows,
+                );
             } else if let Some(pipeline) = &chain.pipeline {
                 device.cmd_bind_pipeline(
                     ctx.command,

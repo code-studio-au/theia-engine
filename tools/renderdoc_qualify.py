@@ -44,7 +44,8 @@ def qualify(report):
     visibility = os.environ.get('THEIA_CAPTURE_VISIBILITY') == '1'
     asset_path = os.environ.get('THEIA_CAPTURE_ASSET')
     cell_path = os.environ.get('THEIA_CAPTURE_CELL')
-    cull = os.environ.get('THEIA_CAPTURE_CULL') == '1'
+    material = os.environ.get('THEIA_CAPTURE_MATERIAL') == '1'
+    cull = os.environ.get('THEIA_CAPTURE_CULL') == '1' or material
     camera = os.environ.get('THEIA_CAPTURE_CAMERA') == '1' or cull
     if camera and not asset_path:
         raise RuntimeError('Camera capture requires expected mesh page')
@@ -56,7 +57,9 @@ def qualify(report):
     if scenario not in (0, 1, 2):
         raise RuntimeError('Capture scenario must be 0, 1 or 2')
     arguments = '--frames 180 --gpu 7900 --no-validation'
-    if cull:
+    if material:
+        arguments += ' --material-test'
+    elif cull:
         arguments += ' --frustum-test'
     elif camera:
         arguments += ' --camera-test'
@@ -219,7 +222,7 @@ def qualify(report):
             verify_surface(controller, executable, root, present.copyDestination, scenario, report)
         if asset_path:
             if camera:
-                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull)
+                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material)
             else:
                 verify_asset(controller, present.copyDestination, source, count, report)
         save = rd.TextureSave()
@@ -316,6 +319,12 @@ def verify_asset(controller, color_id, source, count, report):
         u = ((b[1]-c[1])*(point[0]-c[0])+(c[0]-b[0])*(point[1]-c[1]))/denominator
         v = ((c[1]-a[1])*(point[0]-c[0])+(a[0]-c[0])*(point[1]-c[1]))/denominator
         return min(u,v,1-u-v)>=0
+    identities = [texture for texture in textures if texture.format.compType == rd.CompType.UInt and texture.format.compCount == 2 and texture.format.compByteWidth == 4]
+    identity = None
+    if material:
+        if len(identities) != 1: raise RuntimeError('Expected one cooked identity target')
+        identity = controller.GetTextureData(identities[0].resourceId, rd.Subresource())
+        if len(identity) != color.width*color.height*8: raise RuntimeError('Unexpected identity layout')
     def srgb(value):
         return round((value*12.92 if value<=.0031308 else 1.055*value**(1/2.4)-.055)*255)
     samples = []
@@ -336,7 +345,7 @@ def verify_asset(controller, color_id, source, count, report):
     report.update(asset_surface_samples=samples, asset_surface_verified=True, selected_triangles=len(geometry))
 
 
-def verify_camera(controller, executable, root, color_id, asset_path, scenario, report, cull=False):
+def verify_camera(controller, executable, root, color_id, asset_path, scenario, report, cull=False, material=False):
     textures = controller.GetTextures()
     color = next(texture for texture in textures if texture.resourceId == color_id)
     depths = [texture for texture in textures if texture.format.compType == rd.CompType.Depth
@@ -347,6 +356,12 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
     depth = controller.GetTextureData(depths[0].resourceId, rd.Subresource())
     if len(rgb) != color.width*color.height*4 or len(depth) != color.width*color.height*4:
         raise RuntimeError('Unexpected camera readback layout')
+    identities = [texture for texture in textures if texture.format.compType == rd.CompType.UInt and texture.format.compCount == 2 and texture.format.compByteWidth == 4]
+    identity = None
+    if material:
+        if len(identities) != 1: raise RuntimeError('Expected one cooked identity target')
+        identity = controller.GetTextureData(identities[0].resourceId, rd.Subresource())
+        if len(identity) != color.width*color.height*8: raise RuntimeError('Unexpected identity layout')
     def srgb(value):
         value = max(0, min(1, value))
         return round((value*12.92 if value <= .0031308 else 1.055*value**(1/2.4)-.055)*255)
@@ -354,9 +369,12 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
     for y in range(1,10):
         for x in range(1,10):
             pixel = (int(color.width*x/10), int(color.height*y/10))
-            expected = json.loads(subprocess.check_output([str(executable), '--frustum-reference' if cull else '--camera-reference', asset_path,
+            expected = json.loads(subprocess.check_output([str(executable), '--material-reference' if material else '--frustum-reference' if cull else '--camera-reference', asset_path,
                                   str(pixel[0]), str(pixel[1]), str(color.width), str(color.height), str(scenario)], cwd=root))
             offset = pixel[1]*color.width+pixel[0]
+            if material:
+                actual_identity = list(struct.unpack_from('<2I', identity, offset*8))
+                if actual_identity != expected['identity']: raise RuntimeError(f'Cooked identity mismatch at {pixel}: {actual_identity}, expected {expected}')
             actual_color = list(rgb[offset*4:offset*4+3])
             if color.format.BGRAOrder():
                 actual_color.reverse()
@@ -365,6 +383,7 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
                 raise RuntimeError(f'Perspective camera color/depth mismatch at {pixel}: {actual_color}/{actual_depth}, expected {expected}')
             samples.append({'pixel':pixel,'covered':expected['covered'],'color':actual_color,'depth':actual_depth})
     report.update(camera_samples=samples, camera_verified=True)
+    if material: report['material_verified'] = True
 
 report = {'renderdoc': rd.GetVersionString(), 'validation_enabled_in_capture': False}
 code = 0

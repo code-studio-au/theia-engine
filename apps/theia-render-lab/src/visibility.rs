@@ -1,4 +1,4 @@
-//! M3 identity/depth targets and material resolve, owned by one swapchain generation.
+//! Identity/depth targets and material resolve, owned by one swapchain generation.
 use crate::{Result, indirect::IndirectWork, pipeline::Pipeline};
 use ash::vk;
 use std::path::Path;
@@ -106,6 +106,8 @@ pub struct Target {
     materials: [Image; 2],
     sampler: vk::Sampler,
     device: ash::Device,
+    cooked: bool,
+    geometry: Option<(vk::Buffer, u64, u64)>,
 }
 impl Target {
     pub fn new(
@@ -115,6 +117,7 @@ impl Target {
         color_format: vk::Format,
         shaders: &Path,
         work_layout: vk::DescriptorSetLayout,
+        cooked: bool,
     ) -> Result<Self> {
         let identity = Image::new(
             device,
@@ -158,6 +161,8 @@ impl Target {
             materials,
             sampler: vk::Sampler::null(),
             device: device.clone(),
+            cooked,
+            geometry: None,
         };
         // SAFETY: Images/layouts are live, arrays are retained through calls and handles gain RAII immediately.
         unsafe {
@@ -172,7 +177,7 @@ impl Target {
                     .max_lod(0.0),
                 None,
             )?;
-            let bindings: Vec<_> = (0..4)
+            let mut bindings: Vec<_> = (0..4)
                 .map(|binding| {
                     vk::DescriptorSetLayoutBinding::default()
                         .binding(binding)
@@ -185,12 +190,24 @@ impl Target {
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT)
                 })
                 .collect();
-            let flags = [
+            if cooked {
+                bindings.push(
+                    vk::DescriptorSetLayoutBinding::default()
+                        .binding(4)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .descriptor_count(1)
+                        .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+                );
+            }
+            let mut flags = vec![
                 vk::DescriptorBindingFlags::empty(),
                 vk::DescriptorBindingFlags::empty(),
                 vk::DescriptorBindingFlags::PARTIALLY_BOUND,
                 vk::DescriptorBindingFlags::empty(),
             ];
+            if cooked {
+                flags.push(vk::DescriptorBindingFlags::empty());
+            }
             let mut binding_flags =
                 vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(&flags);
             target.layout = device.create_descriptor_set_layout(
@@ -199,7 +216,7 @@ impl Target {
                     .push_next(&mut binding_flags),
                 None,
             )?;
-            let sizes = [
+            let mut sizes = vec![
                 vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::SAMPLED_IMAGE)
                     .descriptor_count(4),
@@ -207,6 +224,13 @@ impl Target {
                     .ty(vk::DescriptorType::SAMPLER)
                     .descriptor_count(1),
             ];
+            if cooked {
+                sizes.push(
+                    vk::DescriptorPoolSize::default()
+                        .ty(vk::DescriptorType::STORAGE_BUFFER)
+                        .descriptor_count(1),
+                );
+            }
             target.pool = device.create_descriptor_pool(
                 &vk::DescriptorPoolCreateInfo::default()
                     .max_sets(1)
@@ -264,23 +288,62 @@ impl Target {
             );
             device.update_descriptor_sets(&writes, &[]);
         }
-        target.visibility = Some(Pipeline::visibility(device, shaders, work_layout)?);
+        target.visibility = Some(Pipeline::visibility(device, shaders, work_layout, cooked)?);
         target.resolve = Some(Pipeline::resolve(
             device,
             color_format,
             shaders,
             target.layout,
+            cooked,
         )?);
         println!(
-            "M3 targets ready: R32G32_UINT instance/primitive + D32_SFLOAT depth; mesh material resolve"
+            "Visibility targets ready: R32G32_UINT {}/primitive + D32_SFLOAT depth; mesh material resolve",
+            if cooked { "meshlet" } else { "instance" }
         );
         Ok(target)
+    }
+    pub fn bind_geometry(&mut self, info: vk::DescriptorBufferInfo) {
+        let key = (info.buffer, info.offset, info.range);
+        if self.geometry == Some(key) {
+            return;
+        }
+        // SAFETY: Called after the sole frame fence; work owns this uploaded range until subsequent retirement.
+        unsafe {
+            self.device.update_descriptor_sets(
+                &[vk::WriteDescriptorSet::default()
+                    .dst_set(self.set)
+                    .dst_binding(4)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .buffer_info(&[info])],
+                &[],
+            );
+        }
+        self.geometry = Some(key);
+    }
+    fn push_rows(
+        &self,
+        command: vk::CommandBuffer,
+        layout: vk::PipelineLayout,
+        stage: vk::ShaderStageFlags,
+        rows: [[f32; 4]; 4],
+    ) {
+        // SAFETY: Sixteen contiguous f32 values occupy exactly the qualified 64-byte push range; command is recording.
+        unsafe {
+            self.device.cmd_push_constants(
+                command,
+                layout,
+                stage,
+                0,
+                std::slice::from_raw_parts(rows.as_ptr().cast::<u8>(), 64),
+            );
+        }
     }
     pub fn record_identity(
         &self,
         command: vk::CommandBuffer,
         mesh: &ash::ext::mesh_shader::Device,
         work: &IndirectWork,
+        rows: Option<[[f32; 4]; 4]>,
     ) {
         let visibility = self.visibility.as_ref().unwrap();
         // SAFETY: Caller owns/records the command buffer and waits the single frame fence. Targets
@@ -411,6 +474,14 @@ impl Target {
                     extent: self.extent,
                 }],
             );
+            if self.cooked {
+                self.push_rows(
+                    command,
+                    visibility.layout,
+                    vk::ShaderStageFlags::MESH_EXT,
+                    rows.unwrap(),
+                );
+            }
             work.draw(command, visibility.layout, mesh);
             self.device.cmd_end_rendering(command);
             let end = [
@@ -438,7 +509,12 @@ impl Target {
             );
         }
     }
-    pub fn record_resolve(&self, command: vk::CommandBuffer, mesh: &ash::ext::mesh_shader::Device) {
+    pub fn record_resolve(
+        &self,
+        command: vk::CommandBuffer,
+        mesh: &ash::ext::mesh_shader::Device,
+        rows: Option<[[f32; 4]; 4]>,
+    ) {
         let pipeline = self.resolve.as_ref().unwrap();
         // SAFETY: Called inside compatible swapchain dynamic rendering; descriptor images have been published.
         unsafe {
@@ -455,6 +531,14 @@ impl Target {
                 &[self.set],
                 &[],
             );
+            if self.cooked {
+                self.push_rows(
+                    command,
+                    pipeline.layout,
+                    vk::ShaderStageFlags::FRAGMENT,
+                    rows.unwrap(),
+                );
+            }
             mesh.cmd_draw_mesh_tasks(command, 1, 1, 1);
         }
     }

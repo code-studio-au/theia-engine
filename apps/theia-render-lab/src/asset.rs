@@ -322,7 +322,8 @@ impl Upload {
                 .src_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
                 .dst_stage_mask(
                     vk::PipelineStageFlags2::COMPUTE_SHADER
-                        | vk::PipelineStageFlags2::MESH_SHADER_EXT,
+                        | vk::PipelineStageFlags2::MESH_SHADER_EXT
+                        | vk::PipelineStageFlags2::FRAGMENT_SHADER,
                 )
                 .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_READ)
                 .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)

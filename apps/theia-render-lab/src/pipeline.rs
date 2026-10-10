@@ -42,7 +42,7 @@ struct ShaderStages {
     task: Option<&'static str>,
     fragment: &'static str,
     depth: Option<vk::Format>,
-    camera: bool,
+    push: Option<vk::ShaderStageFlags>,
 }
 impl Pipeline {
     pub fn new(
@@ -103,7 +103,8 @@ impl Pipeline {
                 fragment: "triangle.frag.spv",
                 depth: matches!(mode, RenderMode::AssetCamera | RenderMode::AssetCull)
                     .then_some(vk::Format::D32_SFLOAT),
-                camera: matches!(mode, RenderMode::AssetCamera | RenderMode::AssetCull),
+                push: matches!(mode, RenderMode::AssetCamera | RenderMode::AssetCull)
+                    .then_some(vk::ShaderStageFlags::MESH_EXT),
             },
         )?;
         println!("Graphics pipeline ready for {mode:?}");
@@ -113,6 +114,7 @@ impl Pipeline {
         device: &ash::Device,
         shader_dir: &Path,
         descriptor_layout: vk::DescriptorSetLayout,
+        cooked: bool,
     ) -> Result<Self> {
         Self::configured(
             device,
@@ -120,11 +122,23 @@ impl Pipeline {
             shader_dir,
             Some(descriptor_layout),
             ShaderStages {
-                mesh: "visibility.mesh.spv",
-                task: Some("visibility.task.spv"),
-                fragment: "visibility.frag.spv",
+                mesh: if cooked {
+                    "asset.visibility.mesh.spv"
+                } else {
+                    "visibility.mesh.spv"
+                },
+                task: Some(if cooked {
+                    "asset.task.spv"
+                } else {
+                    "visibility.task.spv"
+                }),
+                fragment: if cooked {
+                    "asset.visibility.frag.spv"
+                } else {
+                    "visibility.frag.spv"
+                },
                 depth: Some(vk::Format::D32_SFLOAT),
-                camera: false,
+                push: cooked.then_some(vk::ShaderStageFlags::MESH_EXT),
             },
         )
     }
@@ -133,6 +147,7 @@ impl Pipeline {
         format: vk::Format,
         shader_dir: &Path,
         descriptor_layout: vk::DescriptorSetLayout,
+        cooked: bool,
     ) -> Result<Self> {
         Self::configured(
             device,
@@ -142,9 +157,13 @@ impl Pipeline {
             ShaderStages {
                 mesh: "resolve.mesh.spv",
                 task: None,
-                fragment: "resolve.frag.spv",
+                fragment: if cooked {
+                    "asset.resolve.frag.spv"
+                } else {
+                    "resolve.frag.spv"
+                },
                 depth: None,
-                camera: false,
+                push: cooked.then_some(vk::ShaderStageFlags::FRAGMENT),
             },
         )
     }
@@ -172,12 +191,8 @@ impl Pipeline {
         unsafe {
             let layouts: Vec<_> = descriptor_layout.into_iter().collect();
             let push: Vec<_> = shaders
-                .camera
-                .then(|| {
-                    vk::PushConstantRange::default()
-                        .stage_flags(vk::ShaderStageFlags::MESH_EXT)
-                        .size(64)
-                })
+                .push
+                .map(|stage| vk::PushConstantRange::default().stage_flags(stage).size(64))
                 .into_iter()
                 .collect();
             pipeline.layout = device.create_pipeline_layout(

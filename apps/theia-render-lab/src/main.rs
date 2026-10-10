@@ -32,6 +32,7 @@ enum RenderMode {
     Asset,
     AssetCamera,
     AssetCull,
+    AssetResolve,
     DirectTask,
     MeshOnly,
     Clear,
@@ -54,10 +55,13 @@ struct Options {
     resident_budget: Option<u64>,
     camera: bool,
     frustum: bool,
+    material: bool,
 }
 impl Options {
     fn render_mode(&self) -> RenderMode {
-        if self.frustum {
+        if self.material {
+            RenderMode::AssetResolve
+        } else if self.frustum {
             RenderMode::AssetCull
         } else if self.camera {
             RenderMode::AssetCamera
@@ -72,7 +76,8 @@ impl Options {
             match arg.as_str() {
                 "--camera-test" => result.camera = true,
                 "--frustum-test" => result.frustum = true,
-                "--camera-reference" | "--frustum-reference" => {
+                "--material-test" => result.material = true,
+                "--camera-reference" | "--frustum-reference" | "--material-reference" => {
                     use std::io::Read;
                     let path = args.next().ok_or(
                         "--camera-reference needs mesh path and x y width height scenario",
@@ -91,8 +96,13 @@ impl Options {
                     let mesh =
                         theia_assets::Mesh::decode(&bytes, None, theia_assets::DEFAULT_BUDGET)?;
                     let [x, y, width, height, scenario] = values;
-                    let frustum = arg == "--frustum-reference";
-                    let pixel = camera::pixel(&mesh, x, y, width, height, scenario, frustum)?;
+                    let material = arg == "--material-reference";
+                    let frustum = arg != "--camera-reference";
+                    let mut pixel = camera::pixel(&mesh, x, y, width, height, scenario, frustum)?;
+                    if material && pixel.identity[0] != 0 && (pixel.identity[0] - 1) & 1 != 0 {
+                        pixel.color[0] *= 89. / 255.;
+                        pixel.color[1] *= 153. / 255.;
+                    }
                     let ids = if frustum {
                         camera::visible(&mesh, camera::view_rows(width, height, scenario)?)?
                     } else {
@@ -100,7 +110,7 @@ impl Options {
                     };
                     println!(
                         "{}",
-                        serde_json::json!({"color":pixel.color,"depth":pixel.depth,"covered":pixel.covered,"ids":ids})
+                        serde_json::json!({"color":pixel.color,"depth":pixel.depth,"covered":pixel.covered,"identity":pixel.identity,"ids":ids})
                     );
                     std::process::exit(0);
                 }
@@ -217,15 +227,19 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
                 _ => return Err(format!("Unknown argument: {arg}").into()),
             }
         }
-        if (result.camera || result.frustum) && result.mode != Some(RenderMode::Asset) {
-            return Err("--camera-test/--frustum-test require --asset or --cell".into());
+        if (result.camera || result.frustum || result.material)
+            && result.mode != Some(RenderMode::Asset)
+        {
+            return Err(
+                "--camera-test/--frustum-test/--material-test require --asset or --cell".into(),
+            );
         }
         if result.resident_budget.is_some() && result.cell.is_none() {
             return Err("--resident-budget requires --cell".into());
@@ -242,6 +256,7 @@ impl Options {
                     | RenderMode::Asset
                     | RenderMode::AssetCamera
                     | RenderMode::AssetCull
+                    | RenderMode::AssetResolve
             ) || result.smoke)
         {
             return Err(

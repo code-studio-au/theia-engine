@@ -96,6 +96,7 @@ pub struct Pixel {
     pub color: [f32; 3],
     pub depth: f32,
     pub covered: bool,
+    pub identity: [u32; 2],
 }
 pub fn pixel(
     mesh: &Mesh,
@@ -132,6 +133,7 @@ pub fn pixel(
         color: [0.025, 0.07, 0.12],
         depth: 1.,
         covered: false,
+        identity: [0, 0],
     };
     for id in ids {
         let meshlet = &mesh.meshlets[id as usize];
@@ -183,6 +185,7 @@ pub fn pixel(
                 color: [world[0] * 0.5 + 0.5, world[1] * 0.5 + 0.5, 0.5],
                 depth,
                 covered: true,
+                identity: [id + 1, triangle as u32],
             };
         }
     }

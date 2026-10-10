@@ -192,3 +192,22 @@ read by the renderer host. CPU/reference/RenderDoc readbacks are diagnostic only
 Frame fence and upload/arena lease rules remain unchanged across page replacement.
 This extends static meshlet selection; M2's spatial table and M3's independent
 visibility/material fixture are not yet a unified scene pipeline.
+
+### Cooked identity and diagnostic resolve
+
+`--material-test` reuses the frustum work ABI, camera and immutable geometry
+range. Identity is R32G32_UINT `(meshletID + 1, localTriangleID)`; zero first word
+is background. These IDs are frame/page-local, never stable gameplay handles.
+The identity pass emits three vertices per triangle with identical flat IDs,
+up to 192 output vertices/64 triangles. Its qualified device profile explicitly
+requires 192 mesh output vertices and 8192 output-memory bytes. This is a bounded
+Slang interface qualification workaround, not a general meshlet storage change.
+
+Resolve binding 4 is the same immutable storage-buffer range, published to
+fragment reads by upload Sync2 and rebound only after the sole frame fence.
+Sixty-four fragment push bytes contain the same camera rows as compute/mesh.
+Resolve decodes selected triangle vertices, reconstructs perspective-correct
+world position, checks interpolated depth and samples the existing two-texture
+array using meshlet parity. This palette is diagnostic; no authored UV, normal,
+material, derivative or virtual-texture contract is added. M3 standalone remains
+available. Shared-vertex per-primitive fragment input remains unqualified.

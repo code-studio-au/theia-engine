@@ -4,6 +4,29 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M4 cooked visibility/material resolve — independently executed
+
+Optional `--material-test` connects cooked meshlets, perspective camera, GPU
+frustum work and fenced arena residency to R32G32_UINT meshlet/triangle identity,
+D32 depth and deferred diagnostic material resolve. Resolve reconstructs world
+position with perspective-correct weights from the selected immutable triangle
+and samples the existing two-texture nonuniform array. No runtime host work/ID
+readback. Slang compile/SPIR-V validation passes (23 render outputs).
+
+RX 7900 XTX standalone WSI passes 120 frames/ten generations with zero validation
+diagnostics. Six separate replay cases verify GPU geometry/work and 81 exact
+identity, depth and color samples each: full/narrow/empty terrain, transformed
+glTF, near-before-far occlusion, and cell replacement at arena offset 5528.
+Original M3 replay remains qualified. Thirteen renderer tests, fmt and denied-
+warning Clippy pass; prior rendering paths and construction cleanup are checked.
+
+This uses a diagnostic meshlet-parity palette, not authored materials/UVs/mips.
+Slang builtin primitive ID added Geometry capability; custom per-primitive
+fragment annotation was ignored. This bounded test instead emits three vertices
+per triangle and explicitly requires 192 mesh output vertices/8192 output bytes.
+Shared-vertex per-primitive interoperability remains open; no performance claim
+or renderer-wide expanded-vertex decision follows. M4 remains incomplete.
+
 ## M4 GPU meshlet frustum selection — independently executed
 
 Optional `--frustum-test` computes conservative clip-plane candidates from GPU
@@ -22,9 +45,8 @@ renderer tests, fmt and denied-warning Clippy pass; nine prior rendering paths
 and missing cull mesh construction failure pass zero-diagnostic GPU regression.
 
 This is conservative meshlet selection, not exact primitive visibility, HZB,
-projected-error LOD, cell-demand feedback or M1/M2/M3 scene integration. Current
-forward diagnostic color and independent M3 visibility/material test remain
-separate; connecting cooked geometry to visibility/material resolve is next.
+projected-error LOD, cell-demand feedback or M1/M2/M3 scene integration. The forward diagnostic path remains available; the later cooked material test
+connects selection to identity/depth and resolve.
 
 ## M4 bounded static glTF geometry — independently executed
 

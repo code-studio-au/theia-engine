@@ -390,3 +390,54 @@ failure logs, `m4-frustum-renderdoc-{0,1,2}/report.json` and
 push or benchmark is claimed; changes remain local. General HZB, spatial-cell
 integration, projected-error LOD, feedback/demand streaming, material/visibility
 integration and multi-frame readers remain open. M4 remains incomplete.
+
+## Cooked visibility/material resolve (2026-10-10)
+
+`--material-test` connects GPU frustum selection, cooked task/mesh geometry,
+perspective camera and fenced arena replacement to meshlet/triangle identity,
+D32 nearest depth and deferred diagnostic material resolve. Immutable geometry
+also publishes transfer writes to fragment storage reads; binding 4 tracks the
+retired/published range. Resolve independently reconstructs world attributes
+using screen barycentrics divided by clip W and samples nonuniform texture index
+`meshletID & 1`. The renderer does not read GPU IDs/counts.
+
+Slang 2026.19 qualification found builtin `SV_PrimitiveID` fragment input emits
+`OpCapability Geometry`. Custom `[[vk::perprimitive]]` produced warning E31000
+and no fragment PerPrimitiveEXT decoration. Neither route is claimed qualified.
+The bounded alternative duplicates three mesh outputs per triangle and assigns
+identical flat uint2 IDs to each. SPIR-V validates with only Shader capability
+in the identity fragment stage. Explicit mesh output limits are 192 vertices /
+64 primitives / 8192 memory bytes. All 23 render outputs compile/validate;
+no HLSL/GLSL fallback or Geometry device feature was enabled.
+
+RX 7900 XTX WSI presents 120 frames/ten swapchain generations with zero validation
+warnings/errors including teardown. Separate RenderDoc replay checks uploaded
+geometry, compacted IDs/count/mask, and 81 exact identity/color/depth samples per
+case (2e-6 depth/two RGB byte tolerance):
+
+| Case | Covered samples | Result |
+|---|---:|---|
+| Full terrain | 16 | pass |
+| Narrow terrain | 53 | pass |
+| Translated empty view | 0 | pass |
+| Transformed/reflected glTF | 2 | pass |
+| Near-before-far occlusion | 14 | pass |
+| Narrow cell after replacement, arena offset 5528 | 53 | pass |
+
+Original M3 replay still passes 84 identity/depth/material samples. Capture runs
+are explicitly separate from Vulkan validation and every target presents 180
+frames. Renderer tests (13), fmt and denied-warning Clippy pass. Artifacts:
+`build/qualification/m4-cooked-visibility-{shaders,smoke,regression-*}.log` and
+`m4-cooked-visibility-{full,narrow,empty,gltf,occlusion,cell,m3-regression}`
+report/capture/image files. No hosted CI, push or benchmark is claimed.
+
+Meshlet-parity textures are a diagnostic palette, not authored materials;
+LOD changes may change the palette. General material/UV/normal import,
+derivatives/mips, shared-vertex primitive interface, stable scene instances,
+spatial-cell selection, hierarchy/LOD error and multi-frame readers remain open.
+
+Ten standalone WSI regressions (indirect, clear, mesh, task, spatial, M3 visibility,
+asset, camera, frustum and material cell) pass 120 frames/ten generations with
+zero diagnostics; material cell replaces five pages. Missing cooked resolve
+fragment after arena/upload/identity-pipeline/target construction exits 1 with
+zero validation diagnostics during cleanup.
