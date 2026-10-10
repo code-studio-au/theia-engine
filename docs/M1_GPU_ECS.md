@@ -42,5 +42,7 @@ approved final bit budgets. Retained versions protect data as well as handle reu
 
 CPU oracle local tests pass: relocation/migration, capacity/conflict results,
 generation exhaustion, retained readers, invalid components, and 10,000 randomized
-operations against a separate map representation. No GPU ECS execution is yet
-claimed. M1 remains open.
+operations against a separate map representation. The separate GPU slice now passes 526 batches / 8,717 commands against this oracle
+on RX 7900 XTX with zero validation diagnostics. See [execution evidence](validation/M1_GPU_ECS.md).
+This qualifies the bounded reference gate; production parallel mutation, concurrent
+reader overlap and scale remain open.

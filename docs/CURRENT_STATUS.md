@@ -4,13 +4,28 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
-## M1 CPU oracle — independently executed
+## M1 bounded GPU reference slice — independently executed
+
+Separate `apps/theia-ecs-lab` executes Slang initialization, ordered structural
+mutation, parallel component integration and retained-reader compute. RX 7900 XTX
+passes 526 batches / 8,717 commands against the CPU oracle with zero synchronization
+validation warnings/errors including teardown. Both archetype migration directions,
+compaction, 64-bit world identities, stale/conflicting handles, chunk/slot exhaustion,
+retained old GPU data and permanent generation exhaustion are checked.
+
+Four ECS shader outputs pass SPIR-V validation. Local Rust checks pass; missing
+shader and unmatched-device construction failures clean up without diagnostics.
+M1's bounded reference slice is qualified; production parallel mutation, real
+concurrent rendering-reader overlap, general schemas, scale and other platforms
+remain open. CPU readbacks are diagnostic only. Evidence:
+[M1 GPU ECS qualification](validation/M1_GPU_ECS.md).
+
+## M1 CPU oracle — previously qualified
 
 `crates/theia-ecs` now provides the bounded dense-column/generational-handle CPU
 reference. Six local unit tests pass, including 10,000 deterministic randomized
 operations checked against an independent map. Formatting and Clippy with denied
-warnings pass. This is reference scaffolding, not GPU ECS execution; M1 remains
-open. Scope and next GPU checks: [M1 qualification contract](M1_GPU_ECS.md).
+warnings pass. This is reference scaffolding; the subsequent bounded GPU execution is recorded above. Scope and next GPU checks: [M1 qualification contract](M1_GPU_ECS.md).
 
 ## M0-D reference qualification closeout — independently executed
 

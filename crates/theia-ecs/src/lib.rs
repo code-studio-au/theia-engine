@@ -50,6 +50,12 @@ pub enum MutationError {
     ChunksExhausted,
     NonFiniteComponent,
 }
+impl std::fmt::Display for MutationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{self:?}")
+    }
+}
+impl std::error::Error for MutationError {}
 #[derive(Clone, Debug, Default)]
 struct Chunk {
     handles: Vec<Handle>,
@@ -82,14 +88,24 @@ pub struct Oracle {
 }
 impl Oracle {
     pub fn new(slots: u32, chunks_per_archetype: usize, chunk_capacity: usize) -> Self {
+        Self::with_initial_generation(slots, chunks_per_archetype, chunk_capacity, 1)
+    }
+    /// Qualification constructor for testing generation exhaustion without billions of mutations.
+    pub fn with_initial_generation(
+        slots: u32,
+        chunks_per_archetype: usize,
+        chunk_capacity: usize,
+        generation: u32,
+    ) -> Self {
         assert!(slots > 0 && chunks_per_archetype > 0 && chunk_capacity > 0);
+        assert!(generation > 0);
         Self {
             epoch: 0,
             chunk_capacity,
             chunks: std::array::from_fn(|_| vec![Chunk::default(); chunks_per_archetype]),
             slots: vec![
                 Slot {
-                    generation: 1,
+                    generation,
                     world_id: 0,
                     location: None,
                     retired: None,

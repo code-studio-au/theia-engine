@@ -7,7 +7,7 @@ The goal is an **early end-to-end playable vertical slice**, not years of isolat
 | M0-A | Device/RADV and shader compiler qualification | Report GPU capabilities, Slang compile and SPIR-V validation |
 | M0-C | Headless GPU compute | Rust ash dispatch produces 256 expected values — **DONE** |
 | M0-D | Render Lab | Native window + Vulkan swapchain + task/mesh-generated triangle; validation and resize work |
-| M1 | GPU ECS minimal | Correct dense components, handles, small structural mutations, epoch safety vs CPU oracle |
+| M1 | GPU ECS minimal | [Bounded reference slice qualified on RADV](validation/M1_GPU_ECS.md); dense components, handles, mutations and retained epochs vs CPU oracle |
 | M2 | Flat 2.5D visibility | Spatial candidate ranges, GPU culling, indirect mesh/task draws without host per-object lists |
 | M3 | Visibility buffer/materials | Correct primitive identity/depth, material attribute reconstruction, bindless sampling |
 | M4 | Static world/streaming | Cooked meshlets+LOD, terrain, virtual textures, immutable cells, resource budget/fallback |
@@ -28,12 +28,12 @@ The goal is an **early end-to-end playable vertical slice**, not years of isolat
 7. Add compute-written GPU work descriptors + indirect mesh-task dispatch, correct barriers, no host readback for count — [bounded reference test qualified on RADV](validation/M0D_INDIRECT_WORK.md).
 8. Qualification closeout: [local RADV/X11 reference slice qualified](validation/M0D_CLOSEOUT.md), with labeled WSI recovery injection, genuine suboptimal returns, and RenderDoc capture/replay. Real driver out-of-date/fatal returns and other platforms/vendors remain unqualified.
 
-## Next local implementation — M1
+## M1 reference slice — locally qualified
 
-Start with a bounded CPU oracle: dense chunked position/velocity columns, stable
+Implemented a bounded CPU oracle: dense chunked position/velocity columns, stable
 generational handles, two fixed archetypes, spawn/despawn/component migration at
 explicit epochs, and delayed slot reuse while readers retain an older epoch.
-Qualify a Slang implementation against that oracle with deterministic and randomized
+A Slang implementation is qualified against that oracle with deterministic and randomized
 mutation batches, stale/conflicting handles, exhausted capacity and retained-reader
 tests. Vulkan resource ownership and batched transfer/dispatch are explicit. Do
 not infer that the full GPU ECS, scheduler or allocation strategy exists from M0-D.
@@ -50,3 +50,12 @@ not infer that the full GPU ECS, scheduler or allocation strategy exists from M0
 ## Don't build in M0-D
 
 General ECS, complex render graph, radiance cache, geometry LOD streaming, network replication, audio, full UI, advanced multi-queue GPU scheduling or 10k-player load harness. Each is an intentionally later step.
+
+## Next local implementation — M2
+
+Build a bounded flat 2.5D grid and contiguous membership/candidate ranges, verify
+GPU candidate selection/culling against an independent CPU reference, and feed
+GPU-generated visibility counts/indices into task/mesh rendering. Use direct XY
+cell addressing; keep world identity independent of cell/storage placement.
+Static content streaming, HZB, virtualized geometry and production-scale tuning
+remain later slices. Preserve M0/M1 qualification apps and evidence.
