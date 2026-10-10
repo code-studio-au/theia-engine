@@ -353,6 +353,16 @@ impl Context {
                             && limits.max_mesh_output_primitives >= 1,
                     ),
                     ("taskShader", mesh.task_shader == vk::TRUE),
+                    (
+                        "amplification limits",
+                        limits.max_task_work_group_invocations >= 32
+                            && limits.max_task_work_group_size[0] >= 32
+                            && limits.max_task_payload_size >= 20
+                            && limits.max_task_payload_and_shared_memory_size >= 20
+                            && limits.max_mesh_payload_and_shared_memory_size >= 20
+                            && limits.max_mesh_work_group_count[0] >= 2
+                            && limits.max_mesh_work_group_total_count >= 2,
+                    ),
                     ("dynamicRendering", v13.dynamic_rendering == vk::TRUE),
                     ("synchronization2", v13.synchronization2 == vk::TRUE),
                     ("timelineSemaphore", v12.timeline_semaphore == vk::TRUE),
@@ -536,6 +546,7 @@ impl Swapchain {
         old: vk::SwapchainKHR,
         size: PhysicalSize<u32>,
         shader_dir: Option<&std::path::Path>,
+        task_amplification: bool,
     ) -> Result<Option<Self>> {
         let device = ctx.device.as_ref().unwrap();
         let surface = ctx.surface_loader.as_ref().unwrap();
@@ -614,7 +625,12 @@ impl Swapchain {
                 pipeline: None,
             };
             if let Some(shader_dir) = shader_dir {
-                chain.pipeline = Some(Pipeline::new(device, format.format, shader_dir)?);
+                chain.pipeline = Some(Pipeline::new(
+                    device,
+                    format.format,
+                    shader_dir,
+                    task_amplification,
+                )?);
             }
             chain.images = chain.loader.get_swapchain_images(handle)?;
             for &image in &chain.images {
@@ -703,6 +719,7 @@ pub struct Renderer {
     pub recreate: bool,
     generations: u64,
     shader_dir: Option<std::path::PathBuf>,
+    task_amplification: bool,
 }
 impl Renderer {
     pub fn new(
@@ -716,6 +733,7 @@ impl Renderer {
             chain: None,
             recreate: true,
             generations: 0,
+            task_amplification: !options.mesh_only,
             shader_dir: (!options.clear_only).then(|| {
                 options.shader_dir.clone().unwrap_or_else(|| {
                     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/shaders")
@@ -736,7 +754,13 @@ impl Renderer {
             .chain
             .as_ref()
             .map_or(vk::SwapchainKHR::null(), |chain| chain.handle);
-        if let Some(chain) = Swapchain::new(&self.ctx, old, size, self.shader_dir.as_deref())? {
+        if let Some(chain) = Swapchain::new(
+            &self.ctx,
+            old,
+            size,
+            self.shader_dir.as_deref(),
+            self.task_amplification,
+        )? {
             self.chain = Some(chain);
             self.recreate = false;
             self.generations += 1;
