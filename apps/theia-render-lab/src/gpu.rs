@@ -1,0 +1,918 @@
+use crate::{Options, Result};
+use ash::{Entry, vk};
+use std::{
+    ffi::{CStr, c_void},
+    io::Write,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
+use winit::{
+    dpi::PhysicalSize,
+    raw_window_handle::{HasDisplayHandle, HasWindowHandle},
+    window::Window,
+};
+const LAYER: &CStr = c"VK_LAYER_KHRONOS_validation";
+const CHECK: &CStr = c"THEIA_DEBUG_CALLBACK_CHECK";
+#[derive(Default)]
+pub struct Validation {
+    warnings: AtomicUsize,
+    errors: AtomicUsize,
+    checks: AtomicUsize,
+}
+impl Validation {
+    pub fn counts(&self) -> (usize, usize) {
+        (
+            self.warnings.load(Ordering::Relaxed),
+            self.errors.load(Ordering::Relaxed),
+        )
+    }
+}
+unsafe extern "system" fn callback(
+    severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    _: vk::DebugUtilsMessageTypeFlagsEXT,
+    data: *const vk::DebugUtilsMessengerCallbackDataEXT<'_>,
+    user: *mut c_void,
+) -> vk::Bool32 {
+    if data.is_null() || user.is_null() {
+        return vk::FALSE;
+    }
+    // SAFETY: Vulkan supplies callback data; the retained Arc outlives the instance/messenger.
+    let (data, state) = unsafe { (&*data, &*user.cast::<Validation>()) };
+    // SAFETY: Non-null callback strings are NUL-terminated by Vulkan.
+    let check = !data.p_message_id_name.is_null()
+        && unsafe { CStr::from_ptr(data.p_message_id_name) } == CHECK;
+    if check {
+        state.checks.fetch_add(1, Ordering::Relaxed);
+    } else if severity.contains(vk::DebugUtilsMessageSeverityFlagsEXT::ERROR) {
+        state.errors.fetch_add(1, Ordering::Relaxed);
+    } else {
+        state.warnings.fetch_add(1, Ordering::Relaxed);
+    }
+    if !data.p_message.is_null() {
+        // SAFETY: The string remains valid until this callback returns. Ignore IO errors; never panic across FFI.
+        let message = unsafe { CStr::from_ptr(data.p_message) }.to_string_lossy();
+        let _ = writeln!(std::io::stderr(), "Vulkan {severity:?}: {message}");
+    }
+    vk::FALSE
+}
+fn debug_info(state: &Validation) -> vk::DebugUtilsMessengerCreateInfoEXT<'_> {
+    vk::DebugUtilsMessengerCreateInfoEXT::default()
+        .message_severity(
+            vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
+                | vk::DebugUtilsMessageSeverityFlagsEXT::ERROR,
+        )
+        .message_type(
+            vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
+        )
+        .pfn_user_callback(Some(callback))
+        .user_data((state as *const Validation).cast_mut().cast())
+}
+fn has_extension(properties: &[vk::ExtensionProperties], name: &CStr) -> bool {
+    // SAFETY: Vulkan extension names are NUL-terminated fixed arrays.
+    properties
+        .iter()
+        .any(|property| unsafe { CStr::from_ptr(property.extension_name.as_ptr()) } == name)
+}
+/// Owns all non-swapchain handles. Partial construction is cleaned up by Drop.
+struct Context {
+    entry: Entry,
+    instance: Option<ash::Instance>,
+    debug: Option<ash::ext::debug_utils::Instance>,
+    messenger: vk::DebugUtilsMessengerEXT,
+    surface_loader: Option<ash::khr::surface::Instance>,
+    surface: vk::SurfaceKHR,
+    device: Option<ash::Device>,
+    physical: vk::PhysicalDevice,
+    graphics_family: u32,
+    present_family: u32,
+    graphics: vk::Queue,
+    present: vk::Queue,
+    pool: vk::CommandPool,
+    command: vk::CommandBuffer,
+    acquired: vk::Semaphore,
+    complete: vk::Fence,
+    window: Arc<Window>,
+    validation: Arc<Validation>,
+}
+impl Context {
+    fn new(window: Arc<Window>, options: &Options, validation: Arc<Validation>) -> Result<Self> {
+        // SAFETY: Entry retains the loaded Vulkan library until all objects have been destroyed.
+        let entry = unsafe { Entry::load()? };
+        let mut ctx = Self {
+            entry,
+            instance: None,
+            debug: None,
+            messenger: vk::DebugUtilsMessengerEXT::null(),
+            surface_loader: None,
+            surface: vk::SurfaceKHR::null(),
+            device: None,
+            physical: vk::PhysicalDevice::null(),
+            graphics_family: 0,
+            present_family: 0,
+            graphics: vk::Queue::null(),
+            present: vk::Queue::null(),
+            pool: vk::CommandPool::null(),
+            command: vk::CommandBuffer::null(),
+            acquired: vk::Semaphore::null(),
+            complete: vk::Fence::null(),
+            window,
+            validation,
+        };
+        ctx.initialize(options)?;
+        Ok(ctx)
+    }
+    fn initialize(&mut self, options: &Options) -> Result<()> {
+        // SAFETY: Create-info arrays and pNext chains remain live through calls. Handles are retained
+        // in Context immediately after creation, and Drop releases children before their parents.
+        unsafe {
+            let version = self
+                .entry
+                .try_enumerate_instance_version()?
+                .unwrap_or(vk::API_VERSION_1_0);
+            if version < vk::API_VERSION_1_3 {
+                return Err("Vulkan 1.3 loader required".into());
+            }
+            let extensions = self.entry.enumerate_instance_extension_properties(None)?;
+            let layers = self.entry.enumerate_instance_layer_properties()?;
+            let enabled_layers = if options.no_validation {
+                Vec::new()
+            } else {
+                if !layers
+                    .iter()
+                    .any(|layer| CStr::from_ptr(layer.layer_name.as_ptr()) == LAYER)
+                {
+                    return Err("Khronos validation layer missing; install it or explicitly use --no-validation".into());
+                }
+                vec![LAYER.as_ptr()]
+            };
+            let mut enabled_extensions =
+                ash_window::enumerate_required_extensions(self.window.display_handle()?.as_raw())?
+                    .to_vec();
+            // Presentation fences are required by this lab to make retirement provable, including teardown.
+            for extension in [
+                ash::ext::debug_utils::NAME,
+                ash::khr::get_surface_capabilities2::NAME,
+                ash::ext::surface_maintenance1::NAME,
+            ] {
+                if !has_extension(&extensions, extension) {
+                    return Err(
+                        format!("Render Lab requires instance extension {extension:?}").into(),
+                    );
+                }
+                enabled_extensions.push(extension.as_ptr());
+            }
+            let validation_enables = [vk::ValidationFeatureEnableEXT::SYNCHRONIZATION_VALIDATION];
+            let mut validation_features = vk::ValidationFeaturesEXT::default()
+                .enabled_validation_features(&validation_enables);
+            if !options.no_validation {
+                let layer_extensions = self
+                    .entry
+                    .enumerate_instance_extension_properties(Some(LAYER))?;
+                if !has_extension(&layer_extensions, ash::ext::validation_features::NAME) {
+                    return Err(
+                        "Validation layer does not expose VK_EXT_validation_features".into(),
+                    );
+                }
+                enabled_extensions.push(ash::ext::validation_features::NAME.as_ptr());
+            }
+            let app = vk::ApplicationInfo::default()
+                .application_name(c"Theia Render Lab")
+                .api_version(vk::API_VERSION_1_3);
+            let mut debug_create = debug_info(&self.validation);
+            let mut instance_info = vk::InstanceCreateInfo::default()
+                .application_info(&app)
+                .enabled_layer_names(&enabled_layers)
+                .enabled_extension_names(&enabled_extensions)
+                .push_next(&mut debug_create);
+            if !options.no_validation {
+                instance_info = instance_info.push_next(&mut validation_features);
+            }
+            self.instance = Some(self.entry.create_instance(&instance_info, None)?);
+            let instance = self.instance.as_ref().unwrap();
+            let debug = ash::ext::debug_utils::Instance::new(&self.entry, instance);
+            self.messenger = debug.create_debug_utils_messenger(&debug_create, None)?;
+            self.debug = Some(debug);
+            println!(
+                "Validation layer explicitly {}",
+                if options.no_validation {
+                    "disabled"
+                } else {
+                    "enabled: VK_LAYER_KHRONOS_validation; synchronization validation requested via pNext"
+                }
+            );
+            self.debug.as_ref().unwrap().submit_debug_utils_message(vk::DebugUtilsMessageSeverityFlagsEXT::WARNING, vk::DebugUtilsMessageTypeFlagsEXT::GENERAL, &vk::DebugUtilsMessengerCallbackDataEXT::default().message_id_name(CHECK).message(c"Theia diagnostic: debug callback delivery confirmed (intentional, excluded from totals)"));
+            if self.validation.checks.load(Ordering::Relaxed) == 0 {
+                return Err("Debug callback did not receive diagnostic".into());
+            }
+            self.surface_loader = Some(ash::khr::surface::Instance::new(&self.entry, instance));
+            self.surface = ash_window::create_surface(
+                &self.entry,
+                instance,
+                self.window.display_handle()?.as_raw(),
+                self.window.window_handle()?.as_raw(),
+                None,
+            )?;
+            println!(
+                "Native surface created; loader {}.{}.{}",
+                vk::api_version_major(version),
+                vk::api_version_minor(version),
+                vk::api_version_patch(version)
+            );
+        }
+        self.select_device(options.gpu.as_deref())?;
+        // SAFETY: Features were queried on the selected device; all queue indices support the intended
+        // operations. Create-info backing storage remains live and handles immediately gain RAII ownership.
+        unsafe {
+            let instance = self.instance.as_ref().unwrap();
+            let families = if self.graphics_family == self.present_family {
+                vec![self.graphics_family]
+            } else {
+                vec![self.graphics_family, self.present_family]
+            };
+            let priorities = [1.0];
+            let queues: Vec<_> = families
+                .iter()
+                .map(|&family| {
+                    vk::DeviceQueueCreateInfo::default()
+                        .queue_family_index(family)
+                        .queue_priorities(&priorities)
+                })
+                .collect();
+            let extensions = [
+                ash::khr::swapchain::NAME.as_ptr(),
+                ash::ext::mesh_shader::NAME.as_ptr(),
+                ash::ext::swapchain_maintenance1::NAME.as_ptr(),
+            ];
+            let mut v12 = vk::PhysicalDeviceVulkan12Features::default()
+                .timeline_semaphore(true)
+                .buffer_device_address(true)
+                .runtime_descriptor_array(true)
+                .descriptor_binding_partially_bound(true)
+                .shader_sampled_image_array_non_uniform_indexing(true);
+            let mut v13 = vk::PhysicalDeviceVulkan13Features::default()
+                .dynamic_rendering(true)
+                .synchronization2(true);
+            let mut mesh = vk::PhysicalDeviceMeshShaderFeaturesEXT::default()
+                .task_shader(true)
+                .mesh_shader(true);
+            let mut maintenance = vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
+                .swapchain_maintenance1(true);
+            self.device = Some(
+                instance.create_device(
+                    self.physical,
+                    &vk::DeviceCreateInfo::default()
+                        .queue_create_infos(&queues)
+                        .enabled_extension_names(&extensions)
+                        .push_next(&mut v12)
+                        .push_next(&mut v13)
+                        .push_next(&mut mesh)
+                        .push_next(&mut maintenance),
+                    None,
+                )?,
+            );
+            let device = self.device.as_ref().unwrap();
+            self.graphics = device.get_device_queue(self.graphics_family, 0);
+            self.present = device.get_device_queue(self.present_family, 0);
+            self.pool = device.create_command_pool(
+                &vk::CommandPoolCreateInfo::default()
+                    .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+                    .queue_family_index(self.graphics_family),
+                None,
+            )?;
+            self.command = device.allocate_command_buffers(
+                &vk::CommandBufferAllocateInfo::default()
+                    .command_pool(self.pool)
+                    .level(vk::CommandBufferLevel::PRIMARY)
+                    .command_buffer_count(1),
+            )?[0];
+            self.acquired = device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?;
+            self.complete = device.create_fence(
+                &vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED),
+                None,
+            )?;
+        }
+        Ok(())
+    }
+    fn select_device(&mut self, requested: Option<&str>) -> Result<()> {
+        let instance = self.instance.as_ref().unwrap();
+        let surface = self.surface_loader.as_ref().unwrap();
+        let mut candidates = Vec::new();
+        // SAFETY: Enumerated physical devices belong to the live instance. All output chains are
+        // writable for the call; queue indices come from each device's queried family list.
+        unsafe {
+            for physical in instance.enumerate_physical_devices()? {
+                let mut driver = vk::PhysicalDeviceDriverProperties::default();
+                let mut limits = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
+                let mut properties = vk::PhysicalDeviceProperties2::default()
+                    .push_next(&mut driver)
+                    .push_next(&mut limits);
+                instance.get_physical_device_properties2(physical, &mut properties);
+                let properties = properties.properties;
+                let name = CStr::from_ptr(properties.device_name.as_ptr())
+                    .to_string_lossy()
+                    .into_owned();
+                let mut v12 = vk::PhysicalDeviceVulkan12Features::default();
+                let mut v13 = vk::PhysicalDeviceVulkan13Features::default();
+                let mut mesh = vk::PhysicalDeviceMeshShaderFeaturesEXT::default();
+                let mut maintenance = vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default();
+                let mut features = vk::PhysicalDeviceFeatures2::default()
+                    .push_next(&mut v12)
+                    .push_next(&mut v13)
+                    .push_next(&mut mesh)
+                    .push_next(&mut maintenance);
+                instance.get_physical_device_features2(physical, &mut features);
+                let extensions = instance.enumerate_device_extension_properties(physical)?;
+                println!(
+                    "GPU candidate: {name}; driver {} / {}",
+                    CStr::from_ptr(driver.driver_name.as_ptr()).to_string_lossy(),
+                    CStr::from_ptr(driver.driver_info.as_ptr()).to_string_lossy()
+                );
+                let checks = [
+                    ("Vulkan 1.3", properties.api_version >= vk::API_VERSION_1_3),
+                    (
+                        "VK_KHR_swapchain",
+                        has_extension(&extensions, ash::khr::swapchain::NAME),
+                    ),
+                    (
+                        "VK_EXT_mesh_shader",
+                        has_extension(&extensions, ash::ext::mesh_shader::NAME),
+                    ),
+                    ("meshShader", mesh.mesh_shader == vk::TRUE),
+                    ("taskShader", mesh.task_shader == vk::TRUE),
+                    ("dynamicRendering", v13.dynamic_rendering == vk::TRUE),
+                    ("synchronization2", v13.synchronization2 == vk::TRUE),
+                    ("timelineSemaphore", v12.timeline_semaphore == vk::TRUE),
+                    ("bufferDeviceAddress", v12.buffer_device_address == vk::TRUE),
+                    (
+                        "runtimeDescriptorArray",
+                        v12.runtime_descriptor_array == vk::TRUE,
+                    ),
+                    (
+                        "descriptorBindingPartiallyBound",
+                        v12.descriptor_binding_partially_bound == vk::TRUE,
+                    ),
+                    (
+                        "shaderSampledImageArrayNonUniformIndexing",
+                        v12.shader_sampled_image_array_non_uniform_indexing == vk::TRUE,
+                    ),
+                    (
+                        "lab presentation fences",
+                        has_extension(&extensions, ash::ext::swapchain_maintenance1::NAME)
+                            && maintenance.swapchain_maintenance1 == vk::TRUE,
+                    ),
+                ];
+                for (label, supported) in checks {
+                    println!("  {label}: {supported}");
+                }
+                println!(
+                    "  Mesh limits: {} vertices, {} primitives; task payload {} bytes; preferred task/mesh invocations {}/{}",
+                    limits.max_mesh_output_vertices,
+                    limits.max_mesh_output_primitives,
+                    limits.max_task_payload_size,
+                    limits.max_preferred_task_work_group_invocations,
+                    limits.max_preferred_mesh_work_group_invocations
+                );
+                if checks.iter().any(|(_, supported)| !supported)
+                    || requested
+                        .is_some_and(|filter| !name.to_lowercase().contains(&filter.to_lowercase()))
+                {
+                    println!("  Rejected: missing requirement or GPU filter mismatch");
+                    continue;
+                }
+                let families = instance.get_physical_device_queue_family_properties(physical);
+                let graphics = families.iter().position(|family| {
+                    family.queue_count > 0
+                        && family
+                            .queue_flags
+                            .contains(vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE)
+                });
+                let Some(graphics) = graphics.map(|index| index as u32) else {
+                    continue;
+                };
+                let mut present = None;
+                for (index, family) in families.iter().enumerate() {
+                    if family.queue_count > 0
+                        && surface.get_physical_device_surface_support(
+                            physical,
+                            index as u32,
+                            self.surface,
+                        )?
+                    {
+                        if present.is_none() {
+                            present = Some(index as u32);
+                        }
+                        if index as u32 == graphics {
+                            present = Some(graphics);
+                            break;
+                        }
+                    }
+                }
+                let Some(present) = present else {
+                    continue;
+                };
+                if surface
+                    .get_physical_device_surface_formats(physical, self.surface)?
+                    .is_empty()
+                    || surface
+                        .get_physical_device_surface_present_modes(physical, self.surface)?
+                        .is_empty()
+                {
+                    continue;
+                }
+                let score = if properties.vendor_id == 0x1002 && properties.device_id == 0x744c {
+                    1000
+                } else if properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU {
+                    100
+                } else {
+                    10
+                };
+                candidates.push((score, physical, graphics, present, name));
+            }
+        }
+        let Some((_, physical, graphics, present, name)) =
+            candidates.into_iter().max_by_key(|candidate| candidate.0)
+        else {
+            return Err("No GPU satisfies the Vulkan/mesh/task profile and Render Lab presentation-fence requirements (or --gpu filter)".into());
+        };
+        self.physical = physical;
+        self.graphics_family = graphics;
+        self.present_family = present;
+        println!(
+            "Selected GPU: {name}; graphics/compute family {graphics}, present family {present}; presentation-fence retirement enabled"
+        );
+        Ok(())
+    }
+}
+impl Drop for Context {
+    fn drop(&mut self) {
+        // SAFETY: Renderer retires the swapchain before Context destruction. Any successfully created
+        // device may have submissions, so idle it before freeing command/sync objects and the device.
+        unsafe {
+            if let Some(device) = &self.device {
+                if let Err(error) = device.device_wait_idle() {
+                    eprintln!("Device cleanup wait failed: {error}");
+                }
+                if self.complete != vk::Fence::null() {
+                    device.destroy_fence(self.complete, None);
+                }
+                if self.acquired != vk::Semaphore::null() {
+                    device.destroy_semaphore(self.acquired, None);
+                }
+                if self.pool != vk::CommandPool::null() {
+                    device.destroy_command_pool(self.pool, None);
+                }
+                device.destroy_device(None);
+            }
+            if self.surface != vk::SurfaceKHR::null() {
+                self.surface_loader
+                    .as_ref()
+                    .unwrap()
+                    .destroy_surface(self.surface, None);
+            }
+            if self.messenger != vk::DebugUtilsMessengerEXT::null() {
+                self.debug
+                    .as_ref()
+                    .unwrap()
+                    .destroy_debug_utils_messenger(self.messenger, None);
+            }
+            if let Some(instance) = &self.instance {
+                instance.destroy_instance(None);
+            }
+        }
+    }
+}
+struct Swapchain {
+    loader: ash::khr::swapchain::Device,
+    device: ash::Device,
+    handle: vk::SwapchainKHR,
+    images: Vec<vk::Image>,
+    views: Vec<vk::ImageView>,
+    ready: Vec<vk::Semaphore>,
+    fences: Vec<vk::Fence>,
+    pending: Vec<bool>,
+    extent: vk::Extent2D,
+}
+fn choose_extent(
+    capabilities: &vk::SurfaceCapabilitiesKHR,
+    size: PhysicalSize<u32>,
+) -> Option<vk::Extent2D> {
+    if size.width == 0 || size.height == 0 {
+        return None;
+    }
+    let extent = if capabilities.current_extent.width != u32::MAX {
+        capabilities.current_extent
+    } else {
+        vk::Extent2D {
+            width: size.width.clamp(
+                capabilities.min_image_extent.width,
+                capabilities.max_image_extent.width,
+            ),
+            height: size.height.clamp(
+                capabilities.min_image_extent.height,
+                capabilities.max_image_extent.height,
+            ),
+        }
+    };
+    (extent.width > 0 && extent.height > 0).then_some(extent)
+}
+impl Swapchain {
+    fn new(ctx: &Context, old: vk::SwapchainKHR, size: PhysicalSize<u32>) -> Result<Option<Self>> {
+        let device = ctx.device.as_ref().unwrap();
+        let surface = ctx.surface_loader.as_ref().unwrap();
+        // SAFETY: Surface/device remain live through construction and throughout Swapchain lifetime;
+        // partial construction owns every successful child immediately and is cleaned up by Drop.
+        unsafe {
+            let capabilities =
+                surface.get_physical_device_surface_capabilities(ctx.physical, ctx.surface)?;
+            let Some(extent) = choose_extent(&capabilities, size) else {
+                return Ok(None);
+            };
+            if !capabilities
+                .supported_usage_flags
+                .contains(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+            {
+                return Err("Surface does not support color attachments".into());
+            }
+            let formats = surface.get_physical_device_surface_formats(ctx.physical, ctx.surface)?;
+            let mut format = *formats
+                .iter()
+                .find(|format| {
+                    format.format == vk::Format::B8G8R8A8_SRGB
+                        && format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
+                })
+                .or_else(|| formats.first())
+                .ok_or("Surface has no formats")?;
+            if format.format == vk::Format::UNDEFINED {
+                format.format = vk::Format::B8G8R8A8_SRGB;
+            }
+            let mut count = capabilities.min_image_count.saturating_add(1);
+            if capabilities.max_image_count != 0 {
+                count = count.min(capabilities.max_image_count);
+            }
+            let alpha = [
+                vk::CompositeAlphaFlagsKHR::OPAQUE,
+                vk::CompositeAlphaFlagsKHR::PRE_MULTIPLIED,
+                vk::CompositeAlphaFlagsKHR::POST_MULTIPLIED,
+                vk::CompositeAlphaFlagsKHR::INHERIT,
+            ]
+            .into_iter()
+            .find(|flag| capabilities.supported_composite_alpha.contains(*flag))
+            .ok_or("Surface has no supported composite alpha")?;
+            let families = [ctx.graphics_family, ctx.present_family];
+            let mut info = vk::SwapchainCreateInfoKHR::default()
+                .surface(ctx.surface)
+                .min_image_count(count)
+                .image_format(format.format)
+                .image_color_space(format.color_space)
+                .image_extent(extent)
+                .image_array_layers(1)
+                .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+                .pre_transform(capabilities.current_transform)
+                .composite_alpha(alpha)
+                .present_mode(vk::PresentModeKHR::FIFO)
+                .clipped(true)
+                .old_swapchain(old);
+            if ctx.graphics_family == ctx.present_family {
+                info = info.image_sharing_mode(vk::SharingMode::EXCLUSIVE);
+            } else {
+                info = info
+                    .image_sharing_mode(vk::SharingMode::CONCURRENT)
+                    .queue_family_indices(&families);
+            }
+            let loader = ash::khr::swapchain::Device::new(ctx.instance.as_ref().unwrap(), device);
+            let handle = loader.create_swapchain(&info, None)?;
+            let mut chain = Self {
+                loader,
+                device: device.clone(),
+                handle,
+                images: Vec::new(),
+                views: Vec::new(),
+                ready: Vec::new(),
+                fences: Vec::new(),
+                pending: Vec::new(),
+                extent,
+            };
+            chain.images = chain.loader.get_swapchain_images(handle)?;
+            for &image in &chain.images {
+                chain.views.push(
+                    device.create_image_view(
+                        &vk::ImageViewCreateInfo::default()
+                            .image(image)
+                            .view_type(vk::ImageViewType::TYPE_2D)
+                            .format(format.format)
+                            .subresource_range(color_range()),
+                        None,
+                    )?,
+                );
+                chain
+                    .ready
+                    .push(device.create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?);
+                chain
+                    .fences
+                    .push(device.create_fence(&vk::FenceCreateInfo::default(), None)?);
+                chain.pending.push(false);
+            }
+            println!(
+                "Swapchain: {}x{}, {:?}, FIFO, {} images",
+                extent.width,
+                extent.height,
+                format.format,
+                chain.images.len()
+            );
+            Ok(Some(chain))
+        }
+    }
+    fn wait_present(&mut self, index: usize) -> Result<()> {
+        if self.pending[index] {
+            // SAFETY: Only queued presentations set pending. Their fence establishes retirement;
+            // after the wait the fence is no longer in use and can be reset for the next presentation.
+            unsafe {
+                self.device
+                    .wait_for_fences(&[self.fences[index]], true, u64::MAX)?;
+                self.device.reset_fences(&[self.fences[index]])?;
+            }
+            self.pending[index] = false;
+        }
+        Ok(())
+    }
+    fn retire(&mut self) -> Result<()> {
+        // SAFETY: Live device; all rendering work must finish before freeing views and semaphores.
+        unsafe {
+            self.device.device_wait_idle()?;
+        }
+        for index in 0..self.pending.len() {
+            self.wait_present(index)?;
+        }
+        Ok(())
+    }
+}
+impl Drop for Swapchain {
+    fn drop(&mut self) {
+        if let Err(error) = self.retire() {
+            eprintln!("Swapchain retirement failed: {error}");
+        }
+        // SAFETY: Normal retirement waits rendering and presentation fences. Partial construction has
+        // no submissions; after device loss no pending work can continue. Device/instance are still live.
+        unsafe {
+            for &fence in &self.fences {
+                self.device.destroy_fence(fence, None);
+            }
+            for &semaphore in &self.ready {
+                self.device.destroy_semaphore(semaphore, None);
+            }
+            for &view in &self.views {
+                self.device.destroy_image_view(view, None);
+            }
+            self.loader.destroy_swapchain(self.handle, None);
+        }
+    }
+}
+fn color_range() -> vk::ImageSubresourceRange {
+    vk::ImageSubresourceRange::default()
+        .aspect_mask(vk::ImageAspectFlags::COLOR)
+        .level_count(1)
+        .layer_count(1)
+}
+pub struct Renderer {
+    ctx: Context,
+    chain: Option<Swapchain>,
+    pub recreate: bool,
+    generations: u64,
+}
+impl Renderer {
+    pub fn new(
+        window: Arc<Window>,
+        options: &Options,
+        validation: Arc<Validation>,
+    ) -> Result<Self> {
+        let ctx = Context::new(window, options, validation)?;
+        let mut renderer = Self {
+            ctx,
+            chain: None,
+            recreate: true,
+            generations: 0,
+        };
+        renderer.rebuild(renderer.ctx.window.inner_size())?;
+        Ok(renderer)
+    }
+    fn rebuild(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        if size.width == 0 || size.height == 0 {
+            return Ok(());
+        }
+        if let Some(chain) = &mut self.chain {
+            chain.retire()?;
+        }
+        let old = self
+            .chain
+            .as_ref()
+            .map_or(vk::SwapchainKHR::null(), |chain| chain.handle);
+        if let Some(chain) = Swapchain::new(&self.ctx, old, size)? {
+            self.chain = Some(chain);
+            self.recreate = false;
+            self.generations += 1;
+            println!("Swapchain generation {} ready", self.generations);
+        }
+        Ok(())
+    }
+    pub fn draw(&mut self, size: PhysicalSize<u32>) -> Result<bool> {
+        if size.width == 0 || size.height == 0 {
+            self.recreate = true;
+            return Ok(false);
+        }
+        if self.recreate {
+            self.rebuild(size)?;
+            if self.recreate {
+                return Ok(false);
+            }
+        }
+        let chain = self.chain.as_mut().unwrap();
+        let ctx = &self.ctx;
+        let device = ctx.device.as_ref().unwrap();
+        // SAFETY: A single frame in flight; its fence protects command buffer/acquire semaphore reuse.
+        // Image-specific presentation semaphores are reused only after acquire and a presentation-fence
+        // wait. Barriers order color writes and the present transition. Swapchain owns all referenced views.
+        unsafe {
+            device.wait_for_fences(&[ctx.complete], true, u64::MAX)?;
+            let (index, suboptimal) = match chain.loader.acquire_next_image(
+                chain.handle,
+                u64::MAX,
+                ctx.acquired,
+                vk::Fence::null(),
+            ) {
+                Ok(value) => value,
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                    self.recreate = true;
+                    return Ok(false);
+                }
+                Err(error) => return Err(error.into()),
+            };
+            let i = index as usize;
+            chain.wait_present(i)?;
+            device.reset_command_buffer(ctx.command, vk::CommandBufferResetFlags::empty())?;
+            device.begin_command_buffer(
+                ctx.command,
+                &vk::CommandBufferBeginInfo::default()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+            )?;
+            let to_color = [vk::ImageMemoryBarrier2::default()
+                .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
+                .src_access_mask(vk::AccessFlags2::NONE)
+                .dst_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
+                .dst_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE)
+                .old_layout(vk::ImageLayout::UNDEFINED)
+                .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .image(chain.images[i])
+                .subresource_range(color_range())];
+            device.cmd_pipeline_barrier2(
+                ctx.command,
+                &vk::DependencyInfo::default().image_memory_barriers(&to_color),
+            );
+            let attachments = [vk::RenderingAttachmentInfo::default()
+                .image_view(chain.views[i])
+                .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .clear_value(vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.025, 0.07, 0.12, 1.0],
+                    },
+                })];
+            device.cmd_begin_rendering(
+                ctx.command,
+                &vk::RenderingInfo::default()
+                    .render_area(vk::Rect2D {
+                        offset: vk::Offset2D::default(),
+                        extent: chain.extent,
+                    })
+                    .layer_count(1)
+                    .color_attachments(&attachments),
+            );
+            device.cmd_end_rendering(ctx.command);
+            let to_present = [vk::ImageMemoryBarrier2::default()
+                .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
+                .src_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE)
+                .dst_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
+                .dst_access_mask(vk::AccessFlags2::MEMORY_READ)
+                .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .image(chain.images[i])
+                .subresource_range(color_range())];
+            device.cmd_pipeline_barrier2(
+                ctx.command,
+                &vk::DependencyInfo::default().image_memory_barriers(&to_present),
+            );
+            device.end_command_buffer(ctx.command)?;
+            let waits = [vk::SemaphoreSubmitInfo::default()
+                .semaphore(ctx.acquired)
+                .stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)];
+            let signals = [vk::SemaphoreSubmitInfo::default()
+                .semaphore(chain.ready[i])
+                .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
+            let commands = [vk::CommandBufferSubmitInfo::default().command_buffer(ctx.command)];
+            // Reset only after successful acquisition/recording, never on the out-of-date early return.
+            device.reset_fences(&[ctx.complete])?;
+            device.queue_submit2(
+                ctx.graphics,
+                &[vk::SubmitInfo2::default()
+                    .wait_semaphore_infos(&waits)
+                    .signal_semaphore_infos(&signals)
+                    .command_buffer_infos(&commands)],
+                ctx.complete,
+            )?;
+            let present_waits = [chain.ready[i]];
+            let chains = [chain.handle];
+            let indices = [index];
+            let fences = [chain.fences[i]];
+            let mut fence_info = vk::SwapchainPresentFenceInfoEXT::default().fences(&fences);
+            let info = vk::PresentInfoKHR::default()
+                .wait_semaphores(&present_waits)
+                .swapchains(&chains)
+                .image_indices(&indices)
+                .push_next(&mut fence_info);
+            match chain.loader.queue_present(ctx.present, &info) {
+                Ok(present_suboptimal) => {
+                    chain.pending[i] = true;
+                    self.recreate |= suboptimal || present_suboptimal;
+                    Ok(true)
+                }
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                    chain.pending[i] = true;
+                    self.recreate = true;
+                    Ok(false)
+                }
+                Err(error) => {
+                    // Surface loss still queues presentation operations. Allocation failure leaves
+                    // synchronization untouched; device loss prevents outstanding work from continuing.
+                    chain.pending[i] = matches!(
+                        error,
+                        vk::Result::ERROR_SURFACE_LOST_KHR
+                            | vk::Result::ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT
+                    );
+                    Err(error.into())
+                }
+            }
+        }
+    }
+}
+impl Drop for Renderer {
+    fn drop(&mut self) {
+        self.chain.take();
+        println!(
+            "Render Lab teardown: {} swapchain generations",
+            self.generations
+        );
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn zero_size_is_deferred_even_with_fixed_surface_extent() {
+        let capabilities = vk::SurfaceCapabilitiesKHR {
+            current_extent: vk::Extent2D {
+                width: 960,
+                height: 540,
+            },
+            ..Default::default()
+        };
+        assert!(choose_extent(&capabilities, PhysicalSize::new(0, 540)).is_none());
+        assert!(choose_extent(&capabilities, PhysicalSize::new(960, 0)).is_none());
+        assert_eq!(
+            choose_extent(&capabilities, PhysicalSize::new(800, 600)),
+            Some(capabilities.current_extent)
+        );
+    }
+    #[test]
+    fn variable_extent_is_clamped() {
+        let capabilities = vk::SurfaceCapabilitiesKHR {
+            current_extent: vk::Extent2D {
+                width: u32::MAX,
+                height: u32::MAX,
+            },
+            min_image_extent: vk::Extent2D {
+                width: 64,
+                height: 64,
+            },
+            max_image_extent: vk::Extent2D {
+                width: 1920,
+                height: 1080,
+            },
+            ..Default::default()
+        };
+        assert_eq!(
+            choose_extent(&capabilities, PhysicalSize::new(32, 2160)),
+            Some(vk::Extent2D {
+                width: 64,
+                height: 1080
+            })
+        );
+    }
+}
