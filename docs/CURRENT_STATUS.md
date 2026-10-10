@@ -1,8 +1,40 @@
-# Theia — Actual Implementation Status (2026-10-09)
+# Theia — Actual Implementation Status (2026-10-10)
 
-**This file separates observed evidence from planned systems.** All information below is based on terminal output supplied by the user in the conversation; Codex must independently check the local checkout.
+**This file separates observed evidence from planned systems.** The original handoff
+records user-supplied terminal evidence. The following update was independently
+executed in the local checkout on 2026-10-10.
 
-## Completed and verified
+## M0-D bootstrap — independently executed
+
+- Added separate `apps/theia-render-lab`: ash 0.38, ash-window 0.13, winit 0.30.13,
+  pinned lockfile. Native X11 surface and FIFO swapchain execute on RX 7900 XTX,
+  RADV Mesa 26.2.4; dynamic rendering displays a dark blue clear.
+- Queries/enables Vulkan 1.3 mesh/task capability, BDA, descriptor-indexing subset,
+  timeline semaphores, dynamic rendering and Sync2. **Mesh/task pipelines have not
+  executed.** The lab additionally requires EXT swapchain/surface maintenance for
+  presentation-fence retirement; this does not redefine the approved engine profile.
+- Explicitly enables `VK_LAYER_KHRONOS_validation` (installed version 1.3.275),
+  requests synchronization validation via instance pNext, and verifies callback
+  delivery with an intentional diagnostic excluded from totals.
+- Corrected hazards found in the first synchronization-validation run. Final smoke:
+  **120 queued presentations, six swapchain generations, zero warnings/errors
+  including teardown**. Requests resize/minimize/restore and explicitly verifies
+  zero-size deferral. A separate 300-frame run and own-window capture verify the clear.
+- Unsupported `--gpu` selection exits with an actionable error and zero teardown
+  diagnostics. Zero frame count is rejected. Extent tests: **2/2 passed**.
+- `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test`
+  pass for both apps. Existing compute source is unchanged; Slang compute compile,
+  `spirv-val --target-env vulkan1.3`, and **256/256 GPU values** pass again.
+- Added Linux/Windows Rust CI (build/lint/unit tests, without GPU execution).
+  Wayland, Windows runtime, other vendors, split queue families, device/surface loss,
+  and GPU-assisted validation remain **untested**. The smoke log does not prove an
+  actual `ERROR_OUT_OF_DATE_KHR` return was exercised.
+
+Commands, observed logs and limitations: [M0-D bootstrap qualification](validation/M0D_BOOTSTRAP.md).
+Next: compile/validate/execute the Slang mesh-only triangle + fragment shader, then
+add task amplification and GPU-written indirect work counts. **M0-D remains open.**
+
+## Original handoff — completed and verified
 
 1. Linux Mint, AMD RX 7900 XTX (RADV NAVI31) detected via `vulkaninfo`; RADV Mesa 26.2.4, device Vulkan API 1.4.354.
 2. Vulkan driver filtering with `VK_DRIVER_FILES=/usr/share/vulkan/icd.d/radeon_icd.json` selects RADV and removes unrelated Dozen/llvmpipe in reported enumeration (integrated Radeon still appears).
@@ -34,7 +66,7 @@ This handoff ZIP does **not** include copies of the user's latest local applicat
 
 Create **separate** `apps/theia-render-lab` (cargo new `--vcs none`), native window and Vulkan surface/swapchain, compile and run Slang task+mesh+fragment shaders, render one GPU-generated triangle. Then compute-generated indirect mesh task dispatch, Vulkan validation and correct resize/recreation. Keep headless compute test intact as regression. No ECS, GI, game server or editor yet.
 
-## Known caveats
+## Original handoff caveats (see the update above for new evidence)
 
 - Early one-shot compute test uses HOST_VISIBLE|HOST_COHERENT memory, `queue_wait_idle`, and large explicit unsafe block. Correct for qualification, **not** production data path. Production should use device-local buffers, staging, fences/timelines, RAII and scoped unsafe.
 - `VK_EXT_debug_utils` messenger creation is observed but no proof of callback delivery; check enabled validation instance layer and submit diagnostic message or enumerate instance layers explicitly.
