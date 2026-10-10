@@ -4,6 +4,29 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M4 bounded glTF unlit import — independently executed
+
+Offline `--unlit-factors` imports explicit double-sided opaque KHR_materials_unlit
+linear factors and source primitive assignments. Normalized schema 2 tracks dense
+material indices across instances/reflections; the native cooker remaps by
+winding-preserving triangle identity and emits exact-geometry-bound THEIAMAT v1.
+Unknown/unsupported material features fail explicitly. Existing binary mesh/cell/
+material formats and default position-only import remain intact.
+
+Six normalizer tests and eight Python LOD/remapping tests pass; Rust fmt and
+Clippy with denied warnings pass. Repeated normalization/cooking is byte-identical.
+Independent Rust readers validate the final 2,656-byte/eight-vertex/four-triangle
+mesh and 444-byte/two-factor material page. Raw grid/quad/triangle hashes remain
+exactly unchanged. RX 7900 XTX final-pair WSI presents 120 frames/ten generations
+with zero validation diagnostics. Two separate replay captures (default/shared
+identity interfaces) verify geometry/material GPU bytes, work, all four triangle
+identities and 85 depth/color samples each; targets present 180 frames.
+
+This is factor-only unlit import, not textured/PBR material support, UV/normal/
+vertex-color import, transparency or material dependency streaming. M4 remains
+open. User requested stopping after this unit; no next task was started and
+nothing was pushed. [Tool workflow](../tools/theia-gltf-import/README.md).
+
 ## M4 GPU authored opaque factors — independently executed
 
 `--materials <hash.theia-material>` on a fixed `--asset` validates an exact geometry
@@ -24,8 +47,8 @@ check all four visible triangles/three assigned factors. Original M3 replay
 remains qualified; wrong geometry and missing authored fragment clean up without
 diagnostics. Thirteen renderer tests, fmt and denied-warning Clippy pass.
 
-Assignments still target explicit cooked triangle IDs. Bounded glTF unlit factor
-import/remapping is next; UVs/textures/normals/lighting/alpha, material dependency
+Assignments still target explicit cooked triangle IDs. The later bounded glTF unlit factor unit qualifies import/remapping;
+UVs/textures/normals/lighting/alpha, material dependency
 streaming and broader scene integration remain open. M4 remains incomplete.
 
 ## M4 bounded opaque material contract — CPU/offline qualified

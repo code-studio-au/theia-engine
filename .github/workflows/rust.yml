@@ -99,3 +99,14 @@ jobs:
           page = json.loads(subprocess.check_output([sys.executable, 'tools/cook_material_page.py', '--mesh', mesh['path'], '--assignments', str(path)], text=True))
           subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'material', '--', mesh['path'], page['path']], check=True)
           PY
+      - name: Qualify bounded glTF unlit import and material remapping
+        run: |
+          python3 -m unittest discover -s tools -p test_material_remap.py
+          cargo run --locked --manifest-path tools/theia-gltf-import/Cargo.toml -- fixtures/gltf/transformed_scene_unlit.gltf build/assets/imported-unlit-scene.json --unlit-factors
+          python3 tools/cook_meshlet_fixture.py --geometry build/assets/imported-unlit-scene.json --library "$RUNNER_TEMP/meshopt-build/libmeshoptimizer.so" --source-archive "$RUNNER_TEMP/meshoptimizer.tar.gz"
+          python3 - <<'PY'
+          import json, subprocess
+          report = json.load(open('build/assets/imported-report.json'))
+          subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'inspect', '--', report['path']], check=True)
+          subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'material', '--', report['path'], report['materials']['path']], check=True)
+          PY

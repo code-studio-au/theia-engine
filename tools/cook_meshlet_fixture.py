@@ -13,15 +13,13 @@ from pathlib import Path
 import struct
 import subprocess
 from qualify_height_lod import qualify
+from remap_materials import canonical, remap
+from cook_material_page import cook as cook_material
 
 
 class Meshlet(c.Structure):
     _fields_ = [('vertex_offset', c.c_uint), ('triangle_offset', c.c_uint),
                 ('vertex_count', c.c_uint), ('triangle_count', c.c_uint)]
-
-
-def canonical(triangle):
-    return min(triangle, triangle[1:] + triangle[:1], triangle[2:] + triangle[:2])
 
 
 def main():
@@ -78,7 +76,7 @@ def main():
         if len(normalized)>64*1024*1024:
             parser.error('Normalized JSON exceeds 64 MiB')
         imported = json.loads(normalized)
-        if type(imported.get('schema')) is not int or imported['schema']!=1 or not isinstance(imported.get('provenance'),dict):
+        if type(imported.get('schema')) is not int or imported['schema'] not in (1,2) or not isinstance(imported.get('provenance'),dict):
             parser.error('Unsupported normalized geometry schema/provenance')
         positions = imported.get('positions',[])
         indices = imported.get('indices',[])
@@ -159,6 +157,11 @@ def main():
         metadata['recipe'] = 'normalized-static-gltf-v1'
         metadata['normalization'] = imported['provenance']
         metadata['normalized_json_sha256'] = hashlib.sha256(normalized).hexdigest()
+        if imported['schema'] == 2:
+            metadata['recipe'] = 'normalized-static-gltf-unlit-v1'
+            metadata['material_mapping'] = {'policy':'winding-preserving cyclic index triangle identity; reject conflicting duplicates',
+                'meshlet_cooker_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                'remap_source_sha256':hashlib.sha256(Path(__file__).with_name('remap_materials.py').read_bytes()).hexdigest()}
     if lod is not None:
         metadata['fallback_for_source_sha256'] = original_source_digest
         metadata['producer'] = 'meshoptimizer-1.3/simplify+buildMeshlets+optimizeMeshlet'
@@ -174,10 +177,29 @@ def main():
     blob = header + payload
     identifier = hashlib.sha256(blob).hexdigest()
     args.output_dir.mkdir(parents=True,exist_ok=True)
+    material_report = None
+    material_blob = None
+    if imported is not None and imported['schema'] == 2:
+        colors = imported.get('base_colors')
+        assignments = imported.get('triangle_materials')
+        if not isinstance(assignments,list):
+            raise ValueError('Normalized unlit geometry requires triangle material assignments')
+        mapped = remap(expected_triangles,assignments,reconstructed)
+        material_source = json.dumps({'schema':1,'geometry_sha256':identifier,'base_colors':colors,'triangle_materials':mapped},sort_keys=True,separators=(',',':')).encode()
+        material_blob = cook_material(blob,material_source)
+        material_id = hashlib.sha256(material_blob).hexdigest()
+        material_path = args.output_dir/(material_id+'.theia-material')
+        material_report = {'path':str(material_path),'content_id':material_id,'bytes':len(material_blob),
+                           'geometry_id':identifier,'materials':len(colors),'triangle_materials':mapped,
+                           'mapping':'winding-preserving cyclic index triangle identity; reject conflicting duplicate assignments'}
     destination = args.output_dir / (identifier+'.theia-mesh')
     destination.write_bytes(blob)
+    if material_blob is not None:
+        material_path.write_bytes(material_blob)
     report = {'path': str(destination), 'content_id': identifier, 'bytes': len(blob), 'vertices': len(positions),
               'meshlets': count, 'triangles': len(reconstructed), 'coverage_and_winding_verified': True, 'metadata': metadata}
+    if material_report is not None:
+        report['materials'] = material_report
     if lod is not None:
         report['lod'] = lod
     suffix = '-lod' if lod is not None else ''

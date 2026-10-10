@@ -568,3 +568,50 @@ This is explicit cooked-triangle factor assignment, not general glTF material
 import, UV/normal/texture/mip/lighting/alpha support or material/cell dependency
 publication. Renderer retains both identity shader choices; conservative profile
 limits remain. Bounded unlit import/remapping is next; M4 remains open.
+
+## Bounded glTF unlit factor import (2026-10-10)
+
+Offline normalizer retains default position-only schema 1 and adds opt-in schema
+2 for explicit opaque double-sided KHR_materials_unlit factors. Source material
+indices deduplicate across instances; triangle assignments survive reflected
+winding changes. Bound <=256 materials, finite [0,1] linear RGBA/alpha 1; base-
+color texture/extra vertex attributes/single-sided/other alpha modes/extensions
+fail explicitly. Core PBR lighting fallback properties are ignored according to
+the unlit specification, not interpreted as implemented lighting.
+
+Pinned gltf 1.4.1 activates extensions/KHR_materials_unlit features; no new runtime
+dependency or binary asset schema. Six normalizer tests cover earlier transforms,
+bounds/container checks plus source assignment/reflection/reuse and ten invalid
+material cases. Four new Python remapping tests check permutation/cyclic rotation,
+same-material duplicates, conflicting duplicates, changed winding/coverage/count
+and invalid index types. All eight Python LOD/remapping tests, normalizer fmt and
+denied-warning Clippy pass. Native coverage/winding multiset is checked before
+material remapping; cooker/remapper source hashes enter geometry provenance.
+
+Final synthetic authored fixture has two transformed/reflected quads, red/green
+materials, eight vertices, four triangles, one meshlet. Geometry 2,656 bytes,
+SHA-256 `09b7bb90d920c9ed01c2d45c91edb34a2be4f562eb586b18441eff69639d9e74`;
+material 444 bytes, SHA-256
+`831c3ab1b3fa772b17704168cfddd53f3f0d9c45b0b4aff367128183f472e513`.
+Cooked assignments [0,0,1,1] match source material identity. Independent Rust mesh
+and material examples pass on this final pair. Repeated normalization with the
+same binary/input and repeated native pair cooking are byte-identical. Default
+position-only import/cook/reader remains qualified; old grid/quad/triangle hashes
+are exactly unchanged (4265ed..., b0264e..., 6ce7d2...). Build provenance changes
+normalizer-generated asset hashes intentionally; old fixtures remain available.
+
+Final-pair RX 7900 XTX validation WSI presents 120 frames/ten generations with
+zero diagnostics including teardown. Separate default/shared identity captures
+verify actual GPU geometry/material bytes, indirect/candidate work and all four
+visible triangle identities plus 85 exact color/depth samples each (existing
+2e-6 depth/two RGB byte tolerances). Each target presents 180 frames; capture
+validation is explicitly disabled and separate from standalone qualification.
+No shader/runtime code changed for this import slice. Artifacts:
+`build/qualification/m4-gltf-unlit-final-{cook.json,inspect.log,material.log,
+smoke.log}`, `{full,shared}/report.json` with captures/images, and
+`m4-gltf-unlit-repeat-regression.json`. CI configuration adds import/native pair/
+reader/remapping checks locally; no hosted execution, push or benchmark claim.
+
+General UV/texture/normal/vertex-color/PBR/alpha import, material dependency
+streaming and complete static scene integration remain open. M4 stays incomplete.
+User requested stopping after this current unit; subsequent work was not started.

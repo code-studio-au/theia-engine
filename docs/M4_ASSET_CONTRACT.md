@@ -289,3 +289,23 @@ CPU identity/depth/color JSON. Capture uses `THEIA_CAPTURE_MATERIAL_PAGE` and
 checks immutable GPU bytes plus an interior sample per rasterized identity,
 falling back to an edge pixel for tiny triangles, alongside the 81-point grid.
 These readbacks are qualification tooling only.
+
+### Source glTF opaque unlit factor normalization
+
+Opt-in normalizer `--unlit-factors` emits offline normalized schema 2 with source-
+order triangle assignments and dense base-color factors. Every selected primitive
+requires explicit KHR_materials_unlit, doubleSided true, OPAQUE alpha mode and
+factor alpha 1; base-color textures/other attributes/extensions fail. Source
+material indices/ranges are provenance only; reuse maps to one dense factor.
+Reflection changes winding, preserving source triangle material assignment.
+No THEIAMES/THEIAMAT/THEIACEL binary version changes or runtime parser dependency.
+
+The cooker compares complete winding-preserving cyclic triangle multisets,
+then maps source assignments into meshlet/local-triangle order. Duplicate indexed
+triangles with distinct material assignments fail as ambiguous; same-material
+duplicates retain coverage. Geometry metadata records normalized source hash,
+normalizer source/manifest/lock/binary/compiler configuration and cooker/remapper
+source hashes. The material sidecar binds the exact resulting geometry hash.
+Source material edits consequently affect geometry provenance/content identity;
+independent geometry/material deduplication is not implied by this prototype.
+[Exact limits and workflow](../tools/theia-gltf-import/README.md).

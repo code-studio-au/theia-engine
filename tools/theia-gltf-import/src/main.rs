@@ -1,8 +1,8 @@
-//! Offline position-only static glTF normalization; no runtime glTF/native dependency.
+//! Offline bounded static geometry and optional unlit factor normalization.
 use base64::Engine;
 use serde_json::{Value, json};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     error::Error,
     fs::File,
     io::Read,
@@ -50,8 +50,42 @@ struct Scene {
     indices: Vec<u32>,
     nodes: Vec<Value>,
     visited: BTreeSet<usize>,
+    unlit: bool,
+    base_colors: Vec<[f32; 4]>,
+    material_indices: BTreeMap<usize, u32>,
+    triangle_materials: Vec<u32>,
 }
 impl Scene {
+    fn material(&mut self, material: gltf::Material<'_>) -> Result<u32> {
+        let index = material
+            .index()
+            .ok_or("Unlit import requires an explicit authored material")?;
+        let pbr = material.pbr_metallic_roughness();
+        let factor = pbr.base_color_factor();
+        if !material.unlit()
+            || !material.double_sided()
+            || material.alpha_mode() != gltf::material::AlphaMode::Opaque
+            || pbr.base_color_texture().is_some()
+            || factor[3] != 1.
+            || factor
+                .iter()
+                .any(|v| !v.is_finite() || !(0.0..=1.0).contains(v))
+            || material.extensions().is_some_and(|v| !v.is_empty())
+            || pbr.extensions().is_some_and(|v| !v.is_empty())
+        {
+            return Err("Unlit import requires double-sided opaque factor-only KHR_materials_unlit; textures/other extensions unsupported".into());
+        }
+        if let Some(&id) = self.material_indices.get(&index) {
+            return Ok(id);
+        }
+        if self.base_colors.len() >= 256 {
+            return Err("Unlit material count exceeds 256".into());
+        }
+        let id = self.base_colors.len() as u32;
+        self.base_colors.push(factor);
+        self.material_indices.insert(index, id);
+        Ok(id)
+    }
     fn visit(
         &mut self,
         node: gltf::Node<'_>,
@@ -64,6 +98,9 @@ impl Scene {
         }
         if node.skin().is_some() || node.weights().is_some() {
             return Err("Skin/morph nodes are unsupported by static position importer".into());
+        }
+        if node.extensions().is_some_and(|v| !v.is_empty()) {
+            return Err("Node extensions are unsupported".into());
         }
         let local = node.transform();
         if let gltf::scene::Transform::Decomposed { rotation, .. } = &local {
@@ -83,21 +120,30 @@ impl Scene {
             return Err("Singular node transform".into());
         }
         if let Some(mesh) = node.mesh() {
+            if mesh.extensions().is_some_and(|v| !v.is_empty()) {
+                return Err("Mesh extensions are unsupported".into());
+            }
             if mesh.weights().is_some() {
                 return Err("Morph meshes are unsupported".into());
             }
             for primitive in mesh.primitives() {
                 if primitive.mode() != gltf::mesh::Mode::Triangles
                     || primitive.morph_targets().next().is_some()
-                    || primitive.material().index().is_some()
+                    || (!self.unlit && primitive.material().index().is_some())
+                    || primitive.extensions().is_some_and(|v| !v.is_empty())
                     || primitive
                         .attributes()
                         .any(|(kind, _)| kind != gltf::Semantic::Positions)
                 {
                     return Err(
-                        "Only position-only, unmaterialed triangle primitives are supported".into(),
+                        "Only position-only triangle geometry in the selected material mode is supported".into(),
                     );
                 }
+                let material = if self.unlit {
+                    Some(self.material(primitive.material())?)
+                } else {
+                    None
+                };
                 let count = primitive
                     .get(&gltf::Semantic::Positions)
                     .ok_or("Missing POSITION accessor")?
@@ -151,8 +197,17 @@ impl Scene {
                 }
                 self.indices
                     .extend(indices.iter().map(|index| base + index));
-                self.nodes.push(json!({"node_index":node.index(),"name":node.name(),"mesh_index":mesh.index(),"primitive_index":primitive.index(),
-                    "vertex_offset":base,"vertex_count":self.positions.len()-base as usize,"index_offset":first_index,"index_count":indices.len(),"reflected":determinant<0.}));
+                if let Some(id) = material {
+                    self.triangle_materials
+                        .extend(std::iter::repeat_n(id, indices.len() / 3));
+                }
+                let mut provenance = json!({"node_index":node.index(),"name":node.name(),"mesh_index":mesh.index(),"primitive_index":primitive.index(),
+                    "vertex_offset":base,"vertex_count":self.positions.len()-base as usize,"index_offset":first_index,"index_count":indices.len(),"reflected":determinant<0.});
+                if let Some(id) = material {
+                    provenance["normalized_material_id"] = json!(id);
+                    provenance["source_material_index"] = json!(primitive.material().index());
+                }
+                self.nodes.push(provenance);
             }
         }
         for child in node.children() {
@@ -162,16 +217,28 @@ impl Scene {
     }
 }
 fn normalize(path: &Path) -> Result<Value> {
+    normalize_mode(path, false)
+}
+fn normalize_mode(path: &Path, unlit: bool) -> Result<Value> {
     let source = read(path)?;
     let gltf = gltf::Gltf::from_slice(&source)?;
-    if gltf.document.extensions_used().next().is_some()
-        || gltf.document.extensions_required().next().is_some()
+    if gltf
+        .document
+        .extensions_used()
+        .any(|extension| !unlit || extension != "KHR_materials_unlit")
+        || gltf
+            .document
+            .extensions_required()
+            .any(|extension| !unlit || extension != "KHR_materials_unlit")
         || gltf.document.animations().next().is_some()
         || gltf.document.cameras().next().is_some()
     {
         return Err(
-            "Extensions/animation/authored cameras are unsupported in the static prototype".into(),
+            "Unsupported extension, animation or authored camera in the static prototype".into(),
         );
+    }
+    if unlit && gltf.materials().len() > 256 {
+        return Err("Unlit source material count exceeds 256".into());
     }
     let directory = path
         .parent()
@@ -269,11 +336,18 @@ fn normalize(path: &Path) -> Result<Value> {
         }
         scene
     };
+    if scene.extensions().is_some_and(|v| !v.is_empty()) {
+        return Err("Scene extensions are unsupported".into());
+    }
     let mut normalized = Scene {
         positions: Vec::new(),
         indices: Vec::new(),
         nodes: Vec::new(),
         visited: BTreeSet::new(),
+        unlit,
+        base_colors: Vec::new(),
+        material_indices: BTreeMap::new(),
+        triangle_materials: Vec::new(),
     };
     for node in scene.nodes() {
         normalized.visit(node, IDENTITY, &buffers, 0)?;
@@ -295,25 +369,40 @@ fn normalize(path: &Path) -> Result<Value> {
             return Err("Degenerate or excessive imported triangle area".into());
         }
     }
-    Ok(
-        json!({"schema":1,"positions":normalized.positions,"indices":normalized.indices,
+    let mut result = json!({"schema":1,"positions":normalized.positions,"indices":normalized.indices,
         "provenance":{"producer":format!("theia-gltf-import-{}/gltf-1.4.1",env!("CARGO_PKG_VERSION")),"source_sha256":hex(&source),"buffers":dependencies,
             "compiler":env!("THEIA_IMPORT_RUSTC"),"target_os":std::env::consts::OS,"target_arch":std::env::consts::ARCH,
             "debug_assertions":cfg!(debug_assertions),"normalizer_binary_sha256":hex(&read(&std::env::current_exe()?)?),
-            "normalizer_source_sha256":hex(include_bytes!("main.rs")),"cargo_lock_sha256":hex(include_bytes!("../Cargo.lock")),
-            "scene_index":scene.index(),"nodes":normalized.nodes,"coordinates":"RH Z-up meters; glTF (x,y,z) -> (x,-z,y)","reflections":"swap triangle indices 1/2 for negative world determinant"}}),
-    )
+            "normalizer_source_sha256":hex(include_bytes!("main.rs")),"cargo_lock_sha256":hex(include_bytes!("../Cargo.lock")),"cargo_manifest_sha256":hex(include_bytes!("../Cargo.toml")),
+            "scene_index":scene.index(),"nodes":normalized.nodes,"coordinates":"RH Z-up meters; glTF (x,y,z) -> (x,-z,y)","reflections":"swap triangle indices 1/2 for negative world determinant"}});
+    if unlit {
+        result["schema"] = json!(2);
+        result["base_colors"] = json!(normalized.base_colors);
+        result["triangle_materials"] = json!(normalized.triangle_materials);
+        result["provenance"]["shading"] =
+            json!("opaque double-sided KHR_materials_unlit factors; no textures/vertex attributes");
+    }
+    Ok(result)
 }
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
     let input = args
         .next()
-        .ok_or("usage: theia-gltf-import <source.gltf/glb> <normalized.json>")?;
+        .ok_or("usage: theia-gltf-import <source.gltf/glb> <normalized.json> [--unlit-factors]")?;
     let output = args.next().ok_or("normalized output path required")?;
+    let unlit = match args.next().as_deref() {
+        None => false,
+        Some("--unlit-factors") => true,
+        _ => return Err("Only optional --unlit-factors is supported".into()),
+    };
     if args.next().is_some() {
         return Err("Too many arguments".into());
     }
-    let normalized = normalize(Path::new(&input))?;
+    let normalized = if unlit {
+        normalize_mode(Path::new(&input), true)?
+    } else {
+        normalize(Path::new(&input))?
+    };
     std::fs::write(&output, serde_json::to_vec(&normalized)?)?;
     println!(
         "Normalized {} vertices / {} triangles into {output}",
@@ -423,6 +512,91 @@ mod tests {
         cases.push(v);
         for (index, case) in cases.iter().enumerate() {
             assert!(run(case).is_err(), "case {index}");
+        }
+    }
+    #[test]
+    fn unlit_factors_follow_source_primitives_through_instance_reflections() {
+        let (mut document, _) = fixture();
+        document["extensionsUsed"] = json!(["KHR_materials_unlit"]);
+        document["extensionsRequired"] = json!(["KHR_materials_unlit"]);
+        document["materials"] = json!([
+            {"doubleSided":true,"extensions":{"KHR_materials_unlit":{}},"pbrMetallicRoughness":{"baseColorFactor":[0.8,0.1,0.05,1.0]}},
+            {"doubleSided":true,"extensions":{"KHR_materials_unlit":{}},"pbrMetallicRoughness":{"baseColorFactor":[0.05,0.65,0.2,1.0]}}
+        ]);
+        document["meshes"][0]["primitives"][0]["material"] = json!(1);
+        document["meshes"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"primitives":[{"attributes":{"POSITION":0},"indices":1,"material":0}]}));
+        document["nodes"] =
+            json!([{"mesh":0},{"mesh":1,"scale":[-1.,1.,1.]},{"mesh":0,"translation":[0.4,0.,0.]}]);
+        document["scenes"][0]["nodes"] = json!([0, 1, 2]);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("scene.gltf");
+        std::fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+        assert!(normalize(&path).is_err());
+        let result = normalize_mode(&path, true).unwrap();
+        assert_eq!(result["schema"], json!(2));
+        assert_eq!(result["triangle_materials"], json!([0, 1, 0]));
+        let green = result["base_colors"][0][1].as_f64().unwrap();
+        assert!((green - 0.65).abs() < 1e-6);
+        assert_eq!(result["indices"], json!([0, 1, 2, 3, 5, 4, 6, 7, 8]));
+        assert_eq!(
+            result["provenance"]["nodes"][1]["source_material_index"],
+            json!(0)
+        );
+    }
+    #[test]
+    fn unlit_mode_rejects_unsupported_alpha_faces_textures_attributes_and_extensions() {
+        let (mut source, _) = fixture();
+        source["extensionsUsed"] = json!(["KHR_materials_unlit"]);
+        source["materials"] = json!([{"doubleSided":true,"extensions":{"KHR_materials_unlit":{}},"pbrMetallicRoughness":{"baseColorFactor":[0.8,0.1,0.05,1.0]}}]);
+        source["meshes"][0]["primitives"][0]["material"] = json!(0);
+        let mut cases = Vec::new();
+        let mut v = source.clone();
+        v["materials"][0]["alphaMode"] = json!("BLEND");
+        cases.push(v);
+        let mut v = source.clone();
+        v["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"][3] = json!(0.5);
+        cases.push(v);
+        let mut v = source.clone();
+        v["materials"][0]["doubleSided"] = json!(false);
+        cases.push(v);
+        let mut v = source.clone();
+        v["materials"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("extensions");
+        cases.push(v);
+        let mut v = source.clone();
+        v["meshes"][0]["primitives"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("material");
+        cases.push(v);
+        let mut v = source.clone();
+        v["images"] = json!([{"uri":"unloaded.png"}]);
+        v["textures"] = json!([{"source":0}]);
+        v["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"] = json!({"index":0});
+        cases.push(v);
+        let mut v = source.clone();
+        v["meshes"][0]["primitives"][0]["attributes"]["NORMAL"] = json!(0);
+        cases.push(v);
+        let mut v = source.clone();
+        v["extensionsRequired"] = json!(["KHR_materials_transmission"]);
+        cases.push(v);
+        let mut v = source.clone();
+        v["nodes"][0]["extensions"] = json!({"KHR_materials_unlit":{}});
+        cases.push(v);
+        let mut v = source.clone();
+        v["materials"] =
+            json!(std::iter::repeat_n(source["materials"][0].clone(), 257).collect::<Vec<_>>());
+        cases.push(v);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("scene.gltf");
+        for (i, case) in cases.iter().enumerate() {
+            std::fs::write(&path, serde_json::to_vec(case).unwrap()).unwrap();
+            assert!(normalize_mode(&path, true).is_err(), "case {i}");
         }
     }
     #[test]
