@@ -1,4 +1,4 @@
-//! Minimal task/mesh pipeline ownership. No vertex/index buffers or descriptors.
+//! Minimal task/mesh pipeline ownership. No conventional vertex/index buffers.
 use crate::{RenderMode, Result};
 use ash::vk;
 use std::{fs::File, io::BufReader, path::Path};
@@ -45,8 +45,13 @@ impl Pipeline {
         mode: RenderMode,
         descriptor_layout: Option<vk::DescriptorSetLayout>,
     ) -> Result<Self> {
-        let task_amplification = matches!(mode, RenderMode::Indirect | RenderMode::DirectTask);
-        let mesh_file = if task_amplification {
+        let task_amplification = matches!(
+            mode,
+            RenderMode::Indirect | RenderMode::DirectTask | RenderMode::Spatial
+        );
+        let mesh_file = if mode == RenderMode::Spatial {
+            "spatial.mesh.spv"
+        } else if task_amplification {
             "triangle.amplified.mesh.spv"
         } else {
             "triangle.mesh.spv"
@@ -56,7 +61,9 @@ impl Pipeline {
         let task = if task_amplification {
             Some(ShaderModule::load(
                 device,
-                &shader_dir.join(if mode == RenderMode::Indirect {
+                &shader_dir.join(if mode == RenderMode::Spatial {
+                    "spatial.task.spv"
+                } else if mode == RenderMode::Indirect {
                     "triangle.indirect.task.spv"
                 } else {
                     "triangle.task.spv"
@@ -139,7 +146,11 @@ impl Pipeline {
                 }
             }
         }
-        if mode == RenderMode::Indirect {
+        if mode == RenderMode::Spatial {
+            println!(
+                "GPU spatial pipeline created: CSR candidates -> bounds culling -> indirect task/mesh visibility; up to 32 mesh groups"
+            );
+        } else if mode == RenderMode::Indirect {
             println!(
                 "GPU indirect graphics pipeline created: task reads compute-generated work descriptor; mesh uses shared transforms"
             );

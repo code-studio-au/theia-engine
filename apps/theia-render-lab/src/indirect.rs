@@ -15,14 +15,24 @@ pub struct IndirectWork {
     set: vk::DescriptorSet,
     compute_layout: vk::PipelineLayout,
     compute: vk::Pipeline,
+    bytes: vk::DeviceSize,
 }
 impl IndirectWork {
     pub fn new(
         device: &ash::Device,
         memory_properties: &vk::PhysicalDeviceMemoryProperties,
         shader_dir: &Path,
+        spatial: bool,
     ) -> Result<Self> {
-        let shader = ShaderModule::load(device, &shader_dir.join("work.compute.spv"))?;
+        let bytes = if spatial { 9728 } else { BUFFER_BYTES };
+        let shader = ShaderModule::load(
+            device,
+            &shader_dir.join(if spatial {
+                "spatial.compute.spv"
+            } else {
+                "work.compute.spv"
+            }),
+        )?;
         let mut work = Self {
             device: device.clone(),
             buffer: vk::Buffer::null(),
@@ -32,13 +42,14 @@ impl IndirectWork {
             set: vk::DescriptorSet::null(),
             compute_layout: vk::PipelineLayout::null(),
             compute: vk::Pipeline::null(),
+            bytes,
         };
         // SAFETY: All create-info backing arrays remain live through calls. Every successful handle
         // immediately gains ownership in work; Drop handles partial initialization in dependency order.
         unsafe {
             work.buffer = device.create_buffer(
                 &vk::BufferCreateInfo::default()
-                    .size(BUFFER_BYTES)
+                    .size(bytes)
                     .usage(
                         vk::BufferUsageFlags::STORAGE_BUFFER
                             | vk::BufferUsageFlags::INDIRECT_BUFFER,
@@ -66,7 +77,15 @@ impl IndirectWork {
                 .binding(0)
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::COMPUTE | vk::ShaderStageFlags::TASK_EXT)];
+                .stage_flags(
+                    vk::ShaderStageFlags::COMPUTE
+                        | vk::ShaderStageFlags::TASK_EXT
+                        | if spatial {
+                            vk::ShaderStageFlags::MESH_EXT
+                        } else {
+                            vk::ShaderStageFlags::empty()
+                        },
+                )];
             work.descriptor_layout = device.create_descriptor_set_layout(
                 &vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings),
                 None,
@@ -89,7 +108,7 @@ impl IndirectWork {
             let buffers = [vk::DescriptorBufferInfo::default()
                 .buffer(work.buffer)
                 .offset(0)
-                .range(BUFFER_BYTES)];
+                .range(bytes)];
             device.update_descriptor_sets(
                 &[vk::WriteDescriptorSet::default()
                     .dst_set(work.set)
@@ -130,9 +149,15 @@ impl IndirectWork {
                 }
             }
         }
-        println!(
-            "GPU indirect work initialized: 64-byte device-local buffer; command at 0, count at 12, transforms/mesh count at 16..40; no mapping/readback"
-        );
+        if spatial {
+            println!(
+                "GPU spatial work initialized: 9728-byte device-local CSR/visibility/work arena; no mapping/readback"
+            );
+        } else {
+            println!(
+                "GPU indirect work initialized: 64-byte device-local buffer; command at 0, count at 12, transforms/mesh count at 16..40; no mapping/readback"
+            );
+        }
         Ok(work)
     }
     pub fn generate(&self, command: vk::CommandBuffer, requested_items: u32) {
@@ -144,6 +169,7 @@ impl IndirectWork {
                 .src_stage_mask(
                     vk::PipelineStageFlags2::DRAW_INDIRECT
                         | vk::PipelineStageFlags2::TASK_SHADER_EXT
+                        | vk::PipelineStageFlags2::MESH_SHADER_EXT
                         | vk::PipelineStageFlags2::COMPUTE_SHADER,
                 )
                 .src_access_mask(
@@ -157,7 +183,7 @@ impl IndirectWork {
                 .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                 .buffer(self.buffer)
                 .offset(0)
-                .size(BUFFER_BYTES)];
+                .size(self.bytes)];
             self.device.cmd_pipeline_barrier2(
                 command,
                 &vk::DependencyInfo::default().buffer_memory_barriers(&reuse),
@@ -185,7 +211,8 @@ impl IndirectWork {
                 .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
                 .dst_stage_mask(
                     vk::PipelineStageFlags2::DRAW_INDIRECT
-                        | vk::PipelineStageFlags2::TASK_SHADER_EXT,
+                        | vk::PipelineStageFlags2::TASK_SHADER_EXT
+                        | vk::PipelineStageFlags2::MESH_SHADER_EXT,
                 )
                 .dst_access_mask(
                     vk::AccessFlags2::INDIRECT_COMMAND_READ | vk::AccessFlags2::SHADER_STORAGE_READ,
@@ -194,7 +221,7 @@ impl IndirectWork {
                 .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                 .buffer(self.buffer)
                 .offset(0)
-                .size(BUFFER_BYTES)];
+                .size(self.bytes)];
             self.device.cmd_pipeline_barrier2(
                 command,
                 &vk::DependencyInfo::default().buffer_memory_barriers(&publish),

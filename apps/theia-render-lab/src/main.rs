@@ -1,6 +1,7 @@
 mod gpu;
 mod indirect;
 mod pipeline;
+mod spatial;
 mod wsi;
 
 use std::{
@@ -21,6 +22,7 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RenderMode {
     Indirect,
+    Spatial,
     DirectTask,
     MeshOnly,
     Clear,
@@ -58,10 +60,11 @@ impl Options {
                     }
                     result.frames = Some(count);
                 }
-                "--mesh-only" | "--clear-only" | "--direct-task" => {
+                "--mesh-only" | "--clear-only" | "--direct-task" | "--spatial-test" => {
                     let mode = match arg.as_str() {
                         "--mesh-only" => RenderMode::MeshOnly,
                         "--clear-only" => RenderMode::Clear,
+                        "--spatial-test" => RenderMode::Spatial,
                         _ => RenderMode::DirectTask,
                     };
                     if result.mode.replace(mode).is_some() {
@@ -75,6 +78,17 @@ impl Options {
                     }
                     result.work_items = Some(count);
                 }
+                "--spatial-reference" => {
+                    let scenario = args
+                        .next()
+                        .ok_or("--spatial-reference needs 0, 1 or 2")?
+                        .parse()?;
+                    if scenario > 2 {
+                        return Err("Spatial reference scenario must be 0, 1 or 2".into());
+                    }
+                    spatial::print_reference(scenario);
+                    std::process::exit(0);
+                }
                 "--shader-dir" => {
                     result.shader_dir =
                         Some(args.next().ok_or("--shader-dir needs a directory")?.into())
@@ -86,7 +100,7 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -94,10 +108,13 @@ impl Options {
             }
         }
         if result.work_items.is_some()
-            && (result.render_mode() != RenderMode::Indirect || result.smoke)
+            && (!matches!(
+                result.render_mode(),
+                RenderMode::Indirect | RenderMode::Spatial
+            ) || result.smoke)
         {
             return Err(
-                "--work-items requires indirect mode without --smoke-test (which cycles inputs)"
+                "--work-items requires indirect or spatial mode without --smoke-test (which cycles inputs)"
                     .into(),
             );
         }

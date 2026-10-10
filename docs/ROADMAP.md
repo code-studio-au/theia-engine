@@ -8,7 +8,7 @@ The goal is an **early end-to-end playable vertical slice**, not years of isolat
 | M0-C | Headless GPU compute | Rust ash dispatch produces 256 expected values — **DONE** |
 | M0-D | Render Lab | Native window + Vulkan swapchain + task/mesh-generated triangle; validation and resize work |
 | M1 | GPU ECS minimal | [Bounded reference slice qualified on RADV](validation/M1_GPU_ECS.md); dense components, handles, mutations and retained epochs vs CPU oracle |
-| M2 | Flat 2.5D visibility | Spatial candidate ranges, GPU culling, indirect mesh/task draws without host per-object lists |
+| M2 | Flat 2.5D visibility | [Bounded reference slice qualified on RADV](validation/M2_SPATIAL_VISIBILITY.md); CSR candidates, height-aware bounds culling, GPU indirect mesh/task draws |
 | M3 | Visibility buffer/materials | Correct primitive identity/depth, material attribute reconstruction, bindless sampling |
 | M4 | Static world/streaming | Cooked meshlets+LOD, terrain, virtual textures, immutable cells, resource budget/fallback |
 | M5 | GI/temporal | Static streamed SDF + dynamically updated shared radiance cache, motion vectors, reconstruction |
@@ -51,11 +51,19 @@ not infer that the full GPU ECS, scheduler or allocation strategy exists from M0
 
 General ECS, complex render graph, radiance cache, geometry LOD streaming, network replication, audio, full UI, advanced multi-queue GPU scheduling or 10k-player load harness. Each is an intentionally later step.
 
-## Next local implementation — M2
+## M2 reference slice — locally qualified
 
-Build a bounded flat 2.5D grid and contiguous membership/candidate ranges, verify
+Implemented a bounded flat 2.5D grid and contiguous membership/candidate ranges, verified
 GPU candidate selection/culling against an independent CPU reference, and feed
 GPU-generated visibility counts/indices into task/mesh rendering. Use direct XY
 cell addressing; keep world identity independent of cell/storage placement.
 Static content streaming, HZB, virtualized geometry and production-scale tuning
 remain later slices. Preserve M0/M1 qualification apps and evidence.
+
+## Next local implementation — M3
+
+Start with a bounded visibility/depth target and frame-local primitive identity,
+then resolve material attributes against a CPU reference before adding bindless
+texture sampling. Preserve all previous qualification modes. Reconstruct geometry
+from explicit scene/primitive references; prove depth/overlap and barycentric
+correctness before broadening the material pipeline. No GI or streaming work yet.

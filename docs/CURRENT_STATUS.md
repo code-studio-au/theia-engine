@@ -4,6 +4,22 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M2 bounded spatial/visibility reference slice — independently executed
+
+Render Lab `--spatial-test` builds direct-addressed XY CSR memberships and gathers
+candidates, applies height-aware bounds culling, compacts visible IDs and renders
+GPU-generated indirect task/mesh work. RX 7900 XTX passes the 120-frame WSI smoke
+with ten swapchain generations and zero validation warnings/errors. Separate
+RenderDoc captures match independent CPU bounds/CSR/masks/IDs/counts for empty,
+filtered and full views; replay images contain exactly 0, 8 and 32 triangles.
+
+Nine render stages validate; seven CPU tests pass, including 1,000 randomized
+view comparisons against brute force. All four earlier rendering modes and the
+M0 capture workflow pass regression checks. This qualifies the bounded M2 reference
+slice, not dynamic M1 scene integration, perspective/HZB culling, packed vertical
+indexes, content streaming or scale. Evidence:
+[M2 spatial qualification](validation/M2_SPATIAL_VISIBILITY.md).
+
 ## M1 bounded GPU reference slice — independently executed
 
 Separate `apps/theia-ecs-lab` executes Slang initialization, ordered structural

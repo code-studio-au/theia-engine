@@ -104,3 +104,12 @@ device; other hardware needs its own qualification input/evidence.
 
 References: [RenderDoc quick start](https://renderdoc.org/docs/getting_started/quick_start.html),
 [capture/replay API](https://renderdoc.org/docs/python_api/in_depth/capture_access.html).
+
+For the bounded M2 visibility path, add `THEIA_CAPTURE_SPATIAL=1` and
+`THEIA_CAPTURE_SCENARIO=0`, `1` or `2`, plus a separate
+`THEIA_CAPTURE_OUTPUT=build/qualification/m2-renderdoc-0` (adjust per scenario)
+to the same dedicated RenderDoc command. It captures the spatial mode, compares
+resident bounds/CSR/candidate mask/visible IDs/indirect counts with the executable's
+CPU-only `--spatial-reference` output, and exports the final presentation image.
+Bounds comparison uses explicit absolute tolerance `1e-6`; integer lists/masks and
+counts must match exactly. The three tested images contain 0, 8 and 32 triangles.

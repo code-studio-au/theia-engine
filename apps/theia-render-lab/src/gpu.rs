@@ -226,7 +226,10 @@ impl Context {
                 vk::api_version_patch(version)
             );
         }
-        self.select_device(options.gpu.as_deref())?;
+        self.select_device(
+            options.gpu.as_deref(),
+            options.render_mode() == RenderMode::Spatial,
+        )?;
         // SAFETY: Features were queried on the selected device; all queue indices support the intended
         // operations. Create-info backing storage remains live and handles immediately gain RAII ownership.
         unsafe {
@@ -302,7 +305,7 @@ impl Context {
         }
         Ok(())
     }
-    fn select_device(&mut self, requested: Option<&str>) -> Result<()> {
+    fn select_device(&mut self, requested: Option<&str>, spatial: bool) -> Result<()> {
         let instance = self.instance.as_ref().unwrap();
         let surface = self.surface_loader.as_ref().unwrap();
         let mut candidates = Vec::new();
@@ -362,8 +365,17 @@ impl Context {
                             && limits.max_task_payload_size >= 20
                             && limits.max_task_payload_and_shared_memory_size >= 20
                             && limits.max_mesh_payload_and_shared_memory_size >= 20
-                            && limits.max_mesh_work_group_count[0] >= 2
-                            && limits.max_mesh_work_group_total_count >= 2,
+                            && limits.max_mesh_work_group_count[0] >= if spatial { 32 } else { 2 }
+                            && limits.max_mesh_work_group_total_count
+                                >= if spatial { 32 } else { 2 },
+                    ),
+                    (
+                        "spatial compute limits",
+                        !spatial
+                            || (properties.limits.max_compute_work_group_invocations >= 64
+                                && properties.limits.max_compute_work_group_size[0] >= 64
+                                && properties.limits.max_compute_shared_memory_size >= 524
+                                && properties.limits.max_storage_buffer_range >= 9728),
                     ),
                     ("dynamicRendering", v13.dynamic_rendering == vk::TRUE),
                     ("synchronization2", v13.synchronization2 == vk::TRUE),
@@ -759,7 +771,7 @@ impl Renderer {
                 })
             }),
         };
-        if renderer.mode == RenderMode::Indirect {
+        if matches!(renderer.mode, RenderMode::Indirect | RenderMode::Spatial) {
             // SAFETY: The selected physical device belongs to the retained live instance.
             let memory = unsafe {
                 renderer
@@ -773,6 +785,7 @@ impl Renderer {
                 renderer.ctx.device.as_ref().unwrap(),
                 &memory,
                 renderer.shader_dir.as_ref().unwrap(),
+                renderer.mode == RenderMode::Spatial,
             )?);
         }
         renderer.rebuild(renderer.ctx.window.inner_size())?;
@@ -821,9 +834,15 @@ impl Renderer {
             self.work_items
         };
         if self.work.is_some() && self.last_input != Some(input) {
-            println!(
-                "Indirect qualification input: {input} work items (GPU produces command/count; no host readback)"
-            );
+            if self.mode == RenderMode::Spatial {
+                println!(
+                    "Spatial qualification scenario: {input} (0 empty, 1 left/low, 2 full; GPU produces visibility/counts; no host readback)"
+                );
+            } else {
+                println!(
+                    "Indirect qualification input: {input} work items (GPU produces command/count; no host readback)"
+                );
+            }
             self.last_input = Some(input);
         }
         let chain = self.chain.as_mut().unwrap();
