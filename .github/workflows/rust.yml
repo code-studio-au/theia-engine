@@ -36,6 +36,13 @@ jobs:
           tar -xzf "$RUNNER_TEMP/slang.tar.gz" -C "$RUNNER_TEMP/slang"
       - name: Compile and validate Slang task/mesh/fragment shaders
         run: python3 tools/compile_render_shaders.py --slangc "$RUNNER_TEMP/slang/bin/slangc"
+      - name: Fetch qualified GLSL primitive-interface compiler
+        run: |
+          curl --fail --location --retry 3 'https://archive.ubuntu.com/ubuntu/pool/universe/g/glslang/glslang-tools_15.1.0-2~ubuntu0.24.04.2_amd64.deb' -o "$RUNNER_TEMP/glslang.deb"
+          echo "8767bba0e4cc781a5de0da3e662f656664cc3b8de2399aef6755bac61137727e  $RUNNER_TEMP/glslang.deb" | sha256sum --check -
+          dpkg-deb -x "$RUNNER_TEMP/glslang.deb" "$RUNNER_TEMP/glslang"
+      - name: Compile and validate optional shared primitive interface
+        run: python3 tools/compile_render_shaders.py --slangc "$RUNNER_TEMP/slang/bin/slangc" --shared-primitive-interface --glslang "$RUNNER_TEMP/glslang/usr/bin/glslangValidator" --output-dir build/shaders-shared
       - name: Compile and validate M1 ECS reference compute shaders
         run: python3 tools/compile_ecs_shaders.py --slangc "$RUNNER_TEMP/slang/bin/slangc"
       - name: Validate preserved compute shader

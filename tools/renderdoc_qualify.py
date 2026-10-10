@@ -57,6 +57,12 @@ def qualify(report):
     if scenario not in (0, 1, 2):
         raise RuntimeError('Capture scenario must be 0, 1 or 2')
     arguments = '--frames 180 --gpu 7900 --no-validation'
+    shader_dir = os.environ.get('THEIA_CAPTURE_SHADER_DIR')
+    if shader_dir:
+        shader_dir = str(Path(shader_dir).resolve())
+        quoted_dir = subprocess.list2cmdline([shader_dir]) if os.name == 'nt' else shlex.quote(shader_dir)
+        arguments += f' --shader-dir {quoted_dir}'
+        report['shader_directory'] = shader_dir
     if material:
         arguments += ' --material-test'
     elif cull:

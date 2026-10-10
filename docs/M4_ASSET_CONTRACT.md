@@ -211,3 +211,17 @@ world position, checks interpolated depth and samples the existing two-texture
 array using meshlet parity. This palette is diagnostic; no authored UV, normal,
 material, derivative or virtual-texture contract is added. M3 standalone remains
 available. Shared-vertex per-primitive fragment input remains unqualified.
+
+### Optional shared primitive interface qualification
+
+`compile_render_shaders.py --shared-primitive-interface --glslang <compiler>
+--output-dir build/shaders-shared` substitutes only identity mesh/fragment
+modules. Slang mesh output uses 64 shared vertices/64 primitive records, each
+primitive carrying uint2 identity at Location 0. A specifically scoped GLSL
+fragment fallback consumes flat `perprimitiveEXT` input at that location; all
+compute/task/material resolve and other shaders remain Slang. Both modules must
+show PerPrimitiveEXT at Location 0 and no Geometry capability before publication.
+Use `--material-test --shader-dir build/shaders-shared` for runtime qualification.
+Default compiler invocation and expanded Slang path are unchanged. The lab's
+conservative 192-vertex/8192-byte admission remains, even for this alternate pair.
+This is not a finalized minimum GPU profile, storage change or performance result.

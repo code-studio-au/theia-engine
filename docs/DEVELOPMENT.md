@@ -275,3 +275,21 @@ The helper verifies GPU IDs/mask/counts against `--frustum-reference <mesh-file>
 <x y width height view>`, then checks perspective pixels/depth. Full terrain's
 observed masks are 0, 0x5f and 0xff at 960x540; candidate counts 0, 6, 8. Cell
 frame 30 narrow capture also checks full terrain at arena offset 5528.
+
+### Optional shared-vertex identity shaders
+
+The specific Slang fragment PerPrimitiveEXT qualification failure permits a
+small GLSL fragment fallback. Compile into a separate directory to preserve
+default qualification shaders:
+
+```sh
+python3 tools/compile_render_shaders.py --slangc /path/to/slangc \
+  --shared-primitive-interface --glslang /path/to/glslangValidator \
+  --output-dir build/shaders-shared
+apps/theia-render-lab/target/debug/theia-render-lab --asset /path/to/hash.theia-mesh \
+  --material-test --shader-dir build/shaders-shared --wsi-smoke-test
+```
+
+Use `THEIA_CAPTURE_SHADER_DIR=build/shaders-shared` with the existing material
+capture environment to replay that exact pair. Pinned compiler provenance and
+limits are in [M4 qualification evidence](validation/M4_COOKED_MESHLETS.md).

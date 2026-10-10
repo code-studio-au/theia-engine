@@ -86,7 +86,8 @@ Position-only static glTF node transforms/reflections now feed the cooker/viewer
 with qualified source/tool provenance. Conservative GPU meshlet frustum selection
 now feeds indirect task/mesh work and passes CPU/replay checks. Cooked identity,
 depth and deferred diagnostic material resolve now connect those slices. Next
-qualify the shared-vertex per-primitive Slang interface before deciding a broader
-material/attribute schema; the current expanded-vertex identity test is bounded. General
+define a bounded authored material/attribute slice: the optional shared-vertex
+Slang mesh / GLSL fragment interface now passes replay alongside the default
+expanded-vertex Slang test. General
 LOD/hierarchy errors, broader page dependencies/readers and virtual texture
 residency remain open. Retain the current viewer/fixture checks; M5 GI stays deferred.

@@ -4,6 +4,24 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M4 optional shared primitive interface — independently executed
+
+A specific GLSL fragment fallback now qualifies Slang shared-vertex mesh output
+with custom PerPrimitiveEXT identity. `--shared-primitive-interface` compiles
+an alternate shader directory; default Slang expanded-vertex modules remain
+unchanged. Both stage interfaces use Location 0/PerPrimitiveEXT and neither adds
+Geometry capability. Publication rejects missing interface evidence. Pinned
+Ubuntu glslang 15.1.0 package/binary digests are recorded; CI configuration checks
+the optional path locally, with no hosted execution claim.
+
+RX 7900 XTX standalone mesh/cell WSI runs pass 120 frames/ten generations with
+zero diagnostics; cell replaces five pages. Six replay cases match 81 exact
+identity/depth/color samples each and GPU geometry/work, including nonzero arena
+offset. The current conservative lab admission still requires 192 output
+vertices/8192 bytes despite the alternate shader emitting at most 64 vertices;
+this qualifies interoperability, not a relaxed device profile or speedup.
+General authored materials/attributes remain the next content gate; M4 stays open.
+
 ## M4 cooked visibility/material resolve — independently executed
 
 Optional `--material-test` connects cooked meshlets, perspective camera, GPU

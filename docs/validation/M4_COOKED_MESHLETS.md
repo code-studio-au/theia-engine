@@ -441,3 +441,46 @@ asset, camera, frustum and material cell) pass 120 frames/ten generations with
 zero diagnostics; material cell replaces five pages. Missing cooked resolve
 fragment after arena/upload/identity-pipeline/target construction exits 1 with
 zero validation diagnostics during cleanup.
+
+## Optional shared-vertex primitive interface (2026-10-10)
+
+Khronos defines PerPrimitiveEXT on mesh outputs and fragment inputs in the
+[mesh extension](https://github.com/KhronosGroup/GLSL/blob/main/extensions/ext/GLSL_EXT_mesh_shader.txt)
+and [SPIR-V extension](https://github.khronos.org/SPIRV-Registry/extensions/EXT/SPV_EXT_mesh_shader.html).
+After the specifically observed Slang fragment failures above, the alternate pair
+uses Slang `out primitives` uint2 plus a five-line GLSL fragment consumer. Actual
+SPIR-V on both stages decorates Location 0 PerPrimitiveEXT; fragment has Shader
+and MeshShadingEXT capabilities, no Geometry. Mesh shares at most 64 output
+vertices/64 primitives, keeping original local triangle indices. No SPIR-V
+patching, Geometry device enablement or other language fallback is involved.
+
+`--shared-primitive-interface` is opt-in and publishes a separate output directory.
+All 23 modules compile/validate; default 23-module Slang compilation also passes.
+Before publication, disassembly gates the two interface decorations and absence
+of Geometry capability. Deliberately empty disassembly evidence fails exit 1 and
+preserves all previous 23 output hashes. Missing tools likewise fail explicitly.
+
+Offline glslang 15.1.0 was extracted locally from Ubuntu package
+`glslang-tools_15.1.0-2~ubuntu0.24.04.2_amd64.deb`, not installed globally. Package
+SHA-256 `8767bba0e4cc781a5de0da3e662f656664cc3b8de2399aef6755bac61137727e`;
+compiler SHA-256 `96ea85d4228d7065507cd58454628e0d3c9ec8bbd29a0cd20ee0f3cefaf6d026`.
+Official archive download matches that package digest. Package copyright verifies
+main BSD-3-Clause and bundled MIT/other notices; this tool is offline only.
+CI configuration fetches/hash-checks this exact package and compiles the optional
+directory; no hosted result is claimed.
+
+Standalone RADV full-terrain and cell WSI both present 120 frames/ten generations,
+zero diagnostics including teardown. Cell replaces five pages. Six separate
+captures (full/narrow/empty terrain, glTF, occlusion, cell/frame-30/offset-5528)
+match GPU page/work plus 81 exact identity, depth and color samples each, with
+the same covered counts/tolerances as the expanded test. All targets present
+180 frames. Artifacts: `build/qualification/m4-primitive-interface-*.log`,
+`m4-primitive-interface-{full,narrow,empty,gltf,occlusion,cell}/report.json` and
+captures/images. `THEIA_CAPTURE_SHADER_DIR` selects the alternate directory.
+
+The existing lab still requires conservative 192 output vertices/8192 memory
+bytes. No reduced minimum profile, vendor/Windows execution or performance claim.
+Default expanded Slang interface remains available; shared-vertex interoperability
+is now locally qualified through this specific fallback, not through Slang
+fragment codegen. Authored attributes/materials and broader scene contracts remain
+open; M4 remains incomplete.
