@@ -4,6 +4,27 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
+## M4 initial cooked-asset/viewer slice — independently executed
+
+Official meshoptimizer 1.3 (offline only) cooks/optimizes a 512-triangle grid into
+eight meshlets and verifies coverage/winding. Pure Rust reader validates content
+address, schema, payload digest, ranges/indices, finite positions and byte budget.
+Render Lab uploads immutable geometry once and Slang decodes/draws it through
+GPU-written indirect counts. RX 7900 XTX WSI and capacity-fallback smoke runs pass
+with zero validation warnings/errors including teardown. Four captures verify
+selected immutable GPU bytes/counts plus 81 coverage/color samples each.
+
+A source-linked 848-byte coarse quad replaces the 7,244-byte grid under a 2,048-byte
+encoded-geometry budget; complete planar replay images differ by at most one RGB
+byte level. Invalid content/source links/budgets and missing shader after upload
+fail cleanly. Seventeen render shader outputs validate; Rust checks and all prior
+rendering/headless/ECS regressions pass. Work remains local without hosted CI claims.
+
+**M4 remains open** for authored scene integration, general LOD, immutable cell
+paging, async publication/retirement, actual per-arena residency, terrain and
+virtual textures. This is a bounded prototype, not production streaming.
+[Contract](M4_ASSET_CONTRACT.md), [evidence](validation/M4_COOKED_MESHLETS.md).
+
 ## M3 bounded visibility/material reference — independently executed
 
 Render Lab `--visibility-test` writes integer instance/primitive identity and D32

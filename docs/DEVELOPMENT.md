@@ -124,3 +124,40 @@ FIFO desktop qualification can stall with the monitor powered off. An M3 smoke
 run resumed and completed cleanly after temporarily waking the display with
 `DISPLAY=:0 xset dpms force on`; permanent power settings were not changed.
 This is a desktop-environment condition, not device-loss recovery evidence.
+
+## M4 offline cooked fixtures
+
+The initial slice uses official meshoptimizer 1.3 only in an offline process.
+Run from the repo root; all native/binary outputs stay in ignored build directories:
+
+```bash
+mkdir -p build/qualification/meshoptimizer
+curl --fail --location https://github.com/zeux/meshoptimizer/releases/download/v1.3/meshoptimizer-1.3.tar.gz \
+  -o build/qualification/meshoptimizer/meshoptimizer-1.3.tar.gz
+echo "d50a0b5e1323ba4379cdb32f89436c20652b7393445f8e18c88ae64445b67b77  build/qualification/meshoptimizer/meshoptimizer-1.3.tar.gz" | sha256sum --check -
+tar -xzf build/qualification/meshoptimizer/meshoptimizer-1.3.tar.gz -C build/qualification/meshoptimizer
+cmake -S build/qualification/meshoptimizer/meshoptimizer-1.3 \
+  -B build/qualification/meshoptimizer/lib-build -DCMAKE_BUILD_TYPE=Release \
+  -DMESHOPT_BUILD_SHARED_LIBS=ON -DCMAKE_CXX_COMPILER="$(command -v c++)"
+cmake --build build/qualification/meshoptimizer/lib-build --parallel 4
+python3 tools/cook_meshlet_fixture.py --library build/qualification/meshoptimizer/lib-build/libmeshoptimizer.so \
+  --source-archive build/qualification/meshoptimizer/meshoptimizer-1.3.tar.gz
+python3 tools/cook_meshlet_fixture.py --fixture quad --library build/qualification/meshoptimizer/lib-build/libmeshoptimizer.so \
+  --source-archive build/qualification/meshoptimizer/meshoptimizer-1.3.tar.gz
+```
+
+Read generated `build/assets/grid16-report.json` and `quad-report.json` for paths.
+Inspect with `cargo run --locked --manifest-path crates/theia-assets/Cargo.toml
+--example inspect -- <file>`. Compile shaders/build Render Lab as above, then use
+`--asset <grid-file> --gpu 7900 --wsi-smoke-test`. For capacity fallback add
+`--fallback <quad-file> --asset-budget 2048`; omit `--frames` in smoke mode.
+
+For captures set `THEIA_CAPTURE_ASSET=<grid-file>` without the spatial/visibility
+variables, scenario 0/1/2 and separate `THEIA_CAPTURE_OUTPUT`. To verify capacity
+fallback also set `THEIA_CAPTURE_FALLBACK=<quad-file>` and
+`THEIA_CAPTURE_BUDGET=2048`. The dedicated RenderDoc helper compares the selected
+GPU asset bytes and 81 CPU raster/color samples. Keep standalone validation runs
+separate. Native cooker qualification is Linux-only; the Rust reader/viewer has
+no native-tool dependency and Windows runtime is still untested.
+
+[Format contract](M4_ASSET_CONTRACT.md), [executed evidence](validation/M4_COOKED_MESHLETS.md).

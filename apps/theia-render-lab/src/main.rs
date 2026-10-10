@@ -1,3 +1,4 @@
+mod asset;
 mod gpu;
 mod indirect;
 mod pipeline;
@@ -26,6 +27,7 @@ enum RenderMode {
     Indirect,
     Spatial,
     Visibility,
+    Asset,
     DirectTask,
     MeshOnly,
     Clear,
@@ -41,6 +43,9 @@ struct Options {
     mode: Option<RenderMode>,
     work_items: Option<u32>,
     shader_dir: Option<std::path::PathBuf>,
+    asset: Option<std::path::PathBuf>,
+    fallback: Option<std::path::PathBuf>,
+    asset_budget: Option<usize>,
 }
 impl Options {
     fn render_mode(&self) -> RenderMode {
@@ -75,6 +80,30 @@ impl Options {
                     if result.mode.replace(mode).is_some() {
                         return Err("Regression modes are mutually exclusive".into());
                     }
+                }
+                "--fallback" => {
+                    result.fallback =
+                        Some(args.next().ok_or("--fallback needs a cooked mesh")?.into())
+                }
+                "--asset-budget" => {
+                    let bytes: usize = args
+                        .next()
+                        .ok_or("--asset-budget needs positive encoded bytes")?
+                        .parse()?;
+                    if bytes == 0 || bytes > theia_assets::DEFAULT_BUDGET {
+                        return Err("Asset budget must be 1..64 MiB encoded bytes".into());
+                    }
+                    result.asset_budget = Some(bytes);
+                }
+                "--asset" => {
+                    if result.mode.replace(RenderMode::Asset).is_some() {
+                        return Err("Render modes are mutually exclusive".into());
+                    }
+                    result.asset = Some(
+                        args.next()
+                            .ok_or("--asset needs a content-addressed cooked mesh")?
+                            .into(),
+                    );
                 }
                 "--work-items" => {
                     let count = args.next().ok_or("--work-items needs 0, 1 or 2")?.parse()?;
@@ -120,21 +149,27 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
                 _ => return Err(format!("Unknown argument: {arg}").into()),
             }
         }
+        if result.asset.is_none() && (result.fallback.is_some() || result.asset_budget.is_some()) {
+            return Err("--fallback/--asset-budget require --asset".into());
+        }
         if result.work_items.is_some()
             && (!matches!(
                 result.render_mode(),
-                RenderMode::Indirect | RenderMode::Spatial | RenderMode::Visibility
+                RenderMode::Indirect
+                    | RenderMode::Spatial
+                    | RenderMode::Visibility
+                    | RenderMode::Asset
             ) || result.smoke)
         {
             return Err(
-                "--work-items requires indirect, spatial or visibility mode without --smoke-test (which cycles inputs)"
+                "--work-items requires indirect, spatial, visibility or asset mode without --smoke-test (which cycles inputs)"
                     .into(),
             );
         }

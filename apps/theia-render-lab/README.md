@@ -1,4 +1,4 @@
-# Theia Render Lab — M0-D / M2 / M3 reference slices
+# Theia Render Lab — M0-D / M2 / M3 / initial M4 slices
 
 A separate qualification application; the headless `theia-gpu-test` remains unchanged.
 The default path dispatches Slang compute to write an indirect command, draw count,
@@ -27,13 +27,22 @@ Wayland and Windows execution still require qualification.
   and `triangle.frag.spv`. Default: the build checkout's `build/shaders`, independent
   of working directory. Pass an explicit directory when relocating the executable.
 - `--work-items <0|1|2>` supplies a fixed qualification input to compute (default 2).
-  It requires indirect, spatial or visibility mode without the smoke test. This is a bounded
+  It requires indirect, spatial, visibility or asset mode without the smoke test. This is a bounded
   test input, not an authoritative gameplay decision.
 - `--direct-task` runs the qualified two-triangle task path using `triangle.task.spv`.
 - `--spatial-test` runs the separate bounded M2 grid/height visibility path. Here
   `--work-items 0|1|2` selects empty, left/low or full views over 32 GPU-generated
   resident bounds. It does not provide a host object/draw list. Smoke tests cycle
   those views. See [M2 evidence](../../docs/validation/M2_SPATIAL_VISIBILITY.md).
+- `--asset <file>` loads a content-addressed M4 prototype meshlet file. CPU validates
+  hash/schema/ranges, uploads once to immutable GPU storage, then Slang reads its
+  header and decodes/draws meshlets. Here work scenarios mean 0 empty, 1 first
+  meshlet, 2 all. Max 32 meshlets with 64 vertices/triangles each in this viewer.
+- `--asset-budget <encoded bytes>` and `--fallback <file>` require asset mode.
+  A linked coarse representation is selected explicitly if the requested encoded
+  geometry exceeds budget; source digest relation and identical XYZ bounds are
+  required. Default budget 64 MiB. This is not a full VRAM/page-residency budget.
+  See [M4 commands/evidence](../../docs/validation/M4_COOKED_MESHLETS.md).
 - `--visibility-test` runs M3 identity/depth and material resolve. GPU-generated
   overlapping near/far triangles write `R32G32_UINT` frame-local instance/primitive
   references and `D32_SFLOAT` depth. A fullscreen mesh pass reconstructs barycentrics
@@ -102,7 +111,7 @@ are freed after pipeline creation; pipeline/layout RAII also handles partial fai
 
 `tools/compile_render_shaders.py` uses offline Slang 2026.19 and `spirv-val`, selecting
 `spvMeshShadingEXT` explicitly for task and mesh stages (not the NV mesh variant). It
-publishes all fourteen outputs only after they validate for Vulkan 1.3. Missing shaders,
+publishes all seventeen outputs only after they validate for Vulkan 1.3. Missing shaders,
 compiler errors and pipeline errors fail explicitly; no language fallback occurred.
 On Windows use Python 3 with Slang/SPIR-V tools on PATH or pass their executable
 paths to the script's `--slangc` / `--spirv-val` options.

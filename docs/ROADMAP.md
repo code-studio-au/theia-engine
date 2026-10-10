@@ -10,7 +10,7 @@ The goal is an **early end-to-end playable vertical slice**, not years of isolat
 | M1 | GPU ECS minimal | [Bounded reference slice qualified on RADV](validation/M1_GPU_ECS.md); dense components, handles, mutations and retained epochs vs CPU oracle |
 | M2 | Flat 2.5D visibility | [Bounded reference slice qualified on RADV](validation/M2_SPATIAL_VISIBILITY.md); CSR candidates, height-aware bounds culling, GPU indirect mesh/task draws |
 | M3 | Visibility buffer/materials | [Bounded reference slice qualified on RADV](validation/M3_VISIBILITY_MATERIALS.md); identity/depth, barycentric resolve, nonuniform sampled material array |
-| M4 | Static world/streaming | Cooked meshlets+LOD, terrain, virtual textures, immutable cells, resource budget/fallback |
+| M4 | Static world/streaming | [Initial cooked/viewer slice qualified](validation/M4_COOKED_MESHLETS.md); general LOD, terrain, virtual textures, immutable cells/residency remain open |
 | M5 | GI/temporal | Static streamed SDF + dynamically updated shared radiance cache, motion vectors, reconstruction |
 | M6 | Characters/UI | GPU animation/skin, shared pose baseline, Bézier text, UI, host shaping/IME |
 | M7 (parallel) | Local authoritative game | Rust server tick, navigation/collision, movement, interactions, simple combat |
@@ -54,7 +54,7 @@ General ECS, complex render graph, radiance cache, geometry LOD streaming, netwo
 ## M2 reference slice — locally qualified
 
 Implemented a bounded flat 2.5D grid and contiguous membership/candidate ranges, verified
-GPU candidate selection/culling against an independent CPU reference, and feed
+GPU candidate selection/culling against an independent CPU reference, and fed
 GPU-generated visibility counts/indices into task/mesh rendering. Use direct XY
 cell addressing; keep world identity independent of cell/storage placement.
 Static content streaming, HZB, virtualized geometry and production-scale tuning
@@ -62,17 +62,22 @@ remain later slices. Preserve M0/M1 qualification apps and evidence.
 
 ## M3 reference slice — locally qualified
 
-Start with a bounded visibility/depth target and frame-local primitive identity,
-then resolve material attributes against a CPU reference before adding bindless
-texture sampling. Preserve all previous qualification modes. Reconstruct geometry
-from explicit scene/primitive references; prove depth/overlap and barycentric
-correctness before broadening the material pipeline. No GI or streaming work yet.
+Implemented bounded visibility/depth targets and frame-local primitive identity,
+barycentric attribute reconstruction and nonuniform runtime-array material sampling.
+Fixed w=1/one-primitive fixture passes CPU pixel comparisons. General perspective,
+UV/mip gradients, material/geometry tables and scene integration remain open.
 
-## Next local implementation — M4
+## M4 initial slice — locally qualified; milestone remains open
 
-Begin a small immutable cooked-asset contract and offline tool qualification, then
-load a bounded static scene into GPU-owned buffers. Mature offline geometry tools
-remain the default. Content hashes, format versions and budget/fallback behavior
-must be verified before expanding into meshlet LOD, terrain or virtual textures.
-The existing procedural scenes remain regression/qualification fixtures, not a
-claim of implemented world content streaming.
+A prototype immutable container, official offline meshoptimizer tool, pure Rust
+reader and GPU meshlet viewer are implemented/tested. Source-linked coarse planar
+fallback is qualified for an encoded geometry byte budget. This is not a complete
+LOD hierarchy, cell/page manager, terrain or virtual texture system.
+
+## Next local M4 unit
+
+Define immutable cell/page manifests and explicit residency/publication lifetimes,
+then connect a bounded load/unload/fallback slice to the existing renderer with
+retained-reader safety. Qualify actual resident allocation budgets and staged I/O;
+retain the current viewer/fixture checks. General LOD/error/seams, authored content
+and virtual texture residency follow. M5 GI remains deferred while M4 gates are open.

@@ -28,7 +28,10 @@ def main():
                ('visibility.slang', 'visibilityMesh', 'mesh', 'visibility.mesh.spv'),
                ('visibility.slang', 'visibilityFragment', 'fragment', 'visibility.frag.spv'),
                ('resolve.slang', 'resolveMesh', 'mesh', 'resolve.mesh.spv'),
-               ('resolve.slang', 'resolveFragment', 'fragment', 'resolve.frag.spv')]
+               ('resolve.slang', 'resolveFragment', 'fragment', 'resolve.frag.spv'),
+               ('asset.slang', 'assetCompute', 'compute', 'asset.compute.spv'),
+               ('asset.slang', 'assetTask', 'amplification', 'asset.task.spv'),
+               ('asset.slang', 'assetMesh', 'mesh', 'asset.mesh.spv')]
     try:
         subprocess.run([args.slangc, '-version'], check=True)
         with tempfile.TemporaryDirectory(dir=args.output_dir) as temporary:

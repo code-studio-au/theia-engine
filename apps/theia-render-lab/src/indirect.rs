@@ -16,6 +16,7 @@ pub struct IndirectWork {
     compute_layout: vk::PipelineLayout,
     compute: vk::Pipeline,
     bytes: vk::DeviceSize,
+    asset: Option<crate::asset::Buffer>,
 }
 impl IndirectWork {
     pub fn new(
@@ -23,11 +24,15 @@ impl IndirectWork {
         memory_properties: &vk::PhysicalDeviceMemoryProperties,
         shader_dir: &Path,
         spatial: bool,
+        asset: Option<&[u8]>,
+        queue: (u32, vk::Queue),
     ) -> Result<Self> {
         let bytes = if spatial { 9728 } else { BUFFER_BYTES };
         let shader = ShaderModule::load(
             device,
-            &shader_dir.join(if spatial {
+            &shader_dir.join(if asset.is_some() {
+                "asset.compute.spv"
+            } else if spatial {
                 "spatial.compute.spv"
             } else {
                 "work.compute.spv"
@@ -43,6 +48,7 @@ impl IndirectWork {
             compute_layout: vk::PipelineLayout::null(),
             compute: vk::Pipeline::null(),
             bytes,
+            asset: None,
         };
         // SAFETY: All create-info backing arrays remain live through calls. Every successful handle
         // immediately gains ownership in work; Drop handles partial initialization in dependency order.
@@ -73,26 +79,46 @@ impl IndirectWork {
                 None,
             )?;
             device.bind_buffer_memory(work.buffer, work.memory, 0)?;
-            let bindings = [vk::DescriptorSetLayoutBinding::default()
-                .binding(0)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(1)
-                .stage_flags(
-                    vk::ShaderStageFlags::COMPUTE
-                        | vk::ShaderStageFlags::TASK_EXT
-                        | if spatial {
-                            vk::ShaderStageFlags::MESH_EXT
-                        } else {
-                            vk::ShaderStageFlags::empty()
-                        },
-                )];
+            let mut bindings = vec![
+                vk::DescriptorSetLayoutBinding::default()
+                    .binding(0)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .descriptor_count(1)
+                    .stage_flags(
+                        vk::ShaderStageFlags::COMPUTE
+                            | vk::ShaderStageFlags::TASK_EXT
+                            | if spatial {
+                                vk::ShaderStageFlags::MESH_EXT
+                            } else {
+                                vk::ShaderStageFlags::empty()
+                            },
+                    ),
+            ];
+            if let Some(bytes) = asset {
+                work.asset = Some(crate::asset::Buffer::upload(
+                    device,
+                    memory_properties,
+                    bytes,
+                    queue.0,
+                    queue.1,
+                )?);
+                bindings.push(
+                    vk::DescriptorSetLayoutBinding::default()
+                        .binding(1)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .descriptor_count(1)
+                        .stage_flags(
+                            vk::ShaderStageFlags::COMPUTE | vk::ShaderStageFlags::MESH_EXT,
+                        ),
+                );
+            }
             work.descriptor_layout = device.create_descriptor_set_layout(
                 &vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings),
                 None,
             )?;
             let sizes = [vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(1)];
+                .descriptor_count(if asset.is_some() { 2 } else { 1 })];
             work.pool = device.create_descriptor_pool(
                 &vk::DescriptorPoolCreateInfo::default()
                     .max_sets(1)
@@ -117,6 +143,19 @@ impl IndirectWork {
                     .buffer_info(&buffers)],
                 &[],
             );
+            if let Some(asset) = &work.asset {
+                let info = [vk::DescriptorBufferInfo::default()
+                    .buffer(asset.handle)
+                    .range(asset.bytes)];
+                device.update_descriptor_sets(
+                    &[vk::WriteDescriptorSet::default()
+                        .dst_set(work.set)
+                        .dst_binding(1)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .buffer_info(&info)],
+                    &[],
+                );
+            }
             let push = [vk::PushConstantRange::default()
                 .stage_flags(vk::ShaderStageFlags::COMPUTE)
                 .offset(0)
@@ -149,7 +188,11 @@ impl IndirectWork {
                 }
             }
         }
-        if spatial {
+        if asset.is_some() {
+            println!(
+                "GPU cooked-mesh work initialized: 64-byte device-local command/count; meshlet count at 36; immutable geometry at binding 1; no count readback"
+            );
+        } else if spatial {
             println!(
                 "GPU spatial work initialized: 9728-byte device-local CSR/visibility/work arena; no mapping/readback"
             );

@@ -230,6 +230,7 @@ impl Context {
             options.gpu.as_deref(),
             options.render_mode() == RenderMode::Spatial,
             options.render_mode() == RenderMode::Visibility,
+            options.render_mode() == RenderMode::Asset,
         )?;
         // SAFETY: Features were queried on the selected device; all queue indices support the intended
         // operations. Create-info backing storage remains live and handles immediately gain RAII ownership.
@@ -311,6 +312,7 @@ impl Context {
         requested: Option<&str>,
         spatial: bool,
         visibility: bool,
+        asset: bool,
     ) -> Result<()> {
         let instance = self.instance.as_ref().unwrap();
         let surface = self.surface_loader.as_ref().unwrap();
@@ -383,11 +385,14 @@ impl Context {
                     ),
                     ("meshShader", mesh.mesh_shader == vk::TRUE),
                     (
-                        "triangle mesh limits",
-                        limits.max_mesh_work_group_invocations >= 32
-                            && limits.max_mesh_work_group_size[0] >= 32
-                            && limits.max_mesh_output_vertices >= 3
-                            && limits.max_mesh_output_primitives >= 1,
+                        "mesh output/invocation limits",
+                        limits.max_mesh_work_group_invocations >= if asset { 64 } else { 32 }
+                            && limits.max_mesh_work_group_size[0] >= if asset { 64 } else { 32 }
+                            && limits.max_mesh_output_vertices >= if asset { 64 } else { 3 }
+                            && limits.max_mesh_output_primitives >= if asset { 64 } else { 1 }
+                            && (!asset
+                                || (limits.max_mesh_output_memory_size >= 4096
+                                    && limits.max_mesh_output_components >= 7)),
                     ),
                     ("taskShader", mesh.task_shader == vk::TRUE),
                     (
@@ -397,9 +402,10 @@ impl Context {
                             && limits.max_task_payload_size >= 20
                             && limits.max_task_payload_and_shared_memory_size >= 20
                             && limits.max_mesh_payload_and_shared_memory_size >= 20
-                            && limits.max_mesh_work_group_count[0] >= if spatial { 32 } else { 2 }
+                            && limits.max_mesh_work_group_count[0]
+                                >= if spatial || asset { 32 } else { 2 }
                             && limits.max_mesh_work_group_total_count
-                                >= if spatial { 32 } else { 2 },
+                                >= if spatial || asset { 32 } else { 2 },
                     ),
                     (
                         "spatial compute limits",
@@ -823,7 +829,7 @@ impl Renderer {
         };
         if matches!(
             renderer.mode,
-            RenderMode::Indirect | RenderMode::Spatial | RenderMode::Visibility
+            RenderMode::Indirect | RenderMode::Spatial | RenderMode::Visibility | RenderMode::Asset
         ) {
             // SAFETY: The selected physical device belongs to the retained live instance.
             let memory = unsafe {
@@ -834,11 +840,40 @@ impl Renderer {
                     .unwrap()
                     .get_physical_device_memory_properties(renderer.ctx.physical)
             };
+            let asset = options
+                .asset
+                .as_deref()
+                .map(|path| {
+                    crate::asset::select(
+                        path,
+                        options.fallback.as_deref(),
+                        options.asset_budget.unwrap_or(theia_assets::DEFAULT_BUDGET),
+                    )
+                })
+                .transpose()?;
+            if let Some(bytes) = &asset {
+                // SAFETY: Selected physical device belongs to the retained live instance.
+                let limit = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits
+                        .max_storage_buffer_range
+                };
+                if bytes.len() > limit as usize {
+                    return Err("Cooked asset exceeds selected GPU storage-buffer range".into());
+                }
+            }
             renderer.work = Some(IndirectWork::new(
                 renderer.ctx.device.as_ref().unwrap(),
                 &memory,
                 renderer.shader_dir.as_ref().unwrap(),
                 renderer.mode == RenderMode::Spatial,
+                asset.as_deref(),
+                (renderer.ctx.graphics_family, renderer.ctx.graphics),
             )?);
         }
         renderer.rebuild(renderer.ctx.window.inner_size())?;
@@ -887,7 +922,11 @@ impl Renderer {
             self.work_items
         };
         if self.work.is_some() && self.last_input != Some(input) {
-            if self.mode == RenderMode::Spatial {
+            if self.mode == RenderMode::Asset {
+                println!(
+                    "Cooked mesh qualification scenario: {input} (0 empty, 1 first meshlet, 2 all; GPU reads asset header/counts; no count readback)"
+                );
+            } else if self.mode == RenderMode::Spatial {
                 println!(
                     "Spatial qualification scenario: {input} (0 empty, 1 left/low, 2 full; GPU produces visibility/counts; no host readback)"
                 );

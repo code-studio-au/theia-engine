@@ -53,9 +53,11 @@ impl Pipeline {
     ) -> Result<Self> {
         let task_amplification = matches!(
             mode,
-            RenderMode::Indirect | RenderMode::DirectTask | RenderMode::Spatial
+            RenderMode::Indirect | RenderMode::DirectTask | RenderMode::Spatial | RenderMode::Asset
         );
-        let mesh_file = if mode == RenderMode::Spatial {
+        let mesh_file = if mode == RenderMode::Asset {
+            "asset.mesh.spv"
+        } else if mode == RenderMode::Spatial {
             "spatial.mesh.spv"
         } else if task_amplification {
             "triangle.amplified.mesh.spv"
@@ -63,7 +65,9 @@ impl Pipeline {
             "triangle.mesh.spv"
         };
         let task_file = if task_amplification {
-            Some(if mode == RenderMode::Spatial {
+            Some(if mode == RenderMode::Asset {
+                "asset.task.spv"
+            } else if mode == RenderMode::Spatial {
                 "spatial.task.spv"
             } else if mode == RenderMode::Indirect {
                 "triangle.indirect.task.spv"

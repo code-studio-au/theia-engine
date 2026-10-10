@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import struct
 import subprocess
+import shlex
 import time
 import traceback
 
@@ -41,7 +42,8 @@ def qualify(report):
     options.debugOutputMute = False
     spatial = os.environ.get('THEIA_CAPTURE_SPATIAL') == '1'
     visibility = os.environ.get('THEIA_CAPTURE_VISIBILITY') == '1'
-    if spatial and visibility:
+    asset_path = os.environ.get('THEIA_CAPTURE_ASSET')
+    if sum([spatial, visibility, bool(asset_path)]) > 1:
         raise RuntimeError('Select only one qualification capture mode')
     scenario = int(os.environ.get('THEIA_CAPTURE_SCENARIO', '2'))
     if scenario not in (0, 1, 2):
@@ -51,6 +53,22 @@ def qualify(report):
         arguments += f' --spatial-test --work-items {scenario}'
     if visibility:
         arguments += f' --visibility-test --work-items {scenario}'
+    if asset_path:
+        asset_path = str(Path(asset_path).resolve())
+        quoted = subprocess.list2cmdline([asset_path]) if os.name == 'nt' else shlex.quote(asset_path)
+        arguments += f' --asset {quoted} --work-items {scenario}'
+        fallback = os.environ.get('THEIA_CAPTURE_FALLBACK')
+        budget = os.environ.get('THEIA_CAPTURE_BUDGET')
+        if fallback:
+            fallback = str(Path(fallback).resolve())
+            quoted = subprocess.list2cmdline([fallback]) if os.name == 'nt' else shlex.quote(fallback)
+            arguments += f' --fallback {quoted}'
+        if budget:
+            arguments += f' --asset-budget {int(budget)}'
+            if Path(asset_path).stat().st_size > int(budget):
+                if not fallback:
+                    raise RuntimeError('Capture budget requires explicit fallback')
+                asset_path = fallback
     result = rd.ExecuteAndInject(
         str(executable), str(root), arguments, [],
         str(output / 'theia-indirect'), options, False)
@@ -91,7 +109,7 @@ def qualify(report):
         mesh = [action for action in actions if action.flags & rd.ActionFlags.MeshDispatch
                 and action.flags & rd.ActionFlags.Indirect
                 and not action.flags & rd.ActionFlags.MultiAction]
-        if len(mesh) != (0 if (spatial or visibility) and scenario == 0 else 1):
+        if len(mesh) != (0 if (spatial or visibility or asset_path) and scenario == 0 else 1):
             raise RuntimeError('Expected one indirect task dispatch')
         event = mesh[0] if mesh else next(action for action in actions if action.flags & rd.ActionFlags.Dispatch)
         controller.SetFrameEvent(event.eventId, True)
@@ -129,6 +147,17 @@ def qualify(report):
             draws = int(count != 0)
             if command != (draws, 1, 1, draws):
                 raise RuntimeError('GPU indirect command/count differs from visibility')
+        elif asset_path:
+            source = Path(asset_path).read_bytes()
+            meshlets = struct.unpack_from('<I', source, 20)[0]
+            count = 0 if scenario == 0 else min(meshlets,1) if scenario == 1 else meshlets
+            draws = int(count != 0)
+            if struct.unpack_from('<I', data, 36)[0] != count or command != (draws,1,1,draws):
+                raise RuntimeError('Cooked mesh indirect count differs from asset header/scenario')
+            geometry = [buffer for buffer in controller.GetBuffers() if buffer.length == len(source)]
+            if len(geometry) != 1 or controller.GetBufferData(geometry[0].resourceId,0,len(source)) != source:
+                raise RuntimeError('Immutable GPU asset bytes differ from cooked source')
+            report.update(scenario=scenario, meshlet_count=count, immutable_asset_bytes_verified=True)
         elif visibility:
             count = struct.unpack_from('<I', data, 36)[0]
             draws = int(scenario != 0)
@@ -140,6 +169,8 @@ def qualify(report):
         controller.SetFrameEvent(present.eventId, True)
         if visibility:
             verify_surface(controller, executable, root, present.copyDestination, scenario, report)
+        if asset_path:
+            verify_asset(controller, present.copyDestination, source, count, report)
         save = rd.TextureSave()
         save.resourceId = present.copyDestination
         save.destType = rd.FileType.PNG
@@ -206,6 +237,52 @@ def verify_surface(controller, executable, root, color_id, scenario, report):
             raise RuntimeError(f'Material resolve mismatch at {(x,y)}: {actual_color}, expected {expected_color}')
         samples.append({'pixel': [x,y], 'identity': actual_id, 'depth': actual_depth, 'color': actual_color})
     report.update(scenario=scenario, surface_samples=samples, surface_verified=True)
+
+
+def verify_asset(controller, color_id, source, count, report):
+    header = struct.unpack_from('<9I', source,8)
+    _, metadata, vertices, meshlets, refs, _, _, _, _ = header
+    vertex_offset = 76+((metadata+3)&~3)
+    meshlet_offset = vertex_offset+vertices*12
+    refs_offset = meshlet_offset+meshlets*16
+    triangles_offset = refs_offset+refs*4
+    geometry = []
+    for index in range(count):
+        vo,to,vc,tc = struct.unpack_from('<4I',source,meshlet_offset+index*16)
+        for triangle in range(tc):
+            ids = source[triangles_offset+to+triangle*3:triangles_offset+to+triangle*3+3]
+            global_ids = [struct.unpack_from('<I',source,refs_offset+(vo+local)*4)[0] for local in ids]
+            geometry.append([struct.unpack_from('<3f',source,vertex_offset+vertex*12) for vertex in global_ids])
+    color = next(texture for texture in controller.GetTextures() if texture.resourceId == color_id)
+    rgb = controller.GetTextureData(color_id,rd.Subresource())
+    if len(rgb) != color.width*color.height*4:
+        raise RuntimeError('Unexpected cooked viewer image layout')
+    def inside(point, triangle):
+        a,b,c = triangle
+        denominator = (b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1])
+        if abs(denominator)<1e-12:
+            return False
+        u = ((b[1]-c[1])*(point[0]-c[0])+(c[0]-b[0])*(point[1]-c[1]))/denominator
+        v = ((c[1]-a[1])*(point[0]-c[0])+(a[0]-c[0])*(point[1]-c[1]))/denominator
+        return min(u,v,1-u-v)>=0
+    def srgb(value):
+        return round((value*12.92 if value<=.0031308 else 1.055*value**(1/2.4)-.055)*255)
+    samples = []
+    for y in range(1,10):
+        for x in range(1,10):
+            pixel = (int(color.width*x/10),int(color.height*y/10))
+            point = ((pixel[0]+.5)/color.width*2-1,(pixel[1]+.5)/color.height*2-1)
+            covered = any(inside(point,triangle) for triangle in geometry)
+            linear = [(point[0]+1)*.5,(point[1]+1)*.5,.5] if covered else [.025,.07,.12]
+            expected = [srgb(value) for value in linear]
+            offset = (pixel[1]*color.width+pixel[0])*4
+            actual = list(rgb[offset:offset+3])
+            if color.format.BGRAOrder():
+                actual.reverse()
+            if any(abs(a-b)>2 for a,b in zip(actual,expected)):
+                raise RuntimeError(f'Cooked mesh raster coverage/color mismatch at {pixel}: {actual}, expected {expected}')
+            samples.append({'pixel':pixel,'covered':covered,'color':actual})
+    report.update(asset_surface_samples=samples, asset_surface_verified=True, selected_triangles=len(geometry))
 
 report = {'renderdoc': rd.GetVersionString(), 'validation_enabled_in_capture': False}
 code = 0
