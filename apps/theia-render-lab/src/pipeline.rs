@@ -1,14 +1,14 @@
 //! Minimal task/mesh pipeline ownership. No vertex/index buffers or descriptors.
-use crate::Result;
+use crate::{RenderMode, Result};
 use ash::vk;
 use std::{fs::File, io::BufReader, path::Path};
 
-struct ShaderModule {
+pub(super) struct ShaderModule {
     device: ash::Device,
-    handle: vk::ShaderModule,
+    pub(super) handle: vk::ShaderModule,
 }
 impl ShaderModule {
-    fn load(device: &ash::Device, path: &Path) -> Result<Self> {
+    pub(super) fn load(device: &ash::Device, path: &Path) -> Result<Self> {
         let file = File::open(path).map_err(|error| format!("Cannot open shader {}: {error}. Run python3 tools/compile_render_shaders.py or use --shader-dir / --clear-only", path.display()))?;
         let words = ash::util::read_spv(&mut BufReader::new(file))
             .map_err(|error| format!("Invalid SPIR-V {}: {error}", path.display()))?;
@@ -35,15 +35,17 @@ impl Drop for ShaderModule {
 pub struct Pipeline {
     device: ash::Device,
     pub handle: vk::Pipeline,
-    layout: vk::PipelineLayout,
+    pub layout: vk::PipelineLayout,
 }
 impl Pipeline {
     pub fn new(
         device: &ash::Device,
         format: vk::Format,
         shader_dir: &Path,
-        task_amplification: bool,
+        mode: RenderMode,
+        descriptor_layout: Option<vk::DescriptorSetLayout>,
     ) -> Result<Self> {
+        let task_amplification = matches!(mode, RenderMode::Indirect | RenderMode::DirectTask);
         let mesh_file = if task_amplification {
             "triangle.amplified.mesh.spv"
         } else {
@@ -54,7 +56,11 @@ impl Pipeline {
         let task = if task_amplification {
             Some(ShaderModule::load(
                 device,
-                &shader_dir.join("triangle.task.spv"),
+                &shader_dir.join(if mode == RenderMode::Indirect {
+                    "triangle.indirect.task.spv"
+                } else {
+                    "triangle.task.spv"
+                }),
             )?)
         } else {
             None
@@ -68,8 +74,11 @@ impl Pipeline {
         // mesh features were checked by Context. Pipeline ownership is retained on every success;
         // on error Drop releases the layout and partial Vulkan pipeline outputs are destroyed below.
         unsafe {
-            pipeline.layout =
-                device.create_pipeline_layout(&vk::PipelineLayoutCreateInfo::default(), None)?;
+            let layouts: Vec<_> = descriptor_layout.into_iter().collect();
+            pipeline.layout = device.create_pipeline_layout(
+                &vk::PipelineLayoutCreateInfo::default().set_layouts(&layouts),
+                None,
+            )?;
             // Slang's SPIR-V entry-point name is "main", independently of source function names.
             let mut stages = vec![
                 vk::PipelineShaderStageCreateInfo::default()
@@ -130,7 +139,11 @@ impl Pipeline {
                 }
             }
         }
-        if task_amplification {
+        if mode == RenderMode::Indirect {
+            println!(
+                "GPU indirect graphics pipeline created: task reads compute-generated work descriptor; mesh uses shared transforms"
+            );
+        } else if task_amplification {
             println!(
                 "Task amplification pipeline created: TaskEXT -> 2 MeshEXT groups -> fragment; 32 lanes per stage, 20-byte transform payload; no vertex/index buffers"
             );

@@ -25,8 +25,8 @@ The goal is an **early end-to-end playable vertical slice**, not years of isolat
 4. Create swapchain, image views, dynamic rendering render targets, basic sync and resize handling; start clear-screen-only.
 5. Implement minimal Slang mesh-only + fragment triangle; compile, validate and **execute**.
 6. Add task shader amplification, validate output and framebuffer.
-7. Add compute-written GPU work descriptors + indirect mesh-task dispatch, correct barriers, no host readback for count.
-8. Add explicit results/correctness logs, Vulkan validation, support debugging with RenderDoc. Document per-vendor evidence.
+7. Add compute-written GPU work descriptors + indirect mesh-task dispatch, correct barriers, no host readback for count — [bounded reference test qualified on RADV](validation/M0D_INDIRECT_WORK.md).
+8. Qualification closeout: results/correctness logs and Vulkan validation exist for tested paths; exercise/document remaining WSI error returns, establish RenderDoc capture/debug workflow, and document per-vendor evidence before M1.
 
 ## Exit gates / nonfunctional requirements
 

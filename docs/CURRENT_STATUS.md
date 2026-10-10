@@ -4,7 +4,33 @@
 records user-supplied terminal evidence. The following update was independently
 executed in the local checkout on 2026-10-10.
 
-## M0-D task amplification — independently executed
+## M0-D GPU indirect work — independently executed
+
+- Default Render Lab runs Slang compute to write a device-local 64-byte work buffer:
+  indirect task group dimensions, draw count, transforms and downstream mesh count.
+  It executes `vkCmdDrawMeshTasksIndirectCountEXT` with no host mapping/count
+  readback. `drawIndirectCount` is queried/enabled explicitly.
+- Resource-scoped Sync2 barriers order buffer reuse and publish compute writes to
+  indirect command/count reads and task storage reads. The task copies transforms
+  into its shared payload and launches the GPU-selected number of mesh groups.
+- Radeon smoke cycles qualification inputs 0, 1, 2 while resizing/minimizing/restoring:
+  120 queued presentations, six swapchain generations, zero warnings/errors including
+  teardown. Three fixed-input 120-frame runs also pass; window pixels verify a clear
+  frame, one left triangle and two triangles respectively.
+- `--direct-task`, `--mesh-only` and `--clear-only` preserve prior paths. All three
+  smoke regressions and unchanged headless compute (256/256) pass. Missing indirect
+  task after work-resource creation exits cleanly; invalid/mismatched CLI inputs fail.
+- Six render shader outputs pass Vulkan 1.3 SPIR-V validation; Rust formatting,
+  Clippy with denied warnings and both extent tests pass. CI includes the new stages.
+
+Evidence: [GPU indirect work qualification](validation/M0D_INDIRECT_WORK.md).
+This qualifies a bounded work-generation test, not scene culling or GPU ECS.
+**M0-D remains open for qualification closeout**: exercise/document remaining WSI
+error-return paths and establish the RenderDoc capture/debug workflow before M1.
+Windows/Wayland GPU runtime, other vendors, GPU-assisted validation and performance
+remain unqualified. No locked architectural decision changed.
+
+## M0-D task amplification — previously qualified
 
 - Slang task + payload-consuming mesh shaders compile to SPIR-V 1.6 and pass
   Vulkan 1.3 validation. Task output uses `TaskEXT`, `TaskPayloadWorkgroupEXT`,
@@ -26,9 +52,8 @@ executed in the local checkout on 2026-10-10.
   Shader CI now includes task and both mesh variants.
 
 Evidence and limitations: [task amplification qualification](validation/M0D_TASK_AMPLIFICATION.md).
-Next outstanding task: **compute-written GPU work descriptors and indirect
-mesh/task dispatch**, with explicit barriers and no host count readback. **M0-D
-remains open.** Windows/Wayland GPU execution, other vendors and GPU-assisted
+The subsequent compute-written indirect qualification is recorded above. **M0-D
+remains open for qualification closeout.** Windows/Wayland GPU execution, other vendors and GPU-assisted
 validation remain unqualified; no performance claim is made.
 
 ## M0-D mesh-only triangle — previously qualified
