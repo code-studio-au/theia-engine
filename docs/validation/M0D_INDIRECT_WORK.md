@@ -196,3 +196,19 @@ GPU-assisted validation and performance remain unqualified. The validation layer
 is older than the driver. Linux/Windows CI builds/lints/tests Rust and Linux shader
 CI compiles/validates all outputs without GPU execution. Lab presentation-fence
 extension requirements remain in effect; no locked architectural decision changed.
+
+## Review follow-up — renderer teardown ownership
+
+The reviewed commit already called `self.work.take()` before `Context` destruction.
+The follow-up makes that invariant explicit in both ownership declaration and cleanup:
+`Renderer` declares swapchain children, then indirect work, with `Context` last;
+`Drop` explicitly drops the taken swapchain and work before automatic field destruction.
+This protects normal shutdown and failed `new()` / `rebuild()` construction paths.
+
+Rechecked on the RX 7900 XTX: the cycling resize/minimize/restore smoke exits 0
+(120 presentations, six generations, zero validation warnings/errors including
+teardown). Missing indirect task after work allocation causes `rebuild()` to fail;
+the process exits 1 with the expected missing-shader error and zero cleanup diagnostics.
+Formatting, denied-warning Clippy and both extent tests pass. Raw logs:
+`build/qualification/m0d-indirect-review-smoke.log` and
+`build/qualification/m0d-indirect-review-failure.log` (ignored generated artifacts).

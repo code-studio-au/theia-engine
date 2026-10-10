@@ -718,17 +718,19 @@ fn color_range() -> vk::ImageSubresourceRange {
         .layer_count(1)
 }
 pub struct Renderer {
-    ctx: Context,
+    // Rust drops fields in declaration order after Drop::drop. Keep graphics children
+    // before work resources, and their device-owning context last as a lifetime backstop.
     chain: Option<Swapchain>,
+    work: Option<IndirectWork>,
     pub recreate: bool,
     generations: u64,
     shader_dir: Option<std::path::PathBuf>,
     mode: RenderMode,
-    work: Option<IndirectWork>,
     work_items: u32,
     cycle_work: bool,
     presented: u64,
     last_input: Option<u32>,
+    ctx: Context,
 }
 impl Renderer {
     pub fn new(
@@ -990,8 +992,10 @@ impl Renderer {
 }
 impl Drop for Renderer {
     fn drop(&mut self) {
-        self.chain.take();
-        self.work.take();
+        // Destroy graphics pipelines before their work descriptor layout, then work resources
+        // before Context destroys the device. This also runs when new() fails in rebuild().
+        drop(self.chain.take());
+        drop(self.work.take());
         println!(
             "Render Lab teardown: {} swapchain generations",
             self.generations
