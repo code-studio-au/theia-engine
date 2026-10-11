@@ -342,3 +342,24 @@ conflicts when its baseline is retained. Without the baseline, even a duplicate
 requires explicit repair. No baseline ACK policy/cache or wire message is added;
 THN2 network labs/viewers continue full snapshots. Next qualify an explicitly
 acknowledged sender baseline policy. [Evidence](validation/M8_DELTA_RECONSTRUCTION.md).
+
+## M8 actual acknowledged sender baseline prototype
+
+`theia-protocol::replication::Sender` retains 2..16 canonical prepared complete
+sets for one locally issued recipient context. Only explicit ACK of a retained
+prepared tick enables delta selection. Unknown/future/evicted ACKs cannot invent
+a baseline; older ACKs are stale. Evicting the acknowledged tick clears selection
+and produces full state. Source reset/disconnect clears prepared history and ACKs.
+These contexts require binding to exact trusted transport connections, not packet
+credentials or account identity. Preparation is not proof of network delivery.
+
+A repair request clears the baseline and fences ACKs at/below the latest prepared
+tick. Full state continues until a newer complete set is explicitly acknowledged;
+delayed pre-repair ACKs cannot cancel repair. Strict complete-state validation,
+monotonic ticks/processed movement watermarks and same-tick conflict guards precede
+cache mutation. Caller-owned packet allocations are outside retained history.
+
+Synthetic state/ACK loss/reordering qualification passes bounded history, complete
+readonly values and explicit repairs. No wire/QUIC ACK exchange or synchronized
+baseline retention lease yet; receiver's two-set eviction can still require repair.
+Next qualify versioned encrypted delta/ACK/repair messages. [Evidence](validation/M8_ACKNOWLEDGED_BASELINES.md).

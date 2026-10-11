@@ -4,6 +4,22 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 acknowledged sender baselines — independently executed (2026-10-11)
+
+A transport-neutral per-recipient sender retains 2..16 complete prepared sets and
+selects a delta baseline only after explicit application acknowledgement. Unknown/
+future/evicted ACKs cannot create baselines; stale and previous-connection contexts
+cannot advance them. Eviction falls back to full state. Repair requests force full
+state until a newer complete set is acknowledged, fencing delayed old ACKs.
+
+Protocol tests 23 pass; a 10000-generated-packet loss/reordering oracle verifies
+both state and ACK paths, bounded sender/receiver history, 316 full repairs and
+final complete tick 10001. Renderer 22 tests, preceding delta example and encrypted
+fault regression pass; formatting/Clippy pass. THN2 still sends full sets: no wire
+ACK/delta/repair exchange yet. Next add explicit versioned bounded messages and
+qualify encrypted baseline/repair exchange before updating live presentation.
+Windows/hosted CI unexecuted. [Evidence](validation/M8_ACKNOWLEDGED_BASELINES.md).
+
 ## M8 transport-neutral delta reconstruction — independently executed (2026-10-11)
 
 A bounded full-actor delta prototype names its exact complete baseline tick,

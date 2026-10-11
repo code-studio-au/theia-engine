@@ -343,5 +343,6 @@ mod tests;
 
 pub mod delta;
 pub mod replica;
+pub mod replication;
 
 pub mod presentation;

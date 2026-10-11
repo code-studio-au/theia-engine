@@ -230,3 +230,9 @@ atomic reconstruction, bounded membership, stale/foreign rejection and explicit
 full-state repair under synthetic loss/reordering. Next qualify a bounded sender's
 acknowledged baseline selection before wire integration. THN2 still sends full
 snapshots; this does not close the state-delta/persistence/network milestone.
+
+M8 per-recipient sender baselines now qualify explicit application ACK selection,
+bounded prepared history, source reset, eviction/full fallback and repair fencing
+under synthetic state/ACK loss/reordering. Next qualify versioned bounded encrypted
+delta/ACK/full-repair exchange before live viewer adoption. THN2 still sends full
+snapshots; accounts/persistence and remaining milestone gates stay open.

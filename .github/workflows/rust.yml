@@ -34,6 +34,8 @@ jobs:
         run: cargo run --locked --manifest-path apps/theia-server-lab/Cargo.toml -- --ticks 10000
       - name: Execute bounded authoritative combat qualification
         run: cargo run --locked --manifest-path apps/theia-server-lab/Cargo.toml -- --combat-test
+      - name: Qualify explicitly acknowledged bounded sender baselines
+        run: cargo run --locked --manifest-path crates/theia-protocol/Cargo.toml --example acknowledged_baselines
       - name: Qualify bounded delta reconstruction and explicit full-state repair
         run: cargo run --locked --manifest-path crates/theia-protocol/Cargo.toml --example delta_repair
       - name: Execute bounded request sequencing qualification

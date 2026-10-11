@@ -699,3 +699,13 @@ cargo run --locked --manifest-path crates/theia-protocol/Cargo.toml --example de
 This is a synthetic application-message loss/reordering test. The encrypted THN2
 listener/viewers still exchange full snapshots; no transport baseline ACK/cache
 policy or network repair request is added. [Evidence](validation/M8_DELTA_RECONSTRUCTION.md).
+
+Explicit application-acknowledged sender baseline oracle:
+
+```sh
+cargo run --locked --manifest-path crates/theia-protocol/Cargo.toml --example acknowledged_baselines
+```
+
+Models bounded per-recipient prepared history, state/ACK loss/reordering, eviction
+and full repair. Neither baseline ACKs nor deltas are wired into THN2 yet.
+[Evidence](validation/M8_ACKNOWLEDGED_BASELINES.md).
