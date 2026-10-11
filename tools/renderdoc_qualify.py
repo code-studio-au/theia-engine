@@ -48,8 +48,10 @@ def qualify(report):
     uv_page = os.environ.get('THEIA_CAPTURE_UV_PAGE')
     authored = os.environ.get('THEIA_CAPTURE_MATERIAL_PAGE')
     texture_page = os.environ.get('THEIA_CAPTURE_TEXTURE_PAGE')
-    if texture_page and not (authored and uv_page): raise RuntimeError('Texture capture requires factor and UV pages')
-    if authored and uv_page and not texture_page: raise RuntimeError('Choose authored factors or UV diagnostic capture')
+    texture_table = os.environ.get('THEIA_CAPTURE_TEXTURE_TABLE')
+    if texture_page and texture_table: raise RuntimeError('Choose single texture or indexed table capture')
+    if (texture_page or texture_table) and not (authored and uv_page): raise RuntimeError('Texture capture requires factor and UV pages')
+    if authored and uv_page and not (texture_page or texture_table): raise RuntimeError('Choose authored factors or UV diagnostic capture')
     material = os.environ.get('THEIA_CAPTURE_MATERIAL') == '1' or bool(authored) or bool(uv_page)
     cull = os.environ.get('THEIA_CAPTURE_CULL') == '1' or material
     camera = os.environ.get('THEIA_CAPTURE_CAMERA') == '1' or cull
@@ -74,12 +76,15 @@ def qualify(report):
         uv_page = str(Path(uv_page).resolve())
         quoted_uv = subprocess.list2cmdline([uv_page]) if os.name == 'nt' else shlex.quote(uv_page)
         arguments += f' --uv-test {quoted_uv}'
-        if texture_page:
+        if texture_page or texture_table:
             authored = str(Path(authored).resolve())
-            texture_page = str(Path(texture_page).resolve())
+            selected_texture = str(Path(texture_page or texture_table).resolve())
+            if texture_table: texture_table = selected_texture
+            else: texture_page = selected_texture
             quoted_material = subprocess.list2cmdline([authored]) if os.name == 'nt' else shlex.quote(authored)
-            quoted_texture = subprocess.list2cmdline([texture_page]) if os.name == 'nt' else shlex.quote(texture_page)
-            arguments += f' --materials {quoted_material} --texture-test {quoted_texture}'
+            quoted_texture = subprocess.list2cmdline([selected_texture]) if os.name == 'nt' else shlex.quote(selected_texture)
+            texture_option = '--texture-table' if texture_table else '--texture-test'
+            arguments += f' --materials {quoted_material} {texture_option} {quoted_texture}'
     elif authored:
         if cell_path: raise RuntimeError('Authored material capture requires a fixed geometry page')
         authored = str(Path(authored).resolve())
@@ -267,7 +272,7 @@ def qualify(report):
             verify_surface(controller, executable, root, present.copyDestination, scenario, report)
         if asset_path:
             if camera:
-                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material, authored, uv_page, texture_page)
+                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material, authored, uv_page, texture_page, texture_table)
             else:
                 verify_asset(controller, present.copyDestination, source, count, report)
         save = rd.TextureSave()
@@ -390,7 +395,7 @@ def verify_asset(controller, color_id, source, count, report):
     report.update(asset_surface_samples=samples, asset_surface_verified=True, selected_triangles=len(geometry))
 
 
-def verify_camera(controller, executable, root, color_id, asset_path, scenario, report, cull=False, material=False, authored=None, uv_page=None, texture_page=None):
+def verify_camera(controller, executable, root, color_id, asset_path, scenario, report, cull=False, material=False, authored=None, uv_page=None, texture_page=None, texture_table=None):
     textures = controller.GetTextures()
     color = next(texture for texture in textures if texture.resourceId == color_id)
     depths = [texture for texture in textures if texture.format.compType == rd.CompType.Depth
@@ -411,6 +416,22 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
         value = max(0, min(1, value))
         return round((value*12.92 if value <= .0031308 else 1.055*value**(1/2.4)-.055)*255)
     points = [(int(color.width*x/10), int(color.height*y/10)) for y in range(1,10) for x in range(1,10)]
+    if texture_table:
+        encoded=Path(texture_table).read_bytes()
+        count=struct.unpack_from('<I',encoded,20)[0]
+        start=88+((struct.unpack_from('<I',encoded,12)[0]+3)&~3)
+        verified=[]
+        for i in range(count):
+            digest=encoded[start+i*40:start+i*40+32].hex()
+            size=struct.unpack_from('<Q',encoded,start+i*40+32)[0]
+            data=(Path(texture_table).parent/(digest+'.ktx2')).read_bytes()
+            if len(data)!=size or hashlib.sha256(data).hexdigest()!=digest: raise RuntimeError('Expected texture dependency hash/length mismatch')
+            width,height=struct.unpack_from('<2I',data,20);offset,length,_=struct.unpack_from('<3Q',data,80)
+            matches=[tex for tex in textures if tex.resourceId not in verified and tex.width==width and tex.height==height and controller.GetTextureData(tex.resourceId,rd.Subresource())==data[offset:offset+length]]
+            if not matches: raise RuntimeError('Expected complete indexed texture GPU texels')
+            verified.append(matches[0].resourceId)
+        report['texture_set_gpu_texels_verified']=True
+        report['texture_count']=count
     if texture_page:
         data = Path(texture_page).read_bytes()
         width,height=struct.unpack_from('<2I',data,20)
@@ -420,7 +441,7 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
         report['texture_gpu_texels_verified']=True
         report['texture_dimensions']=[width,height]
     if authored or uv_page:
-        for path,key in [(authored,'material_gpu_bytes_verified'),(uv_page,'uv_gpu_bytes_verified')]:
+        for path,key in [(authored,'material_gpu_bytes_verified'),(uv_page,'uv_gpu_bytes_verified'),(texture_table,'texture_table_gpu_bytes_verified')]:
             if not path: continue
             data = Path(path).read_bytes()
             candidates = [buffer for buffer in controller.GetBuffers() if buffer.length == len(data)]
@@ -444,7 +465,7 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
         report['visible_triangle_probes'] = [list(value) for value in sorted(probes)]
     samples = []
     for pixel in points:
-        reference = [str(executable), '--texture-reference', asset_path, authored, uv_page, texture_page] if texture_page else [str(executable), '--uv-reference', asset_path, uv_page] if uv_page else [str(executable), '--authored-reference', asset_path, authored] if authored else [str(executable), '--material-reference' if material else '--frustum-reference' if cull else '--camera-reference', asset_path]
+        reference = [str(executable), '--texture-table-reference', asset_path, authored, uv_page, texture_table] if texture_table else [str(executable), '--texture-reference', asset_path, authored, uv_page, texture_page] if texture_page else [str(executable), '--uv-reference', asset_path, uv_page] if uv_page else [str(executable), '--authored-reference', asset_path, authored] if authored else [str(executable), '--material-reference' if material else '--frustum-reference' if cull else '--camera-reference', asset_path]
         expected = json.loads(subprocess.check_output(reference + [
                               str(pixel[0]), str(pixel[1]), str(color.width), str(color.height), str(scenario)], cwd=root))
         offset = pixel[1]*color.width+pixel[0]
@@ -460,12 +481,15 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
         sample = {'pixel':pixel,'covered':expected['covered'],'color':actual_color,'depth':actual_depth}
         if material: sample['identity'] = actual_identity
         if uv_page: sample['uv'] = expected['uv']
+        if texture_table:
+            sample['material_id']=expected['material_id'];sample['texture_index']=expected['texture_index']
         samples.append(sample)
     report.update(camera_samples=samples, camera_verified=True)
     if material: report['material_verified'] = True
     if authored: report['authored_material_verified'] = True
     if uv_page: report['uv_verified'] = True
     if texture_page: report['texture_sampling_verified'] = True
+    if texture_table: report['texture_table_sampling_verified'] = True
 
 report = {'renderdoc': rd.GetVersionString(), 'validation_enabled_in_capture': False}
 code = 0

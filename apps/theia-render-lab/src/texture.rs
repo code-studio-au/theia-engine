@@ -73,6 +73,56 @@ pub struct ResidentTexture {
     pub sampler: vk::Sampler,
     device: ash::Device,
 }
+pub struct TextureSet {
+    pub table: Vec<u8>,
+    pub images: Vec<Vec<u8>>,
+}
+pub fn load_set(
+    path: &Path,
+    materials: &theia_assets::material::MaterialPage,
+) -> Result<TextureSet> {
+    use theia_assets::texture_table::{DEFAULT_BUDGET as TABLE_BUDGET, TextureTable};
+    let mut table = Vec::new();
+    std::fs::File::open(path)?
+        .take(TABLE_BUDGET as u64 + 1)
+        .read_to_end(&mut table)?;
+    let hex = |id: [u8; 32]| id.iter().map(|v| format!("{v:02x}")).collect::<String>();
+    if path.file_stem().and_then(|v| v.to_str()) != Some(&hex(theia_assets::content_id(&table))) {
+        return Err("Texture table hash filename mismatch".into());
+    }
+    let decoded = TextureTable::decode(&table, None, materials, TABLE_BUDGET)?;
+    let mut images = Vec::new();
+    for dep in &decoded.textures {
+        images.push(load(
+            &path.parent().unwrap().join(hex(dep.content_id) + ".ktx2"),
+        )?);
+    }
+    decoded.validate_textures(&images.iter().map(Vec::as_slice).collect::<Vec<_>>())?;
+    Ok(TextureSet { table, images })
+}
+pub fn admit_table(
+    path: &Path,
+    mesh_path: &Path,
+    material_path: &Path,
+    uv_path: &Path,
+) -> Result<()> {
+    let bytes = crate::asset::load(mesh_path)?;
+    let mesh = theia_assets::Mesh::decode(&bytes, None, theia_assets::DEFAULT_BUDGET)?;
+    let bytes = crate::asset::load_material(material_path, &mesh)?;
+    let materials = theia_assets::material::MaterialPage::decode(
+        &bytes,
+        None,
+        &mesh,
+        theia_assets::material::DEFAULT_BUDGET,
+    )?;
+    crate::asset::load_uv(uv_path, &mesh)?;
+    let set = load_set(path, &materials)?;
+    println!(
+        "Complete material texture set admitted: {} immutable textures, all lengths/hashes/geometry/material bindings verified before Vulkan initialization",
+        set.images.len()
+    );
+    Ok(())
+}
 struct Pending {
     // Dedicated work retires before staging/image drops on every error path.
     transfer: Transfer,

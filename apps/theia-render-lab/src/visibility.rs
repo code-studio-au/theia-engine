@@ -116,6 +116,18 @@ pub struct ResolveBuffers {
     pub materials: Option<vk::DescriptorBufferInfo>,
     pub uvs: Option<vk::DescriptorBufferInfo>,
     pub texture: Option<vk::DescriptorImageInfo>,
+    pub texture_table: Option<vk::DescriptorBufferInfo>,
+    pub texture_images: [vk::DescriptorImageInfo; theia_assets::texture_table::MAX_TEXTURES],
+    pub texture_count: u32,
+}
+impl ResolveBuffers {
+    fn image_count(&self) -> u32 {
+        if self.texture_table.is_some() {
+            self.texture_count
+        } else {
+            u32::from(self.texture.is_some())
+        }
+    }
 }
 pub struct Target {
     visibility: Option<Pipeline>,
@@ -148,6 +160,12 @@ impl Target {
         let material_info = buffers.materials;
         let uv = buffers.uvs.is_some();
         let authored = material_info.is_some();
+        let image_count = buffers.image_count();
+        if buffers.texture_table.is_some()
+            && !(1..=theia_assets::texture_table::MAX_TEXTURES as u32).contains(&image_count)
+        {
+            return Err("Invalid bounded texture descriptor count".into());
+        }
         let identity = Image::new(
             device,
             memory,
@@ -248,7 +266,7 @@ impl Target {
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
-            if buffers.texture.is_some() {
+            if image_count > 0 {
                 for (binding, ty) in [
                     (7, vk::DescriptorType::SAMPLED_IMAGE),
                     (8, vk::DescriptorType::SAMPLER),
@@ -257,10 +275,19 @@ impl Target {
                         vk::DescriptorSetLayoutBinding::default()
                             .binding(binding)
                             .descriptor_type(ty)
-                            .descriptor_count(1)
+                            .descriptor_count(if binding == 7 { image_count } else { 1 })
                             .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                     );
                 }
+            }
+            if buffers.texture_table.is_some() {
+                bindings.push(
+                    vk::DescriptorSetLayoutBinding::default()
+                        .binding(9)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .descriptor_count(1)
+                        .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+                );
             }
             let mut flags = vec![
                 vk::DescriptorBindingFlags::empty(),
@@ -277,8 +304,11 @@ impl Target {
             if uv {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
-            if buffers.texture.is_some() {
+            if image_count > 0 {
                 flags.extend([vk::DescriptorBindingFlags::empty(); 2]);
+            }
+            if buffers.texture_table.is_some() {
+                flags.push(vk::DescriptorBindingFlags::empty());
             }
             let mut binding_flags =
                 vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(&flags);
@@ -291,16 +321,20 @@ impl Target {
             let mut sizes = vec![
                 vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::SAMPLED_IMAGE)
-                    .descriptor_count(4 + u32::from(buffers.texture.is_some())),
+                    .descriptor_count(4 + image_count),
                 vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::SAMPLER)
-                    .descriptor_count(1 + u32::from(buffers.texture.is_some())),
+                    .descriptor_count(1 + u32::from(image_count > 0)),
             ];
             if cooked {
                 sizes.push(
                     vk::DescriptorPoolSize::default()
                         .ty(vk::DescriptorType::STORAGE_BUFFER)
-                        .descriptor_count(1 + u32::from(authored) + u32::from(uv)),
+                        .descriptor_count(
+                            1 + u32::from(authored)
+                                + u32::from(uv)
+                                + u32::from(buffers.texture_table.is_some()),
+                        ),
                 );
             }
             target.pool = device.create_descriptor_pool(
@@ -378,20 +412,36 @@ impl Target {
                         .buffer_info(info),
                 );
             }
-            let texture_images = buffers.texture.map(|info| [info]);
-            if let Some(info) = &texture_images {
-                for (binding, ty) in [
-                    (7, vk::DescriptorType::SAMPLED_IMAGE),
-                    (8, vk::DescriptorType::SAMPLER),
-                ] {
-                    writes.push(
-                        vk::WriteDescriptorSet::default()
-                            .dst_set(target.set)
-                            .dst_binding(binding)
-                            .descriptor_type(ty)
-                            .image_info(info),
-                    );
-                }
+            let texture_images = if buffers.texture_table.is_some() {
+                buffers.texture_images[..image_count as usize].to_vec()
+            } else {
+                buffers.texture.into_iter().collect::<Vec<_>>()
+            };
+            if !texture_images.is_empty() {
+                writes.push(
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(target.set)
+                        .dst_binding(7)
+                        .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                        .image_info(&texture_images),
+                );
+                writes.push(
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(target.set)
+                        .dst_binding(8)
+                        .descriptor_type(vk::DescriptorType::SAMPLER)
+                        .image_info(&texture_images[..1]),
+                );
+            }
+            let texture_tables = buffers.texture_table.map(|v| [v]);
+            if let Some(info) = &texture_tables {
+                writes.push(
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(target.set)
+                        .dst_binding(9)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .buffer_info(info),
+                );
             }
             device.update_descriptor_sets(&writes, &[]);
         }
@@ -405,7 +455,8 @@ impl Target {
                 cooked,
                 authored,
                 uv,
-                texture: buffers.texture.is_some(),
+                texture: image_count > 0,
+                texture_table: buffers.texture_table.is_some(),
             },
         )?);
         println!(

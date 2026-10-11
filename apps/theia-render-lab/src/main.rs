@@ -61,6 +61,7 @@ struct Options {
     uvs: Option<std::path::PathBuf>,
     texture: Option<std::path::PathBuf>,
     texture_budget: Option<u64>,
+    texture_table: Option<std::path::PathBuf>,
     bundle: Option<std::path::PathBuf>,
 }
 impl Options {
@@ -90,6 +91,14 @@ impl Options {
                 "--camera-test" => result.camera = true,
                 "--frustum-test" => result.frustum = true,
                 "--material-test" => result.material = true,
+                "--texture-table" => {
+                    result.material = true;
+                    result.texture_table = Some(
+                        args.next()
+                            .ok_or("--texture-table needs a content-addressed table")?
+                            .into(),
+                    );
+                }
                 "--texture-test" => {
                     result.material = true;
                     result.texture = Some(
@@ -123,20 +132,25 @@ impl Options {
                 | "--material-reference"
                 | "--authored-reference"
                 | "--uv-reference"
-                | "--texture-reference" => {
+                | "--texture-reference"
+                | "--texture-table-reference" => {
                     use std::io::Read;
                     let path = args.next().ok_or(
                         "--camera-reference needs mesh path and x y width height scenario",
                     )?;
                     let authored =
-                        if arg == "--authored-reference" || arg == "--texture-reference" {
+                        if arg == "--authored-reference"
+                            || (arg == "--texture-reference" || arg == "--texture-table-reference")
+                        {
                             Some(args.next().ok_or(
                                 "--authored-reference needs material sidecar after mesh path",
                             )?)
                         } else {
                             None
                         };
-                    let uv_path = if arg == "--uv-reference" || arg == "--texture-reference" {
+                    let uv_path = if arg == "--uv-reference"
+                        || (arg == "--texture-reference" || arg == "--texture-table-reference")
+                    {
                         Some(
                             args.next()
                                 .ok_or("--uv-reference needs UV page after mesh path")?,
@@ -145,7 +159,7 @@ impl Options {
                         None
                     };
                     let texture_path =
-                        if arg == "--texture-reference" {
+                        if arg == "--texture-reference" || arg == "--texture-table-reference" {
                             Some(args.next().ok_or(
                                 "--texture-reference needs KTX2 after mesh/material/UV paths",
                             )?)
@@ -173,6 +187,7 @@ impl Options {
                         pixel.color[0] *= 89. / 255.;
                         pixel.color[1] *= 153. / 255.;
                     }
+                    let mut material_page = None;
                     if let Some(path) = authored {
                         let data = asset::load_material(std::path::Path::new(&path), &mesh)?;
                         let page = theia_assets::material::MaterialPage::decode(
@@ -187,9 +202,12 @@ impl Options {
                                 .ok_or("Invalid CPU material identity")?;
                             pixel.color.copy_from_slice(&color[..3]);
                         }
+                        material_page = Some(page);
                     }
                     let factor = pixel.color;
                     let mut uv_value = None;
+                    let mut selected_material = None;
+                    let mut selected_texture = None;
                     if let Some(path) = uv_path {
                         let data = asset::load_uv(std::path::Path::new(&path), &mesh)?;
                         let page = theia_assets::uv::UvPage::decode(
@@ -213,15 +231,47 @@ impl Options {
                                 0.5,
                             ];
                             if let Some(path) = &texture_path {
-                                let bytes = texture::load(std::path::Path::new(path))?;
-                                let tex = theia_assets::texture::Texture::decode(
-                                    &bytes,
-                                    None,
-                                    theia_assets::texture::DEFAULT_BUDGET,
-                                )?;
-                                let sampled = texture::reference_sample(&tex, uv);
-                                pixel.color =
-                                    std::array::from_fn(|axis| sampled[axis] * factor[axis]);
+                                if arg == "--texture-table-reference" {
+                                    let materials = material_page
+                                        .as_ref()
+                                        .ok_or("Texture reference requires material page")?;
+                                    let set =
+                                        texture::load_set(std::path::Path::new(path), materials)?;
+                                    let table = theia_assets::texture_table::TextureTable::decode(
+                                        &set.table,
+                                        None,
+                                        materials,
+                                        theia_assets::texture_table::DEFAULT_BUDGET,
+                                    )?;
+                                    let material = materials.triangle_materials[materials
+                                        .triangle_offsets
+                                        [(pixel.identity[0] - 1) as usize]
+                                        as usize
+                                        + pixel.identity[1] as usize];
+                                    let index = table
+                                        .texture_for(material)
+                                        .ok_or("Invalid CPU texture material")?;
+                                    let tex = theia_assets::texture::Texture::decode(
+                                        &set.images[index as usize],
+                                        None,
+                                        theia_assets::texture::DEFAULT_BUDGET,
+                                    )?;
+                                    let sampled = texture::reference_sample(&tex, uv);
+                                    pixel.color =
+                                        std::array::from_fn(|axis| sampled[axis] * factor[axis]);
+                                    selected_material = Some(material);
+                                    selected_texture = Some(index);
+                                } else {
+                                    let bytes = texture::load(std::path::Path::new(path))?;
+                                    let tex = theia_assets::texture::Texture::decode(
+                                        &bytes,
+                                        None,
+                                        theia_assets::texture::DEFAULT_BUDGET,
+                                    )?;
+                                    let sampled = texture::reference_sample(&tex, uv);
+                                    pixel.color =
+                                        std::array::from_fn(|axis| sampled[axis] * factor[axis]);
+                                }
                             }
                             uv_value = Some(uv);
                         }
@@ -233,7 +283,7 @@ impl Options {
                     };
                     println!(
                         "{}",
-                        serde_json::json!({"color":pixel.color,"depth":pixel.depth,"covered":pixel.covered,"identity":pixel.identity,"ids":ids,"uv":uv_value})
+                        serde_json::json!({"color":pixel.color,"depth":pixel.depth,"covered":pixel.covered,"identity":pixel.identity,"ids":ids,"uv":uv_value,"material_id":selected_material,"texture_index":selected_texture})
                     );
                     std::process::exit(0);
                 }
@@ -350,7 +400,7 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -365,6 +415,7 @@ impl Options {
                 || result.materials.is_some()
                 || result.uvs.is_some()
                 || result.texture.is_some()
+                || result.texture_table.is_some()
             {
                 return Err("--bundle owns all four asset roles; do not combine explicit asset/cell/fallback/material/UV/texture paths".into());
             }
@@ -387,7 +438,9 @@ impl Options {
             && (result.asset.is_none()
                 || result.cell.is_some()
                 || result.fallback.is_some()
-                || (result.materials.is_some() && result.texture.is_none()))
+                || (result.materials.is_some()
+                    && result.texture.is_none()
+                    && result.texture_table.is_none()))
         {
             return Err(
                 "--uv-test requires a fixed --asset without --cell/--fallback/--materials".into(),
@@ -402,8 +455,28 @@ impl Options {
         {
             return Err("--texture-test requires fixed --asset plus --uv-test and --materials; no cell/fallback".into());
         }
-        if result.texture_budget.is_some() && result.texture.is_none() {
-            return Err("--texture-budget requires --texture-test".into());
+        if let Some(path) = &result.texture_table {
+            if result.texture.is_some()
+                || result.asset.is_none()
+                || result.materials.is_none()
+                || result.uvs.is_none()
+                || result.cell.is_some()
+                || result.fallback.is_some()
+            {
+                return Err("--texture-table needs fixed --asset/--materials/--uv-test without single texture/cell/fallback".into());
+            }
+            texture::admit_table(
+                path,
+                result.asset.as_deref().unwrap(),
+                result.materials.as_deref().unwrap(),
+                result.uvs.as_deref().unwrap(),
+            )?;
+        }
+        if result.texture_budget.is_some()
+            && result.texture.is_none()
+            && result.texture_table.is_none()
+        {
+            return Err("--texture-budget requires --texture-test or --texture-table".into());
         }
         if result.materials.is_some()
             && (result.asset.is_none() || result.cell.is_some() || result.fallback.is_some())

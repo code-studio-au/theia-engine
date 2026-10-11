@@ -149,6 +149,31 @@ canonical mapping bytes match. The cooker checks source structure/filenames;
 Rust validates full child semantics. Sampling stays opaque sRGB, nearest repeat,
 mip zero. The existing single-texture bundle/shader formats remain unchanged.
 
+`--texture-table <table> --asset <mesh> --materials <factors> --uv-test <uv>`
+now admits the entire fixed set before Vulkan initialization and uses an indexed
+GPU path. Single-texture/cell/fallback/bundle combinations fail explicitly.
+Immutable loaders recheck bytes before uploads, so later file mutation is not
+trusted. Device sampled-image descriptor limits include the four existing target
+slots plus the table images; image dimensions/format and table storage range
+are queried. CPU profile allows <=16 textures subject to device limits; executed
+GPU qualification covers counts one/two, including three-material reuse.
+
+Resident images retain the dedicated-fence upload/image transition/ownership
+contract. `--texture-budget` is aggregate actual image allocation bytes for this
+profile; each new image must fit the remaining capacity before allocation. Table
+storage has a separate 1 MiB allocation cap; coherent staging retains its 4 MiB
+cap. These limits exclude samplers, descriptors, geometry and render targets.
+Partial failure retires upload work and releases already uploaded images.
+
+Fragment binding 7 is the immutable sampled-image descriptor array, binding 8
+the fixed nearest-repeat sampler, binding 9 the raw table buffer. The shader
+looks up cooked primitive -> material -> dense texture index, applies explicit
+NonUniformResourceIndex, samples level zero and multiplies the linear unlit
+factor. There is no per-frame host material lookup or descriptor sorting.
+Recreation/teardown retires frame/descriptor users before table/image owners.
+This does not yet import authored multiple PNGs, publish asynchronous resource
+sets, or qualify mip/derivative/filtering/virtual textures.
+
 ## Version 1 byte layout
 
 All integer/float words are little-endian. The 76-byte header is:

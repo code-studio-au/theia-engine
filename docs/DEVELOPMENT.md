@@ -404,4 +404,14 @@ Assignments are schema 1, exact `material_sha256`, `textures` hash-named KTX2
 paths, and one `material_textures` source index per material. All listed textures
 must be used. The cooker canonicalizes hash order and remaps the indices; the
 Rust example validates every sibling texture before admitting the set. This
-table has no GPU binding path yet.
+table's file-backed admission is independent of its subsequent GPU path.
+
+GPU qualification uses `--asset <mesh> --materials <page> --uv-test <uv>
+--texture-table <table> --gpu 7900 --wsi-smoke-test`. `--texture-budget` caps
+aggregate physical image allocations; table/staging have separate limits. It
+rejects single-texture/bundle/cell/fallback combinations. CPU oracle:
+`--texture-table-reference <mesh material uv table x y width height view>`.
+For replay set `THEIA_CAPTURE_TEXTURE_TABLE` with expected asset, factor and UV
+paths, without single texture/bundle variables. Reports include table/GPU texel
+checks and sampled material/texture indices. Only one/two texture counts have
+executed GPU qualification so far.

@@ -254,3 +254,77 @@ CI configuration adds native second-texture/table production and independent
 Rust admission; hosted execution is untested. No push/benchmark claim.
 Next qualification is indexed GPU material texture selection; authored multiple
 PNG conversion, mip/gradient/filtering and asynchronous residency remain open.
+
+## GPU indexed resident texture selection (2026-10-11)
+
+Render Lab now connects THEIATEX to a fixed geometry/factor/UV set through
+`--texture-table`. Complete source-set admission happens before Vulkan setup;
+loaders recheck immutable bytes before upload. Device sampled-image descriptor
+limits (including four target slots), image format/dimensions and table storage
+range are queried. A sampled-image runtime array at binding 7, nearest-repeat
+sampler at 8 and immutable table buffer at 9 feed material-indexed Slang resolve.
+No per-frame host material lookup or descriptor sort is performed.
+
+Both shader variants compile/SPIR-V validate 27 outputs. Fragment disassembly
+records RuntimeDescriptorArray, ShaderNonUniform and
+SampledImageArrayNonUniformIndexing capabilities, NonUniform decoration on the
+sampled image, and OpImageSampleExplicitLod with level zero. Fourteen renderer
+tests, formatting and denied-warning Clippy pass. Default/single-image paths
+retain their existing shaders; only the indexed entry is new.
+
+Each 2x2 resident image costs 4096 actual Vulkan allocation bytes/16 staging
+bytes on this RX 7900 XTX. Two images succeed with an exact aggregate 8192-byte
+cap. At 8191 bytes, the first image finishes its dedicated-fence upload, then
+the second allocation is rejected; teardown releases the completed first image
+with zero validation warnings/errors. Missing indexed fragment shader fails
+after successful uploads/target construction and also cleans up without
+diagnostics. Table/staging/target/geometry/sampler/descriptor allocations are
+separate from this image-only aggregate budget.
+
+Four isolated malformed sets (missing texture, corrupt texture, foreign material
+binding, freshly hashed invalid mapping) fail before Vulkan initialization.
+The preceding immutable source files remain untouched. Images/table/descriptor
+owners retain the dedicated upload and frame/swapchain retirement contracts.
+
+Standalone RX 7900 XTX/RADV synchronization-validation passes 19 configurations,
+each 120 presented frames/ten generations with zero diagnostics through teardown:
+14 preceding paths (bundle, single texture, UV, factors, visibility, indirect,
+clear, mesh, task, spatial, asset, camera, frustum, diagnostic material cell),
+plus indexed default/shared/terrain and exact-budget one/two-image cases.
+The preserved headless compute independently verifies all 256 GPU values.
+
+Separate RenderDoc captures disable capture validation; each target presents
+180 frames. They verify exact GPU geometry/factor/UV/table bytes, the complete
+texture texel set, GPU work/identities and CPU depth/sampled colours at the
+preceding 2e-6 depth/two RGB-byte tolerances:
+
+| Indexed case | Samples | Visible triangle probes |
+| --- | ---: | ---: |
+| Imported full | 85 | 4 |
+| Imported empty | 81 | 0 |
+| Imported narrow | 83 | 2 |
+| Imported shared identity | 85 | 4 |
+| Terrain | 593 | 512 |
+| Terrain shared identity | 593 | 512 |
+| One-texture table | 85 | 4 |
+
+The two-material table retains `52ca7e...`, selecting [1,0] independently of
+descriptor/hash order. Terrain's three-material table is 472 bytes, SHA-256
+`59f9f597e154de591724153c3eac9481d001298c7c8c88986ec64903e48c698b`,
+bound to `5a004f...` factors and selecting [1,0,1]. Both terrain replays observe
+all (material,texture) pairs (0,1), (1,0), (2,1), proving reuse across distinct
+materials/multiple meshlets. Reports retain sampled material/texture indices.
+Original single-image/bundle replay passes 85 samples; original M3 replay
+passes 84. These qualify texture counts one/two; execution of all counts up to
+the CPU profile cap 16 is not claimed.
+
+Artifacts: `build/qualification/m4-texture-table-gpu-{shaders.log,
+shared-shaders.log,frag.spvasm,smoke.log,shared.log,budget-exact.log,
+budget-reject.log,missing-shader.log,terrain-smoke.log,mono-smoke.log,
+headless.log}`, regression logs, negative logs under
+`m4-texture-table-negative/` and
+`m4-texture-table-gpu-{full,empty,narrow,shared,terrain,terrain-shared,mono,
+regression-single,regression-m3}/report.json` with captures/images.
+No hosted CI, push, performance or Windows GPU claim. Multiple authored PNG
+normalization/bundling is next; asynchronous residency and mip/derivative/
+filtering/virtual textures remain open.

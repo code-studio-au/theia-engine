@@ -852,6 +852,8 @@ pub struct Renderer {
     materials: Option<crate::asset::Buffer>,
     uvs: Option<crate::asset::Buffer>,
     texture: Option<crate::texture::ResidentTexture>,
+    textures: Vec<crate::texture::ResidentTexture>,
+    texture_table: Option<crate::asset::Buffer>,
     pub recreate: bool,
     generations: u64,
     shader_dir: Option<std::path::PathBuf>,
@@ -881,6 +883,8 @@ impl Renderer {
             materials: None,
             uvs: None,
             texture: None,
+            textures: Vec::new(),
+            texture_table: None,
             work_items: options.work_items.unwrap_or(2),
             cycle_work: options.smoke,
             presented: 0,
@@ -1070,6 +1074,95 @@ impl Renderer {
                         .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64),
                 )?);
             }
+            if let Some(path) = &options.texture_table {
+                let mesh = theia_assets::Mesh::decode(
+                    asset.as_ref().ok_or("Texture table needs fixed geometry")?,
+                    None,
+                    theia_assets::DEFAULT_BUDGET,
+                )?;
+                let bytes =
+                    crate::asset::load_material(options.materials.as_deref().unwrap(), &mesh)?;
+                let materials = theia_assets::material::MaterialPage::decode(
+                    &bytes,
+                    None,
+                    &mesh,
+                    theia_assets::material::DEFAULT_BUDGET,
+                )?;
+                let set = crate::texture::load_set(path, &materials)?;
+                // SAFETY: Physical device and instance are retained and live.
+                let properties = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties(renderer.ctx.physical)
+                };
+                let count = set.images.len() as u32;
+                if count + 4 > properties.limits.max_per_stage_descriptor_sampled_images
+                    || count + 4 > properties.limits.max_descriptor_set_sampled_images
+                    || set.table.len() > properties.limits.max_storage_buffer_range as usize
+                {
+                    return Err("Texture table exceeds device descriptor/storage limits".into());
+                }
+                // SAFETY: Same retained physical device; query the exact upload/sample profile.
+                let image_limits = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_image_format_properties(
+                            renderer.ctx.physical,
+                            vk::Format::R8G8B8A8_SRGB,
+                            vk::ImageType::TYPE_2D,
+                            vk::ImageTiling::OPTIMAL,
+                            vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                            vk::ImageCreateFlags::empty(),
+                        )?
+                };
+                let budget = options
+                    .texture_budget
+                    .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64);
+                let mut remaining = budget;
+                for bytes in &set.images {
+                    let image = theia_assets::texture::Texture::decode(
+                        bytes,
+                        None,
+                        theia_assets::texture::DEFAULT_BUDGET,
+                    )?;
+                    if image.width > image_limits.max_extent.width
+                        || image.height > image_limits.max_extent.height
+                    {
+                        return Err("Resident texture exceeds device image limits".into());
+                    }
+                    let texture = crate::texture::ResidentTexture::upload(
+                        renderer.ctx.device.as_ref().unwrap(),
+                        &memory,
+                        &image,
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        remaining,
+                    )?;
+                    remaining = remaining
+                        .checked_sub(texture.image.allocated_bytes)
+                        .ok_or("Texture image aggregate budget exhausted")?;
+                    renderer.textures.push(texture);
+                }
+                renderer.texture_table = Some(crate::asset::Buffer::upload(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    &set.table,
+                    renderer.ctx.graphics_family,
+                    renderer.ctx.graphics,
+                    theia_assets::texture_table::DEFAULT_BUDGET as u64,
+                    None,
+                )?);
+                println!(
+                    "Resident texture table ready: {count} hash-sorted images, {} aggregate physical image bytes within {budget}; immutable GPU material selection",
+                    budget - remaining
+                );
+            }
             renderer.work = Some(IndirectWork::new(
                 renderer.ctx.device.as_ref().unwrap(),
                 &memory,
@@ -1124,6 +1217,18 @@ impl Renderer {
                         .range(buffer.bytes)
                 }),
                 texture: self.texture.as_ref().map(|texture| texture.descriptor()),
+                texture_count: self.textures.len() as u32,
+                texture_images: std::array::from_fn(|i| {
+                    self.textures
+                        .get(i)
+                        .map_or(vk::DescriptorImageInfo::default(), |v| v.descriptor())
+                }),
+                texture_table: self.texture_table.as_ref().map(|buffer| {
+                    vk::DescriptorBufferInfo::default()
+                        .buffer(buffer.handle)
+                        .offset(buffer.offset)
+                        .range(buffer.bytes)
+                }),
                 uvs: self.uvs.as_ref().map(|buffer| {
                     vk::DescriptorBufferInfo::default()
                         .buffer(buffer.handle)
@@ -1510,6 +1615,8 @@ impl Drop for Renderer {
         drop(self.materials.take());
         drop(self.uvs.take());
         drop(self.texture.take());
+        self.textures.clear();
+        drop(self.texture_table.take());
         println!(
             "Render Lab teardown: {} swapchain generations",
             self.generations

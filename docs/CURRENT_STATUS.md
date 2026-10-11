@@ -4,6 +4,32 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 GPU material texture selection — independently executed (2026-10-11)
+
+`--texture-table` admits fixed geometry/factors/UVs and the complete indexed
+texture set before Vulkan initialization. It uploads hash-sorted resident images
+and the immutable table once; Slang selects the descriptor from the resolved
+material index with NonUniformResourceIndex. Device descriptor/image/storage
+limits and aggregate physical image-memory budget are checked. Existing
+single-image/bundle/diagnostic paths remain available.
+
+RX 7900 XTX passes 19 standalone 120-frame/ten-generation validation cases with
+zero diagnostics: fourteen preceding configurations plus imported default,
+shared, terrain and exact one/two-image budget cases. Two images charge 8192
+physical bytes; 8191 rejects the second upload and releases the completed first
+image safely. Missing shader cleanup passes; four malformed sets fail before
+Vulkan initialization. Seven indexed captures verify GPU dependency bytes/texels,
+work/identity/depth and CPU colours; terrain checks all 512 visible triangles and
+material/texture mappings [1,0,1]. Original single-image/M3 replay also passes.
+
+Fourteen renderer tests, formatting/denied-warning Clippy and both 27-output
+shader builds/SPIR-V validation pass. Disassembly verifies runtime descriptor
+array/nonuniform sampled-image capabilities and explicit mip-zero sampling.
+GPU execution qualifies one/two textures, not every supported table count.
+Authored multiple-image normalization/bundling and asynchronous residency remain
+open. Next: bounded multiple authored texture import. No push/benchmark claim.
+[Evidence](validation/M4_TEXTURES.md).
+
 ## M4 bounded material texture table — independently executed (2026-10-11)
 
 THEIATEX v1 binds an exact material-page hash to up to 16 hash-sorted immutable

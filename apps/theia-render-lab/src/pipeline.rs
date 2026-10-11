@@ -38,6 +38,7 @@ pub struct ResolveMode {
     pub authored: bool,
     pub uv: bool,
     pub texture: bool,
+    pub texture_table: bool,
 }
 pub struct Pipeline {
     device: ash::Device,
@@ -161,6 +162,7 @@ impl Pipeline {
             authored,
             uv,
             texture,
+            texture_table,
         } = mode;
         Self::configured(
             device,
@@ -170,7 +172,9 @@ impl Pipeline {
             ShaderStages {
                 mesh: "resolve.mesh.spv",
                 task: None,
-                fragment: if texture {
+                fragment: if texture_table {
+                    "asset.texture.table.resolve.frag.spv"
+                } else if texture {
                     "asset.texture.resolve.frag.spv"
                 } else if uv {
                     "asset.uv.resolve.frag.spv"
