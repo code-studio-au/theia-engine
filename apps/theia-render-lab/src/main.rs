@@ -50,6 +50,7 @@ enum RenderMode {
 struct Options {
     network_address: Option<std::net::SocketAddr>,
     network_certificate: Option<std::path::PathBuf>,
+    network_faults: bool,
     authority_alpha: Option<f32>,
     authority_demo: bool,
     authority_script: bool,
@@ -111,6 +112,7 @@ impl Options {
                         return Err("Network client is a separate render mode".into());
                     }
                 }
+                "--network-faults" => result.network_faults = true,
                 "--network-certificate" => {
                     result.network_certificate = Some(
                         args.next()
@@ -526,7 +528,7 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU task/mesh qualification\n  --network-client <loopback address> --network-certificate <public DER>  live readonly GPU viewer\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU task/mesh qualification\n  --network-client <loopback address> --network-certificate <public DER>  live readonly GPU viewer\n  --network-faults  bounded encrypted post-bootstrap packet faults\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -688,8 +690,8 @@ impl Options {
             if !network_address.ip().is_loopback() {
                 return Err("Network client fixture must target loopback".into());
             }
-        } else if result.network_certificate.is_some() {
-            return Err("--network-certificate requires --network-client".into());
+        } else if result.network_certificate.is_some() || result.network_faults {
+            return Err("--network-certificate/--network-faults require --network-client".into());
         }
         if result.authority_script && !result.authority_demo {
             return Err("--authority-script requires --authority-demo".into());
@@ -1001,7 +1003,11 @@ fn main() -> Result<()> {
     let network = options
         .network_address
         .map(|address| {
-            network::Viewer::new(address, options.network_certificate.as_deref().unwrap())
+            network::Viewer::new(
+                address,
+                options.network_certificate.as_deref().unwrap(),
+                options.network_faults,
+            )
         })
         .transpose()?;
     let mut app = App {

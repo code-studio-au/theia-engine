@@ -11,7 +11,17 @@ import subprocess
 import time
 
 
-def qualify(output, laboratory=False, wsi=False):
+def verify_faults(log):
+    import re
+    match = re.search(r'Network fault relay: Report \{ forwarded: (\d+), dropped: (\d+), delayed: (\d+), reordered: (\d+), duplicated: (\d+), max_pending: (\d+) \}', log)
+    if match is None:
+        raise RuntimeError('Missing bounded fault report: '+log)
+    counts = list(map(int, match.groups()))
+    if not all(v>0 for v in counts[:5]) or not 1<=counts[5]<=2:
+        raise RuntimeError('Faults were not exercised within bounds: '+str(counts))
+
+
+def qualify(output, laboratory=False, wsi=False, faults=False):
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     suffix = '.exe' if os.name == 'nt' else ''
@@ -47,6 +57,8 @@ def qualify(output, laboratory=False, wsi=False):
             handles.append(path.open('w'))
             arguments = [str(viewer_exe), '--network-client', ready['address'],
                 '--network-certificate', ready['certificate']]
+            if faults:
+                arguments.append('--network-faults')
             arguments += ['--wsi-smoke-test'] if wsi else ['--frames', '180']
             process = subprocess.Popen(arguments, stdout=handles[-1], stderr=subprocess.STDOUT)
             processes.append(process)
@@ -64,10 +76,12 @@ def qualify(output, laboratory=False, wsi=False):
             if len(assigned)!=1:
                 raise RuntimeError('Invalid server-owned identity: '+log)
             roles.extend(assigned)
+            if faults:
+                verify_faults(log)
         if sorted(roles)!=[10,20] or server.wait(timeout=10)!=0:
             raise RuntimeError('Pair shutdown or identity check failed: '+server_log.read_text())
         print('Qualified separate encrypted GPU viewers:', roles, 'profile', ready['profile'],
-              'WSI', wsi, '; logs', output)
+              'WSI', wsi, 'faults', faults, '; logs', output)
     finally:
         for process in processes:
             if process.poll() is None:
@@ -86,5 +100,6 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, default=Path('build/qualification/m8-network-viewer'))
     parser.add_argument('--laboratory', action='store_true')
     parser.add_argument('--wsi', action='store_true')
+    parser.add_argument('--faults', action='store_true')
     args = parser.parse_args()
-    qualify(args.output, args.laboratory, args.wsi)
+    qualify(args.output, args.laboratory, args.wsi, args.faults)

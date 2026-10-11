@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 use theia_network_fixture::{
-    client, tls,
+    client, proxy, tls,
     wire::{self, Message, Profile, Reject, Welcome},
 };
 use theia_protocol::{Outcome, Reply};
@@ -60,7 +60,7 @@ pub struct Viewer {
     thread: Option<thread::JoinHandle<()>>,
 }
 impl Viewer {
-    pub fn new(address: SocketAddr, certificate: &Path) -> Result<Self> {
+    pub fn new(address: SocketAddr, certificate: &Path, faults: bool) -> Result<Self> {
         use std::io::Read;
         if !address.ip().is_loopback() {
             return Err("Network viewer fixture requires loopback".into());
@@ -75,25 +75,36 @@ impl Viewer {
         let (stop_tx, stop_rx) = oneshot::channel();
         let worker_controls = controls.clone();
         let worker_view = view.clone();
-        let thread=thread::Builder::new().name("theia-viewer-network".into()).spawn(move || {
-            let result: theia_network_fixture::Result<()> = (|| {
-                let runtime=tokio::runtime::Builder::new_current_thread().enable_all().build()?;
-                runtime.block_on(async {
-                    let mut endpoint=Endpoint::client(SocketAddr::new(address.ip(),0))?;endpoint.set_default_client_config(config);
-                    let result=tokio::select! {
-                        result=run(&endpoint,address,worker_controls,worker_view.clone())=>result,
-                        _=stop_rx=>Ok(()),
-                    };
-                    if let Ok(mut view)=worker_view.lock() { view.closed("Connection closed"); }
-                    endpoint.close(0u8.into(),b"viewer ended");
-                    let _=tokio::time::timeout(Duration::from_secs(1),endpoint.wait_idle()).await;
-                    result
-                })
-            })();
-            let message=match result { Ok(())=>"Connection closed".into(),Err(e)=>format!("Connection closed: {e}") };
-            if let Ok(mut view)=worker_view.lock() { view.closed(&message); }
-            println!("{message}");
-        })?;
+        let thread = thread::Builder::new()
+            .name("theia-viewer-network".into())
+            .spawn(move || {
+                let result: theia_network_fixture::Result<()> = (|| {
+                    let runtime = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()?;
+                    runtime.block_on(async {
+                        let mut endpoint = Endpoint::client(SocketAddr::new(address.ip(), 0))?;
+                        endpoint.set_default_client_config(config);
+                        run(
+                            &endpoint,
+                            address,
+                            worker_controls,
+                            worker_view.clone(),
+                            faults,
+                            stop_rx,
+                        )
+                        .await
+                    })
+                })();
+                let message = match result {
+                    Ok(()) => "Connection closed".into(),
+                    Err(e) => format!("Connection closed: {e}"),
+                };
+                if let Ok(mut view) = worker_view.lock() {
+                    view.closed(&message);
+                }
+                println!("{message}");
+            })?;
         Ok(Self {
             controls,
             view,
@@ -222,10 +233,43 @@ async fn run(
     address: SocketAddr,
     controls: Arc<Mutex<Controls>>,
     view: Arc<Mutex<View>>,
+    faults: bool,
+    mut stop: oneshot::Receiver<()>,
+) -> theia_network_fixture::Result<()> {
+    let relay = if faults {
+        Some(proxy::Relay::new(address, endpoint.local_addr()?).await?)
+    } else {
+        None
+    };
+    let destination = relay.as_ref().map_or(address, |relay| relay.address);
+    let result = tokio::select! {
+        result = connected(endpoint, destination, controls, view.clone(), relay.as_ref()) => result,
+        _ = &mut stop => Ok(()),
+    };
+    if let Ok(mut view) = view.lock() {
+        view.closed("Connection closed");
+    }
+    if let Some(relay) = &relay {
+        relay.enable(false);
+    }
+    endpoint.close(0u8.into(), b"viewer ended");
+    // Keep the transparent relay alive during bounded QUIC close draining.
+    let _ = tokio::time::timeout(Duration::from_secs(1), endpoint.wait_idle()).await;
+    if let Some(relay) = relay {
+        println!("Network fault relay: {:?}", relay.finish().await?);
+    }
+    result
+}
+async fn connected(
+    endpoint: &Endpoint,
+    destination: SocketAddr,
+    controls: Arc<Mutex<Controls>>,
+    view: Arc<Mutex<View>>,
+    relay: Option<&proxy::Relay>,
 ) -> theia_network_fixture::Result<()> {
     let connection = tokio::time::timeout(
         Duration::from_secs(5),
-        endpoint.connect(address, "localhost")?,
+        endpoint.connect(destination, "localhost")?,
     )
     .await??;
     view.lock().map_err(|_| "Viewer state poisoned")?.status = "Waiting for second client".into();
@@ -246,6 +290,10 @@ async fn run(
         welcome.target.value(),
         welcome.profile
     );
+    if let Some(relay) = &relay {
+        relay.enable(true);
+        println!("Network faults enabled after verified bootstrap");
+    }
     let mut clock = tokio::time::interval(Duration::from_millis(50));
     clock.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut movement = 0u64;

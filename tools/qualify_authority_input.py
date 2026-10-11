@@ -15,7 +15,7 @@ import subprocess
 import time
 
 
-def qualify(output, network=False):
+def qualify(output, network=False, faults=False):
     if os.name != 'posix' or not os.environ.get('DISPLAY'):
         raise RuntimeError('This qualification requires a Linux X11 DISPLAY')
     x = c.CDLL(ctypes.util.find_library('X11'))
@@ -89,6 +89,8 @@ def qualify(output, network=False):
                 if ready is None:
                     raise RuntimeError('Listener did not publish readiness')
                 arguments = [str(executable),'--gpu','7900','--network-client',ready['address'],'--network-certificate',ready['certificate'],'--frames','600']
+            if faults:
+                arguments.append('--network-faults')
             process = subprocess.Popen(arguments,stdout=log,stderr=subprocess.STDOUT)
             deadline = time.monotonic() + 10
             window = None
@@ -104,7 +106,10 @@ def qualify(output, network=False):
             if network:
                 companion_log = output.with_name(output.stem+'-companion.log')
                 extra_logs.append(companion_log.open('w'))
-                companion = subprocess.Popen([str(executable),'--gpu','7900','--network-client',ready['address'],'--network-certificate',ready['certificate'],'--frames','660'],stdout=extra_logs[-1],stderr=subprocess.STDOUT)
+                companion_args = [str(executable),'--gpu','7900','--network-client',ready['address'],'--network-certificate',ready['certificate'],'--frames','660']
+                if faults:
+                    companion_args.append('--network-faults')
+                companion = subprocess.Popen(companion_args,stdout=extra_logs[-1],stderr=subprocess.STDOUT)
                 deadline = time.monotonic()+5
                 while 'Verified server assigned actor 10' not in output.read_text() and time.monotonic()<deadline:
                     time.sleep(.02)
@@ -129,10 +134,18 @@ def qualify(output, network=False):
             key(b'd', True)
             time.sleep(.3)
             key(b'd', False)
-            for _ in range(4):
+            for request in range(4):
                 key(b'space', True)
                 time.sleep(.02)
                 key(b'space', False)
+                if network:
+                    # Fault delays can reorder server tick arrival relative to key timing.
+                    # Start cooldown spacing only after this request is acknowledged.
+                    deadline = time.monotonic()+3
+                    while f'Server outcome request {request} ' not in output.read_text():
+                        if time.monotonic()>=deadline or process.poll() is not None:
+                            raise RuntimeError('Network outcome was not acknowledged: '+output.read_text())
+                        time.sleep(.02)
                 time.sleep(.25)
             if process.wait(timeout=20) != 0:
                 raise RuntimeError('Demo failed; see '+str(output))
@@ -143,6 +156,10 @@ def qualify(output, network=False):
                 raise RuntimeError('Companion viewer or independent listener failed')
             server_text = server_log.read_text()
             gameplay_ok = '4 acknowledged outcomes' in text and 'hits: 4' in server_text and 'health: [100, 0]' in server_text
+            if faults:
+                from qualify_network_viewer import verify_faults
+                verify_faults(text)
+                verify_faults(companion_log.read_text())
             if '0 warnings, 0 errors' not in companion_log.read_text():
                 raise RuntimeError('Companion Vulkan diagnostics')
         if not gameplay_ok or '0 warnings, 0 errors' not in text:
@@ -181,5 +198,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=Path('build/qualification/m7-interactive-native-input.log'))
     parser.add_argument('--network',action='store_true',help='spawn separate encrypted authority plus a second GPU viewer')
+    parser.add_argument('--faults',action='store_true',help='post-bootstrap encrypted packet faults; requires --network')
     args=parser.parse_args()
-    qualify(args.output,args.network)
+    if args.faults and not args.network:
+        parser.error('--faults requires --network')
+    qualify(args.output,args.network,args.faults)

@@ -219,3 +219,8 @@ profile geometry, disconnect clearing and Vulkan/RenderDoc evidence. Next apply
 the bounded post-handshake packet-fault relay to the live viewer before expanding
 replication. Accounts, deltas/baseline repair, reconnect/persistence and scale
 remain open; this does not close M7/M8 or deferred M4/M5 work.
+
+Live M8 viewer packet-fault qualification now passes bounded drops/reorders/
+duplicates, keyboard combat, WSI and replay. Next isolate transport-neutral bounded
+delta reconstruction/missing-baseline full-state repair before changing the tested
+wire version. Production baselines, accounts/persistence and scale remain open.

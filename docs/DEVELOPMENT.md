@@ -675,3 +675,16 @@ Unpaired replay checks empty geometry; the application's no-snapshot completion
 check deliberately fails. These helpers require a qualified GPU/desktop; CI only
 builds/lints/tests and executes CPU/network fixtures. Native input is X11-only.
 [Evidence and limits](validation/M8_NETWORK_VIEWER.md).
+
+Live encrypted packet-fault qualification:
+
+```sh
+python3 tools/qualify_network_viewer.py --faults --wsi --output build/qualification/live-fault-wsi
+PYTHONPYCACHEPREFIX=build/python-cache python3 tools/qualify_authority_input.py --network --faults --output build/qualification/live-fault-input.log
+THEIA_AUTHORITY_NETWORK=1 THEIA_AUTHORITY_FAULTS=1 THEIA_CAPTURE_OUTPUT="$PWD/build/qualification/live-fault-capture" qrenderdoc --python tools/renderdoc_authority_qualify.py
+```
+
+Manual clients can add `--network-faults`. Faults activate after verified bootstrap;
+final relay reports require actual positive drop/delay/reorder/duplicate counts and
+at most two retained packets. Native harness checks both viewers' reports.
+[Evidence/teardown limits](validation/M8_LIVE_PACKET_FAULTS.md).

@@ -4,6 +4,21 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 live GPU packet faults — independently executed (2026-10-11)
+
+Render Lab `--network-faults` reuses the bounded shared opaque UDP relay after
+verified bootstrap. Two separate GPU viewers qualify real drops/reorders/duplicates,
+180-frame and 120-frame/ten-generation WSI execution, zero diagnostics and bounded
+relay retention. Native input still produces four acknowledged server hits/death;
+faulted replay matches 32387 sampled pixels. Direct GPU and encrypted headless
+fault regressions pass. Shared/renderer tests 6/22 and formatting/Clippy pass.
+
+Cancellation clears presentation before bounded transparent close drain and joins
+the relay. No WAN/load/handshake-loss/reconnect or performance claim; Windows/
+Wayland/hosted CI unexecuted. M8 remains open. Next qualify transport-neutral
+bounded delta reconstruction and missing-baseline full-state repair before wire
+integration. [Evidence](validation/M8_LIVE_PACKET_FAULTS.md).
+
 ## M8 separate encrypted GPU viewers — independently executed (2026-10-11)
 
 Render Lab `--network-client` now connects to the separate Quinn listener using

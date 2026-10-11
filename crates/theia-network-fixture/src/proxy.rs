@@ -32,6 +32,17 @@ pub struct Relay {
 }
 impl Relay {
     pub async fn new(server: SocketAddr, client: SocketAddr) -> Result<Self> {
+        if !server.ip().is_loopback()
+            || !client.ip().is_loopback()
+            || server.is_ipv4() != client.is_ipv4()
+            || server == client
+            || server.port() == 0
+            || client.port() == 0
+        {
+            return Err(
+                "Relay requires distinct, bound loopback peers of the same address family".into(),
+            );
+        }
         let bind = SocketAddr::new(server.ip(), 0);
         let socket = UdpSocket::bind(bind).await?;
         let address = socket.local_addr()?;
@@ -114,6 +125,26 @@ async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn invalid_peer_routes_reject_before_binding_or_starting_a_worker() {
+        let server = "127.0.0.1:1000".parse().unwrap();
+        for client in [
+            "127.0.0.1:1000",
+            "127.0.0.1:0",
+            "192.0.2.1:1001",
+            "[::1]:1001",
+        ] {
+            assert!(Relay::new(server, client.parse().unwrap()).await.is_err());
+        }
+        assert!(
+            Relay::new(
+                "192.0.2.1:1000".parse().unwrap(),
+                "127.0.0.1:1001".parse().unwrap()
+            )
+            .await
+            .is_err()
+        );
+    }
     #[tokio::test]
     async fn transparent_routes_reject_unknown_sources_and_oversize_without_growth() {
         let server = UdpSocket::bind("127.0.0.1:0").await.unwrap();

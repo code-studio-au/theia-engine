@@ -1,6 +1,7 @@
 //! Shared bounded qualification fixture, not a production networking/server API.
 //! Two actors, explicit limits, encrypted Quinn and strict prototype wire messages.
 pub mod client;
+pub mod proxy;
 pub mod server;
 pub mod tls;
 pub mod wire;

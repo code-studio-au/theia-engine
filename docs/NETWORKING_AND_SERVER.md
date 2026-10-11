@@ -318,3 +318,9 @@ clock estimator. Local-demo profile shows its known static rectangle; laboratory
 profile hides it. Unknown/disconnected identity clears actor geometry. This fixed
 two-actor/profile fixture is not a general streamed world/scene protocol.
 See [target-GPU evidence](validation/M8_NETWORK_VIEWER.md).
+
+Live viewers now optionally route through the same shared bounded qualification
+relay (`--network-faults`). Activation follows verified bootstrap; teardown disables
+faults before bounded close draining and joins the relay. Separate GPU/native input/
+WSI/replay tests pass under actual encrypted packet faults. No WAN/handshake-loss/
+load or general repair/reconnect claim. [Evidence](validation/M8_LIVE_PACKET_FAULTS.md).
