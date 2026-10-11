@@ -135,14 +135,17 @@ pub fn admit_table(
     );
     Ok(())
 }
-struct Pending {
+pub struct Upload {
     // Dedicated work retires before staging/image drops on every error path.
     transfer: Transfer,
     staging: Buffer,
     image: Option<Image>,
+    extent: vk::Extent2D,
+    texel_bytes: usize,
 }
-impl ResidentTexture {
-    pub fn upload(
+impl Upload {
+    /// Submit one owned transfer without waiting for its dedicated fence.
+    pub fn begin(
         device: &ash::Device,
         memory: &vk::PhysicalDeviceMemoryProperties,
         texture: &AssetTexture<'_>,
@@ -171,7 +174,7 @@ impl ResidentTexture {
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             DEFAULT_BUDGET as u64,
         )?;
-        let mut pending = Pending {
+        let mut pending = Self {
             transfer: Transfer {
                 device: device.clone(),
                 pool: vk::CommandPool::null(),
@@ -180,6 +183,8 @@ impl ResidentTexture {
             },
             staging,
             image: Some(image),
+            extent,
+            texel_bytes: texture.texels.len(),
         };
         let image = pending.image.as_ref().unwrap();
         // SAFETY: Mapping/copy sizes are bounded. Pending owns submitted commands,
@@ -265,11 +270,37 @@ impl ResidentTexture {
                 pending.transfer.fence,
             )?;
             pending.transfer.submitted = true;
-            device.wait_for_fences(&[pending.transfer.fence], true, u64::MAX)?;
-            pending.transfer.submitted = false;
         }
-        let mut resident = Self {
-            image: pending.image.take().unwrap(),
+        println!(
+            "Texture transfer submitted: {}x{}, {} physical image bytes, {} staging allocation bytes; completion not yet waited",
+            extent.width,
+            extent.height,
+            pending.resident_bytes(),
+            pending.staging_bytes()
+        );
+        Ok(pending)
+    }
+    pub fn ready(&self) -> Result<bool> {
+        // SAFETY: Upload retains the live device and dedicated submitted fence.
+        Ok(unsafe { self.transfer.device.get_fence_status(self.transfer.fence)? })
+    }
+    pub fn resident_bytes(&self) -> u64 {
+        self.image.as_ref().unwrap().allocated_bytes
+    }
+    pub fn staging_bytes(&self) -> u64 {
+        self.staging.allocated_bytes
+    }
+    pub fn finish(mut self) -> Result<ResidentTexture> {
+        // SAFETY: Fence covers this upload and all resources remain owned through retirement.
+        unsafe {
+            self.transfer
+                .device
+                .wait_for_fences(&[self.transfer.fence], true, u64::MAX)?;
+        }
+        self.transfer.submitted = false;
+        let device = &self.transfer.device;
+        let mut resident = ResidentTexture {
+            image: self.image.take().unwrap(),
             sampler: vk::Sampler::null(),
             device: device.clone(),
         };
@@ -290,13 +321,25 @@ impl ResidentTexture {
         };
         println!(
             "Resident texture upload: {}x{} RGBA8_SRGB, {} texel bytes, {} physical image bytes, {} staging bytes; dedicated fence retired; nearest repeat mip 0",
-            texture.width,
-            texture.height,
-            texture.texels.len(),
+            self.extent.width,
+            self.extent.height,
+            self.texel_bytes,
             resident.image.allocated_bytes,
-            pending.staging.allocated_bytes
+            self.staging.allocated_bytes
         );
         Ok(resident)
+    }
+}
+impl ResidentTexture {
+    pub fn upload(
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        texture: &AssetTexture<'_>,
+        family: u32,
+        queue: vk::Queue,
+        budget: u64,
+    ) -> Result<Self> {
+        Upload::begin(device, memory, texture, family, queue, budget)?.finish()
     }
     pub fn descriptor(&self) -> vk::DescriptorImageInfo {
         vk::DescriptorImageInfo::default()

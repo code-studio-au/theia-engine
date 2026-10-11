@@ -115,3 +115,8 @@ Complete-bundle CPU residency now passes full-set admission/reservation,
 content-addressed sharing, atomic epoch replacement and retained-reader budget
 checks. Next integrate bounded asynchronous whole-set uploads and frame-safe
 GPU publication; fixed-renderer texture residency is still unchanged.
+
+Pending sampled-image transfers now qualify submit/poll/finish/cancellation,
+including complete-set submission before startup waits. Next connect CPU
+bundle reservations, bounded I/O and all-resource GPU upload completion to
+frame-safe publication.

@@ -571,3 +571,16 @@ identity/depth/color JSON. Capture `THEIA_CAPTURE_UV_PAGE` verifies actual GPU
 UV bytes and the same grid/all-visible-triangle probes as authored factors.
 Color checks quantify encoded UV agreement (two sRGB byte levels), not a direct
 floating-point UV target accuracy measurement.
+
+### Pending sampled-image ownership
+
+Renderer `texture::Upload` now separates begin/ready/finish. Begin records and
+submits the copy and scoped image transitions without waiting. A pending owner
+retains its command pool, dedicated fence, coherent staging allocation and image;
+cancellation waits before releasing submitted resources. Finish retires the
+fence and creates the nearest-repeat sampler. Indexed startup submits the entire
+image set before finishing any image, with aggregate image-budget checks across
+pending images. Startup waits before target/descriptor construction. This is
+not yet asynchronous whole-bundle frame-time publication. Staging allocations
+remain separately counted and individually bounded; images retain their
+aggregate physical byte budget.

@@ -371,3 +371,28 @@ Artifacts: `build/qualification/m4-multi-image-cook.json`,
 `m4-multi-image-regression-v1/report.json`, smoke/regression/test logs.
 No hosted CI, Windows GPU, performance, all-16-image execution or asynchronous
 complete-set residency claim. The next unit is bounded complete-set residency.
+
+## Submitted texture-set ownership (2026-10-11)
+
+`texture::Upload::begin` submits without a completion wait; `ready` polls its
+dedicated fence and `finish` retires it before returning a sampled image. The
+pending owner drops its transfer guard before staging/image ownership on every
+error path. The indexed initializer submits all images, checks readiness, then
+finishes them. Startup remains synchronous as a complete operation; no frame-time
+bundle publication, upload/render overlap or performance improvement is claimed.
+
+RX 7900 XTX/RADV executes default two-image, alias, shared identity, v1 and exact
+8192-byte cases, each 120 frames/ten swapchain generations with zero diagnostics.
+Two images are submitted before waits, charging 8192 physical image bytes and
+32 staging allocation bytes. Alias logs observe its fence unsignalled before
+finish; readiness can vary and is not a benchmark. The 8191-byte case submits
+one transfer then rejects the second image; pending cancellation retires its
+fence before teardown, with zero validation warnings/errors.
+
+Separate default/shared/alias captures each present 180 frames and pass 85 samples,
+including exact GPU bytes/texels, every triangle, work/identity/depth and colours.
+Renderer tests (14), formatting and denied-warning Clippy pass. No shader change
+requires new SPIR-V compilation; preceding qualified modules remain in use.
+Artifacts: `build/qualification/m4-async-texture-{multi,alias,shared,legacy,exact,
+reject,tests}.log`, capture logs and `m4-async-texture-{full,shared,alias}/report.json`.
+Complete asynchronous resource-set upload/publication remains the next gate.

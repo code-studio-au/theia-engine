@@ -4,6 +4,22 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 submitted texture-set uploads — independently executed (2026-10-11)
+
+Resident image uploads now expose submit, readiness and completion ownership.
+The indexed initializer submits every image before any completion wait. Each
+pending upload retains staging/image/command-pool/fence owners; cancellation
+retires its dedicated fence before destroying resources. The single-image
+wrapper preserves its preceding behavior. This enables later streaming; startup
+still waits for the complete set and no frame-time bundle replacement is claimed.
+
+Five RX 7900 XTX 120-frame/ten-generation configurations pass synchronization
+validation without diagnostics (default, alias, shared, v1 and exact budget).
+The 8191-byte case rejects the second image after submitting the first and safely
+retires cancellation with zero diagnostics. Three independent captures pass 85
+samples each. Renderer tests (14), formatting and denied-warning Clippy pass.
+See [texture evidence](validation/M4_TEXTURES.md).
+
 ## M4 complete-bundle CPU residency — independently executed (2026-10-11)
 
 A separate `theia_assets::bundle_residency` store admits every v1/v2 root and

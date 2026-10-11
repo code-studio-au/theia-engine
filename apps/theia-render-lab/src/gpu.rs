@@ -1125,6 +1125,7 @@ impl Renderer {
                     .texture_budget
                     .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64);
                 let mut remaining = budget;
+                let mut pending = Vec::new();
                 for bytes in &set.images {
                     let image = theia_assets::texture::Texture::decode(
                         bytes,
@@ -1136,7 +1137,7 @@ impl Renderer {
                     {
                         return Err("Resident texture exceeds device image limits".into());
                     }
-                    let texture = crate::texture::ResidentTexture::upload(
+                    let upload = crate::texture::Upload::begin(
                         renderer.ctx.device.as_ref().unwrap(),
                         &memory,
                         &image,
@@ -1145,9 +1146,23 @@ impl Renderer {
                         remaining,
                     )?;
                     remaining = remaining
-                        .checked_sub(texture.image.allocated_bytes)
+                        .checked_sub(upload.resident_bytes())
                         .ok_or("Texture image aggregate budget exhausted")?;
-                    renderer.textures.push(texture);
+                    pending.push(upload);
+                }
+                let ready = pending
+                    .iter()
+                    .map(|upload| upload.ready())
+                    .collect::<Result<Vec<_>>>()?;
+                println!(
+                    "Complete texture set submitted before completion waits: {} uploads, {} staging allocation bytes, {} already signalled dedicated fences; {} physical image bytes within {budget}",
+                    pending.len(),
+                    pending.iter().map(|v| v.staging_bytes()).sum::<u64>(),
+                    ready.iter().filter(|&&v| v).count(),
+                    budget - remaining
+                );
+                for upload in pending {
+                    renderer.textures.push(upload.finish()?);
                 }
                 renderer.texture_table = Some(crate::asset::Buffer::upload(
                     renderer.ctx.device.as_ref().unwrap(),
