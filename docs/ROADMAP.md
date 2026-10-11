@@ -241,3 +241,9 @@ M8 separate bounded TDR1 full/delta/snapshot-ACK/repair codec now passes canonic
 binary and adversarial tests. Next qualify encrypted exchange in an isolated lab
 before changing live listener/viewer behavior. THN2 transport remains unchanged;
 this codec alone does not close the state-delta gate.
+
+M8 isolated encrypted TDR1 exchange now qualifies full/delta publication, explicit
+snapshot ACKs and full repair under controlled packet faults. Synthetic values are
+not gameplay authority. Next explicitly revise live protocol and adopt the tested
+contract for actual authority/GPU clients. Accounts/persistence, production baseline
+leases/feature negotiation and remaining milestone gates stay open.

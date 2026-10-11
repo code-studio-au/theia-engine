@@ -4,6 +4,23 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 isolated encrypted delta exchange — independently executed (2026-10-11)
+
+Separate network lab `--replication-test` now exchanges TDR1 full states/deltas and
+application baseline ACK/full-repair DATAGRAMs through certificate-verified Quinn.
+A synthetic complete-state source is checked independently on both clients; this
+unit does not replace gameplay authority. Receiver history eviction deliberately
+triggers repair while ACKs are withheld; unknown baselines never partly publish.
+
+Direct run and three opaque packet-fault runs reach final tick 120 on both clients,
+with at least one missing-baseline repair each, exact readonly states and bounded
+sender/receiver/relay history. Shared nine tests, app formatting/Clippy and preceding
+encrypted gameplay fault regression pass. No live viewer adoption or production
+protocol negotiation yet; THN2 listener/viewer still sends full state. Next integrate
+the qualified baseline/repair contract with actual authority and GPU clients using
+an explicit protocol revision. Windows/hosted CI unexecuted.
+[Evidence](validation/M8_ENCRYPTED_REPLICATION.md).
+
 ## M8 bounded replication envelope codec — independently executed (2026-10-11)
 
 Separate TDR1 codec encodes full sets, full-actor deltas, snapshot ACKs and repair

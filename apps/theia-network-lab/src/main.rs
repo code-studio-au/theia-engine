@@ -1,5 +1,6 @@
 //! Encrypted two-client loopback qualification, not a production server/account service.
 mod listener;
+mod replication;
 use quinn::{Connection, Endpoint};
 use std::{error::Error, net::SocketAddr, time::Duration};
 use theia_network_fixture::{client, proxy, server, tls, wire};
@@ -412,20 +413,26 @@ async fn main() -> Result<()> {
     if args.first().is_some_and(|arg| arg == "--client-probe") {
         return listener::probe(&args[1..]).await;
     }
+    let mut replication_test = false;
     let mut ipv6 = false;
     let mut faults = false;
     for arg in args {
         match arg.as_str() {
+            "--replication-test" => replication_test = true,
             "--ipv6" => ipv6 = true,
             "--faults" => faults = true,
             "--help" => {
                 println!(
-                    "Theia encrypted two-client loopback lab: [--ipv6] [--faults]; default IPv4; ephemeral localhost ports/certificates only; or --serve [--listen address] [--certificate public-DER-path] [--laboratory-profile]"
+                    "Theia encrypted two-client loopback lab: [--ipv6] [--faults] [--replication-test]; default IPv4; ephemeral localhost ports/certificates only; or --serve [--listen address] [--certificate public-DER-path] [--laboratory-profile]"
                 );
                 return Ok(());
             }
-            _ => return Err("Use --ipv6, --faults or --help".into()),
+            _ => return Err("Use --ipv6, --faults, --replication-test or --help".into()),
         }
     }
-    timeout(Duration::from_secs(20), qualify(ipv6, faults)).await?
+    if replication_test {
+        timeout(Duration::from_secs(20), replication::qualify(ipv6, faults)).await?
+    } else {
+        timeout(Duration::from_secs(20), qualify(ipv6, faults)).await?
+    }
 }

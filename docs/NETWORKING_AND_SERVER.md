@@ -374,3 +374,23 @@ Decoding bounds counts before allocation; encoding rejects invalid caller values
 This is a codec-only prototype, not a locked component schema or negotiated network
 feature. THN2/its ALPN and listener/viewer behavior remain unchanged. Next qualify
 isolated certificate-verified encrypted TDR1 exchange. [Evidence](validation/M8_REPLICATION_CODEC.md).
+
+## M8 actual isolated encrypted delta exchange
+
+Separate `theia-network-lab --replication-test` sends TDR1 full/delta DATAGRAMs and
+receives application snapshot ACK/repair DATAGRAMs on exact verified connections.
+Two sender histories (eight sets each) and readonly clients (two sets each) use
+synthetic two-actor complete states, checked against independent values. This is
+replication qualification, not a gameplay source or account service. Explicit test
+mode selects participants; existing TLS ALPN remains theia-lab-2, with no production
+feature negotiation. THN2 listener/viewer behavior stays unchanged.
+
+Clients ACK only reconstructed complete publication; missing baselines send repair
+and retain current/previous state. Repeated state/control delivery repairs loss;
+requests/ACKs are supersedable DATAGRAMs, not combat/durable outcome ACKs. Deliberate
+early ACK withholding exercises receiver eviction. Server stops only after both
+clients ACK the prepared final tick; a fenced same-tick final ACK confirms completion
+without reactivating baseline selection. Clients verify exact final state before
+accepting closure. All tasks/futures and endpoint/relay lifetimes remain bounded.
+Next revise the live protocol explicitly and integrate actual authority snapshots.
+[Evidence](validation/M8_ENCRYPTED_REPLICATION.md).

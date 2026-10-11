@@ -713,3 +713,15 @@ and full repair. Neither baseline ACKs nor deltas are wired into THN2 yet.
 The separate bounded TDR1 replication codec runs with the shared fixture tests:
 `cargo test --locked --manifest-path crates/theia-network-fixture/Cargo.toml`.
 It is not yet used by the THN2 listener/viewers. [Evidence](validation/M8_REPLICATION_CODEC.md).
+
+Isolated encrypted full/delta/snapshot-ACK/full-repair qualification:
+
+```sh
+cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml -- --replication-test
+cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml -- --replication-test --faults
+```
+
+Uses a synthetic complete-state source and independent client oracle, deliberately
+withholds early ACKs to exercise missing-baseline repair, verifies final tick 120
+before closure and bounds the whole run to 20 seconds. This test does not replace
+live THN2 gameplay/viewer transport. [Evidence](validation/M8_ENCRYPTED_REPLICATION.md).
