@@ -37,6 +37,13 @@ and [local qualification evidence](validation/M4_COOKED_MESHLETS.md).
 
 ## No full editor first
 
+Pinned offline KTX-Software 4.4.2 now qualifies bounded synthetic opaque RGBA8
+sRGB single-mip textures. The source build excludes the separately licensed ETC
+decoder; no native tool enters the runtime. The pure Rust KTX2 reader borrows
+verified dense texels. This is the CPU asset contract; authored glTF image import,
+GPU upload/sampling, mip/gradient and residency integration remain open.
+[Profile/evidence](validation/M4_TEXTURES.md).
+
 `tools/theia-gltf-import` now evaluates pinned Rust `gltf` 1.4.1 offline for a
 bounded static position-only subset. It bakes node transforms/reflections into
 Z-up geometry and supplies the existing meshlet cooker, preserving tool/source

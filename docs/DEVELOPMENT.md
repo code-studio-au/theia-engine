@@ -329,3 +329,22 @@ apps/theia-render-lab/target/debug/theia-render-lab --asset <mesh-path-from-repo
 `THEIA_CAPTURE_SHADER_DIR=build/shaders-shared` uses the qualified shared identity
 pair. This diagnostic does not sample authored textures. Use only fixed geometry;
 UV/cell/fallback/material combinations are not implemented by this mode.
+
+## Bounded offline KTX2 texture qualification
+
+Use official KTX-Software 4.4.2 source with SHA-256
+`9412cb45045a503005acd47d98f9e8b47154634a50b4df21e17a1dfa8971d323`.
+Build recipe and licence scope: [qualification](validation/M4_TEXTURES.md).
+
+```bash
+cmake -S <ktx-source> -B <ktx-build> -DCMAKE_BUILD_TYPE=Release \
+  -DKTX_GIT_VERSION_FULL=v4.4.2 -DKTX_FEATURE_ETC_UNPACK=OFF \
+  -DKTX_FEATURE_TESTS=OFF -DKTX_FEATURE_DOC=OFF -DKTX_FEATURE_TOOLS=ON
+cmake --build <ktx-build> --target ktxtools --parallel 4
+python3 tools/cook_texture.py --ktx <ktx-build>/Release/ktx --build-dir <ktx-build> \
+  --source-archive <qualified-source-archive> --source fixtures/textures/opaque_2x2.json
+cargo run --locked --manifest-path crates/theia-assets/Cargo.toml --example texture -- <hash.ktx2>
+```
+
+The initial source is explicit row-major RGBA8 JSON, not a general image importer.
+The official validator's custom-provenance-key warning is expected and recorded.

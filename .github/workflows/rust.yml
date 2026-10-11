@@ -119,3 +119,18 @@ jobs:
           report = json.load(open('build/assets/imported-report.json'))
           subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'uv', '--', report['path'], report['uv']['path']], check=True)
           PY
+      - name: Qualify bounded resident texture container
+        run: |
+          curl --fail --location --retry 3 https://codeload.github.com/KhronosGroup/KTX-Software/tar.gz/refs/tags/v4.4.2 -o "$RUNNER_TEMP/ktx-source.tar.gz"
+          echo "9412cb45045a503005acd47d98f9e8b47154634a50b4df21e17a1dfa8971d323  $RUNNER_TEMP/ktx-source.tar.gz" | sha256sum --check -
+          mkdir "$RUNNER_TEMP/ktx-source"
+          tar -xzf "$RUNNER_TEMP/ktx-source.tar.gz" -C "$RUNNER_TEMP/ktx-source"
+          cmake -S "$RUNNER_TEMP/ktx-source/KTX-Software-4.4.2" -B "$RUNNER_TEMP/ktx-build" -DCMAKE_BUILD_TYPE=Release -DKTX_GIT_VERSION_FULL=v4.4.2 -DKTX_FEATURE_ETC_UNPACK=OFF -DKTX_FEATURE_TESTS=OFF -DKTX_FEATURE_DOC=OFF -DKTX_FEATURE_TOOLS=ON
+          cmake --build "$RUNNER_TEMP/ktx-build" --target ktxtools --parallel 2
+          python3 -m unittest discover -s tools -p test_texture_cook.py
+          python3 tools/cook_texture.py --ktx "$RUNNER_TEMP/ktx-build/Release/ktx" --build-dir "$RUNNER_TEMP/ktx-build" --source-archive "$RUNNER_TEMP/ktx-source.tar.gz" --source fixtures/textures/opaque_2x2.json > build/texture-report.json
+          python3 - <<'PY'
+          import json, subprocess
+          texture = json.load(open('build/texture-report.json'))['path']
+          subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'texture', '--', texture], check=True)
+          PY

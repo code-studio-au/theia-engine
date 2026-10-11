@@ -4,6 +4,41 @@ This evaluates proposed ADR-019 under the approved mature-offline-tool policy. I
 is a qualification format, not an approved final asset schema or a complete world
 streamer. Runtime reader is pure Rust; native meshoptimizer is used only offline.
 
+## Bounded resident texture profile
+
+The initial texture container is standard KTX2, with full-file SHA-256 naming.
+`theia_assets::texture::Texture` accepts only opaque 2D R8G8B8A8_SRGB (VkFormat
+43), one mip, one face, no array/depth/supercompression, dimensions 1..1024 and
+an encoded budget of 4 MiB. The 104-byte header/one-level index is followed by
+the canonical 92-byte RGBSDA/BT709/sRGB DFD, bounded key/value metadata, then
+dense RGBA8 texels. Section offsets/lengths must match this contiguous profile;
+other valid KTX2 layouts fail explicitly. Checked ranges, canonical zero padding,
+opaque alpha bytes and an optional expected full-file hash are required.
+
+Metadata is limited to 16 KiB and unique UTF-8 `KTXorientation=rd`, nonempty
+`KTXwriter` and optional `THEIAprovenance` keys. Orientation is top-left, channels
+remain RGBA, sRGB applies to RGB, alpha is straight/opaque. Swizzles, unknown
+keys and other colour descriptors are rejected. Decoded texels borrow immutable
+encoded bytes; there is no decompression/allocation/native runtime dependency.
+The encoded budget excludes Vulkan allocation alignment and other GPU resources.
+
+`tools/cook_texture.py` takes bounded schema-1 JSON containing integer width,
+height and row-major `rgba` arrays; alpha must be 255. Pinned KTX-Software 4.4.2
+writes raw RGBA8 sRGB/BT709 data and validates the packaged result. The packager
+adds namespaced provenance and relocates the sole level without rewriting its
+DFD/texels. Exact source pixels are compared before publication. Provenance
+records source/tool/library/compiler/cooker hashes and the recipe. Same tools
+and input produce identical bytes. This is a synthetic raw-texture source gate;
+glTF image decoding and source material-to-texture assignment remain separate.
+
+KTX core is Apache-2.0 with third-party licences recorded in its source release.
+The qualification build disables `KTX_FEATURE_ETC_UNPACK`: its separately
+licensed Ericsson decoder is not compiled. Tools and sources stay under ignored
+`build/`; no native library or source is shipped in Rust packages. The pinned
+source hash and executable/library evidence are recorded in
+[texture qualification](validation/M4_TEXTURES.md). GPU upload/sampling is not
+established by this CPU contract.
+
 ## Version 1 byte layout
 
 All integer/float words are little-endian. The 76-byte header is:

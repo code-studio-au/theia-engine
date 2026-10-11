@@ -4,6 +4,18 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 bounded texture asset contract — independently executed (2026-10-11)
+
+Pinned offline KTX-Software 4.4.2 now produces synthetic opaque RGBA8 sRGB,
+top-left, single-mip 2D textures. The Release source build excludes its separately
+licensed ETC decoder. Exact source texels and deterministic output are checked;
+official validation succeeds with its custom-provenance-key warning recorded.
+Pure Rust bounded KTX2 decoding checks sections, DFD, metadata, alpha and hash;
+21 asset tests and ten Python tests pass with formatting/denied-warning Clippy.
+This CPU contract does not establish GPU upload/sampling or glTF image import.
+Next: resident texture upload/sampling, then authored image/dependency integration.
+[Contract](M4_ASSET_CONTRACT.md), [evidence](validation/M4_TEXTURES.md).
+
 ## M4 authored UV reconstruction — independently executed (2026-10-11)
 
 Opt-in `--unlit-uv` imports float2 TEXCOORD_0 into normalized schema 3. Source UVs

@@ -4,6 +4,7 @@ use std::{error::Error, fmt};
 pub mod arena;
 pub mod material;
 pub mod residency;
+pub mod texture;
 pub mod uv;
 pub const HEADER_BYTES: usize = 76;
 pub const DEFAULT_BUDGET: usize = 64 * 1024 * 1024;
