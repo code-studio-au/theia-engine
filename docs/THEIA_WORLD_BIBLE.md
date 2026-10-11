@@ -36,12 +36,12 @@ These are **canonical divine titles**; individual personal names proposed in ear
 | **The Guardian** | Protection, restoration, sacrifice | Excessive self-sacrifice | Created elves; principal patron of humans and Aelari |
 | **The Seeker** | Arcane analysis, knowledge, discovery | Intellectual arrogance | No confirmed playable race directly created; patron of halflings and Vaelari |
 | **The Warrior** | Physical empowerment, courage, endurance | Uncompromising honour | Created and is patron of orcs |
-| **The Shaper** | Construction, transformation, living creation | Ambition | Created and is patron of dwarves; exceptionally beloved among ancient mortals |
+| **The Shaper** | Construction, transformation, living creation | **OPEN — distinct flaw not yet confirmed** | Created and is patron of dwarves; exceptionally beloved among ancient mortals |
 | **The Judge** | Magical binding, equilibrium, truth | Inflexibility | Created humans |
 | **The Keeper** | Sealing, containment, preservation | Isolation and secrecy | Created halflings; co-created trolls; patron of Korrath |
 | **The Ascendant** | Amplification, adaptation, synthesis | Envy and ambition | Co-created trolls with Keeper; patron of Vorrath |
 
-**Renaming history:** The Ascendant supersedes *The Ambitious*. Never revert the divine title.
+**Renaming history:** The Ascendant supersedes *The Ambitious*. Never revert the divine title. **Ambition is associated with the Ascendant, not the Shaper; the Shaper's distinct defining flaw remains open.**
 
 Established relationships: Guardian and Warrior were the closest loyal pair, disagreeing over honour versus sacrifice. Seeker and Shaper were early partners in discovery and invention but disagreed about ethical limits. Judge mediated among equals; influenced Warrior, questioned Seeker and opposed unrestricted creation. Guardian sought to protect the distant Keeper; Seeker questioned Keeper's secrecy; Judge respected Keeper but disputed exceptions to shared law. Keeper mistrusted Ascendant's experiments; Guardian and Ascendant were philosophical rivals; Ascendant envied Shaper and had no close divine ally. The Warrior respected Judge and maintained distance from Ascendant.
 
