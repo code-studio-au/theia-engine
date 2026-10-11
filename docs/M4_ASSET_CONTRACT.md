@@ -737,3 +737,14 @@ entry-threshold retention. Diagnostic prior/entry/hard/reset occupy bytes 16–2
 `--lod-hysteresis-test` drives eight budget phases with an explicit reset probe.
 [GPU/history qualification](validation/M4_GPU_LOD_HYSTERESIS.md). General hierarchy,
 page demand, morphing and 3D/material/silhouette errors remain open.
+
+### Separate complete authored mip-chain profile
+
+`texture_mips::TextureMipChain` accepts complete base-first indexed/smallest-first
+physical RGBA8_SRGB KTX2 levels through 1x1, count 1..11, dimensions <=1024 and
+default 4 MiB encoded budget. It shares strict DFD/metadata validation with the
+unchanged single-mip runtime gate. Exact level sizes/offsets/opaque alpha are checked;
+texels borrow immutable bytes. The offline `cook_texture_mips.py` qualifies explicitly
+authored raw levels using pinned KTX 4.4.2 and verifies every byte, without filtering.
+[Contract evidence](validation/M4_TEXTURE_MIP_CONTRACT.md). GPU adoption, mip selection,
+derivatives, filtering and tiled/partial residency remain separate gates.

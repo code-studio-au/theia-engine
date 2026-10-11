@@ -4,6 +4,19 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 authored texture mip-chain contract — independently executed (2026-10-11)
+
+A separate bounded pure-Rust reader admits complete opaque RGBA8 sRGB KTX2 chains,
+1..11 levels with exact ranges/layout/metadata/hash/alpha checks and borrowed texels.
+Pinned offline KTX writes explicit authored levels; square, odd rectangle and eleven-
+level thin files pass exact source checks, official validation and independent Rust
+admission. Repeated cooking is identical. Assets 46/46, renderer 22/22, eight producer
+tests, formatting/asset Clippy pass; Windows GNU assets/examples and 46 Wine tests pass.
+Legacy single-mip admission stays separate; 16-image WSI streaming passes zero
+Vulkan diagnostics and the legacy path cleanly rejects mip-chain files. GPU mip
+upload/sampling, filtering/derivatives/automatic choice and tiled fallback remain next.
+CI configuration added, hosted unexecuted. [Evidence](validation/M4_TEXTURE_MIP_CONTRACT.md).
+
 ## M4 GPU LOD hysteresis — independently executed (2026-10-11)
 
 The two resident heightfield pages now retain GPU-owned level history with explicit

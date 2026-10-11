@@ -825,3 +825,10 @@ history under a stricter entry threshold. Default zero preserves old selection.
 `tools/qualify_lod_hysteresis.py` replay/validation harness and optional
 `tools/qualify_wayland.py --lod-pair <fine coarse>` checks are documented in
 [M4 GPU LOD hysteresis evidence](validation/M4_GPU_LOD_HYSTERESIS.md).
+
+## Authored texture mip-chain qualification
+
+`tools/cook_texture_mips.py` consumes explicit raw levels, validates the pinned KTX
+source build and preserves every authored texel. Inspect the emitted hash-named file
+with the assets `texture_mips` example. This is separate from the existing single-mip
+renderer profile. [Commands/evidence](validation/M4_TEXTURE_MIP_CONTRACT.md).

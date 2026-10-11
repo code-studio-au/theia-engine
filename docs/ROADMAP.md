@@ -292,3 +292,7 @@ M4 bounded GPU LOD hysteresis now qualifies retained selection, stricter entry,
 hard-limit refinement and explicit reset in both shader variants. X11 replay,
 Wayland execution and Windows GNU/Wine checks pass; general hierarchy/streamed page
 demand and texture mip/tile fallback remain implementation gates.
+
+M4 now qualifies a separate complete authored mip-chain CPU/native-cooker contract.
+Next qualify full-chain GPU upload and fixed mip-view sampling before automatic mip
+selection, material derivatives, filtering or tiled fallback publication.

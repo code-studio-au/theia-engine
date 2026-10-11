@@ -13,7 +13,7 @@ pub struct Texture<'a> {
     pub writer: &'a str,
     pub provenance: Option<&'a str>,
 }
-fn long(bytes: &[u8], offset: usize) -> Result<u64> {
+pub(super) fn long(bytes: &[u8], offset: usize) -> Result<u64> {
     Ok(u64::from_le_bytes(
         bytes
             .get(offset..offset + 8)
@@ -64,88 +64,7 @@ impl<'a> Texture<'a> {
         {
             return Err(AssetError("invalid KTX level ranges/lengths"));
         }
-        // Canonical basic DFD for R8G8B8A8_SRGB: RGBSDA/BT709/sRGB, straight
-        // alpha, 1x1 block, four bytes, samples R/G/B/A at bits 0/8/16/24.
-        let dfd = &bytes[104..196];
-        let prefix = [
-            92, 0, 0, 0, 0, 0, 0, 0, 2, 0, 88, 0, 1, 1, 2, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0,
-        ];
-        if dfd[..28] != prefix {
-            return Err(AssetError("unsupported KTX data format descriptor"));
-        }
-        for (i, channel) in [0u8, 1, 2, 31].into_iter().enumerate() {
-            let sample = &dfd[28 + i * 16..44 + i * 16];
-            let required = [
-                i as u8 * 8,
-                0,
-                7,
-                channel,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                255,
-                0,
-                0,
-                0,
-            ];
-            if sample != required {
-                return Err(AssetError("unsupported KTX channel descriptor"));
-            }
-        }
-        let mut offset = 196;
-        let mut orientation = None;
-        let mut writer = None;
-        let mut provenance = None;
-        while offset < start {
-            let length = word(bytes, offset)? as usize;
-            let begin = offset
-                .checked_add(4)
-                .ok_or(AssetError("KTX metadata overflow"))?;
-            let end = begin
-                .checked_add(length)
-                .filter(|&v| v <= start)
-                .ok_or(AssetError("KTX metadata range exceeds section"))?;
-            let padded = crate::aligned(end)?;
-            if length == 0 || padded > start || bytes[end..padded].iter().any(|&v| v != 0) {
-                return Err(AssetError("invalid KTX metadata padding/length"));
-            }
-            let entry = &bytes[begin..end];
-            let split = entry
-                .iter()
-                .position(|&v| v == 0)
-                .ok_or(AssetError("missing KTX key terminator"))?;
-            let key = std::str::from_utf8(&entry[..split])
-                .map_err(|_| AssetError("invalid KTX key UTF-8"))?;
-            let value = entry
-                .get(split + 1..)
-                .and_then(|v| v.strip_suffix(&[0]))
-                .ok_or(AssetError("missing KTX value terminator"))?;
-            if value.contains(&0) {
-                return Err(AssetError("embedded KTX value terminator"));
-            }
-            let value =
-                std::str::from_utf8(value).map_err(|_| AssetError("invalid KTX value UTF-8"))?;
-            let slot = match key {
-                "KTXorientation" => &mut orientation,
-                "KTXwriter" => &mut writer,
-                "THEIAprovenance" => &mut provenance,
-                _ => return Err(AssetError("unsupported KTX metadata key")),
-            };
-            if value.is_empty() || slot.replace(value).is_some() {
-                return Err(AssetError("empty or duplicate KTX metadata"));
-            }
-            offset = padded;
-        }
-        if orientation != Some("rd") || writer.is_none() {
-            return Err(AssetError(
-                "KTX profile requires top-left orientation and writer",
-            ));
-        }
+        let (writer, provenance) = sections(&bytes[104..196], &bytes[196..start])?;
         let texels = &bytes[start..];
         if texels.as_chunks::<4>().0.iter().any(|v| v[3] != 255) {
             return Err(AssetError("KTX qualification requires opaque texels"));
@@ -159,11 +78,105 @@ impl<'a> Texture<'a> {
             width,
             height,
             texels,
-            writer: writer.unwrap(),
+            writer,
             provenance,
         })
     }
 }
+/// Shared strict sRGB DFD/key-value admission for the two bounded texture profiles.
+pub(super) fn sections<'a>(dfd: &[u8], metadata: &'a [u8]) -> Result<(&'a str, Option<&'a str>)> {
+    if dfd.len() != 92
+        || metadata.is_empty()
+        || metadata.len() > 16384
+        || !metadata.len().is_multiple_of(4)
+    {
+        return Err(AssetError("invalid KTX DFD/metadata section size"));
+    }
+    let start = metadata.len();
+    // Canonical basic DFD for R8G8B8A8_SRGB: RGBSDA/BT709/sRGB, straight
+    // alpha, 1x1 block, four bytes, samples R/G/B/A at bits 0/8/16/24.
+    let prefix = [
+        92, 0, 0, 0, 0, 0, 0, 0, 2, 0, 88, 0, 1, 1, 2, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    if dfd[..28] != prefix {
+        return Err(AssetError("unsupported KTX data format descriptor"));
+    }
+    for (i, channel) in [0u8, 1, 2, 31].into_iter().enumerate() {
+        let sample = &dfd[28 + i * 16..44 + i * 16];
+        let required = [
+            i as u8 * 8,
+            0,
+            7,
+            channel,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            255,
+            0,
+            0,
+            0,
+        ];
+        if sample != required {
+            return Err(AssetError("unsupported KTX channel descriptor"));
+        }
+    }
+    let mut offset = 0;
+    let mut orientation = None;
+    let mut writer = None;
+    let mut provenance = None;
+    while offset < start {
+        let length = word(metadata, offset)? as usize;
+        let begin = offset
+            .checked_add(4)
+            .ok_or(AssetError("KTX metadata overflow"))?;
+        let end = begin
+            .checked_add(length)
+            .filter(|&v| v <= start)
+            .ok_or(AssetError("KTX metadata range exceeds section"))?;
+        let padded = crate::aligned(end)?;
+        if length == 0 || padded > start || metadata[end..padded].iter().any(|&v| v != 0) {
+            return Err(AssetError("invalid KTX metadata padding/length"));
+        }
+        let entry = &metadata[begin..end];
+        let split = entry
+            .iter()
+            .position(|&v| v == 0)
+            .ok_or(AssetError("missing KTX key terminator"))?;
+        let key = std::str::from_utf8(&entry[..split])
+            .map_err(|_| AssetError("invalid KTX key UTF-8"))?;
+        let value = entry
+            .get(split + 1..)
+            .and_then(|v| v.strip_suffix(&[0]))
+            .ok_or(AssetError("missing KTX value terminator"))?;
+        if value.contains(&0) {
+            return Err(AssetError("embedded KTX value terminator"));
+        }
+        let value =
+            std::str::from_utf8(value).map_err(|_| AssetError("invalid KTX value UTF-8"))?;
+        let slot = match key {
+            "KTXorientation" => &mut orientation,
+            "KTXwriter" => &mut writer,
+            "THEIAprovenance" => &mut provenance,
+            _ => return Err(AssetError("unsupported KTX metadata key")),
+        };
+        if value.is_empty() || slot.replace(value).is_some() {
+            return Err(AssetError("empty or duplicate KTX metadata"));
+        }
+        offset = padded;
+    }
+    if orientation != Some("rd") || writer.is_none() {
+        return Err(AssetError(
+            "KTX profile requires top-left orientation and writer",
+        ));
+    }
+    Ok((writer.unwrap(), provenance))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

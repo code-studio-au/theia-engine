@@ -198,6 +198,15 @@ jobs:
           texture = json.load(open('build/texture-report.json'))['path']
           subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'texture', '--', texture], check=True)
           PY
+      - name: Qualify complete authored texture mip chain
+        run: |
+          python3 -m unittest discover -s tools -p test_texture_mips.py
+          python3 tools/cook_texture_mips.py --ktx "$RUNNER_TEMP/ktx-build/Release/ktx" --build-dir "$RUNNER_TEMP/ktx-build" --source-archive "$RUNNER_TEMP/ktx-source.tar.gz" --source fixtures/textures/opaque_4x4_mips.json --output-dir build/assets > build/texture-mips-report.json
+          python3 - <<'PY'
+          import json, subprocess
+          texture = json.load(open('build/texture-mips-report.json'))['path']
+          subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'texture_mips', '--', texture], check=True)
+          PY
       - name: Qualify complete immutable textured bundle admission
         run: |
           python3 - <<'PY'
