@@ -4,6 +4,16 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 CPU LOD hysteresis contract — independently executed (2026-10-11)
+
+A bounded two-page selection oracle delays fine-to-coarse transitions using a
+stricter entry threshold while preserving the original hard-limit refinement and
+clip guards. Caller-owned view/page history resets to Fine; fraction zero preserves
+the existing stateless policy. Three new tests include a 10000-step independent
+orthographic state machine. Assets 42/42, renderer 22/22, formatting and asset Clippy
+pass. GPU history/adoption remains the next unit; no runtime/performance claim.
+[Evidence](validation/M4_LOD_HYSTERESIS_CONTRACT.md).
+
 ## M4 maximum texture capacity on Wayland — independently executed (2026-10-11)
 
 Native Wayland surfaces in owned nested Weston execute all four 16-image bundles,

@@ -715,3 +715,12 @@ added: each load branches between two fixed descriptor bindings. Existing
 single-page camera/cull/identity/material paths and headless test remain intact.
 General hierarchy/page demand, LOD hysteresis/morphing, 3D/silhouette/material
 errors, allocation reuse and multi-frame retirement remain open.
+
+### Bounded CPU LOD hysteresis
+
+`lod::select_hysteresis` uses caller-owned prior level for one view/page pair.
+An entry fraction [0,1] reduces the fine-to-coarse threshold; coarse-to-fine keeps
+the original hard budget and clip guards. Both entry arithmetic steps round inward.
+Fraction zero preserves `select` exactly. The caller starts/resets to Fine when
+context changes. This is independent of GPU history and streamed page demand.
+[Contract qualification](validation/M4_LOD_HYSTERESIS_CONTRACT.md).

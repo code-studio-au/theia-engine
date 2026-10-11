@@ -283,3 +283,7 @@ three deferrals. Conservative retirement and broader M4 gates remain open.
 The same maximum-capacity resident/replacement/budget cases now pass native Wayland
 surface execution and validation in owned nested Weston. Capacity pixel replay stays
 X11-only; native-seat/restore, Windows and cross-vendor gates remain open.
+
+Next M4 implementation slice: GPU adoption of the qualified CPU hysteresis contract
+for the bounded resident heightfield pair. Preserve hard pixel limits and clip
+fallback, initialize history explicitly and qualify temporal selection trajectories.

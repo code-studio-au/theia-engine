@@ -13,6 +13,7 @@ pub enum FineReason {
     ClipBoundary,
     UnboundedProjection,
     PixelBudget,
+    Hysteresis,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Selection {
@@ -122,6 +123,45 @@ pub fn select(
     })
 }
 
+/// Delay fine-to-coarse transitions until the projected bound fits a stricter
+/// entry budget. Coarse-to-fine uses the original hard budget, so hysteresis
+/// never authorizes a previously coarse page above the caller's error limit.
+/// The caller owns history for one view/page pair and starts/resets it to Fine
+/// when that context changes. This function neither caches nor authenticates it.
+pub fn select_hysteresis(
+    bounds: [[f32; 3]; 2],
+    vertical_error: f32,
+    rows: [[f32; 4]; 4],
+    extent: [u32; 2],
+    pixel_budget: f64,
+    previous: Level,
+    entry_fraction: f64,
+) -> Result<Selection> {
+    if !entry_fraction.is_finite() || !(0.0..=1.0).contains(&entry_fraction) {
+        return Err(AssetError("invalid LOD hysteresis entry fraction"));
+    }
+    let selection = select(bounds, vertical_error, rows, extent, pixel_budget)?;
+    if previous == Level::Coarse || selection.level == Level::Fine || entry_fraction == 0. {
+        return Ok(selection);
+    }
+    // Round the positive entry threshold inward; the hard-budget oracle still
+    // decides safety before history influences a transition.
+    let entry_factor = (1. - entry_fraction).next_down().max(0.);
+    let entry_budget = (entry_factor * pixel_budget).next_down().max(0.);
+    Ok(
+        if selection
+            .bound_pixels
+            .unwrap()
+            .iter()
+            .all(|v| *v <= entry_budget)
+        {
+            selection
+        } else {
+            fine(FineReason::Hysteresis, selection.bound_pixels)
+        },
+    )
+}
+
 /// Convert a finite nonnegative producer upper bound to f32 without rounding down.
 pub fn error_f32(upper: f64) -> Result<f32> {
     if !upper.is_finite() || upper < 0. || upper > f64::from(f32::MAX) {
@@ -146,6 +186,97 @@ mod tests {
             [0., 0., 0., 0.5],
             [0., 0., 0., 1.],
         ]
+    }
+    #[test]
+    fn hysteresis_delays_coarsening_but_never_delays_hard_limit_refinement() {
+        let mut previous = Level::Fine;
+        let expected = [
+            Level::Fine,
+            Level::Fine,
+            Level::Coarse,
+            Level::Coarse,
+            Level::Coarse,
+            Level::Fine,
+            Level::Fine,
+            Level::Coarse,
+        ];
+        for (error, want) in [0.9, 0.81, 0.79, 0.9, 0.99, 1.01, 0.9, 0.79]
+            .into_iter()
+            .zip(expected)
+        {
+            let selection =
+                select_hysteresis(BOX, error, ortho(), [200; 2], 100., previous, 0.2).unwrap();
+            assert_eq!(selection.level, want);
+            if selection.level == Level::Coarse {
+                assert!(selection.bound_pixels.unwrap().iter().all(|v| *v <= 100.));
+            }
+            previous = selection.level;
+        }
+        // A new view/page context starts fine, even inside the dead band.
+        assert_eq!(
+            select_hysteresis(BOX, 0.9, ortho(), [200; 2], 100., Level::Fine, 0.2)
+                .unwrap()
+                .reason,
+            Some(FineReason::Hysteresis)
+        );
+    }
+    #[test]
+    fn hysteresis_preserves_guards_zero_error_and_stateless_policy() {
+        for previous in [Level::Fine, Level::Coarse] {
+            assert_eq!(
+                select_hysteresis(BOX, 0., ortho(), [200; 2], 0., previous, 1.)
+                    .unwrap()
+                    .level,
+                Level::Coarse
+            );
+            let mut rows = ortho();
+            rows[2] = [0., 0., 1., 0.];
+            assert_eq!(
+                select_hysteresis(BOX, 0., rows, [200; 2], 1e9, previous, 0.2)
+                    .unwrap()
+                    .reason,
+                Some(FineReason::ClipBoundary)
+            );
+            for fraction in [-0.1, 1.1, f64::NAN, f64::INFINITY] {
+                assert!(
+                    select_hysteresis(BOX, 0.1, ortho(), [200; 2], 100., previous, fraction)
+                        .is_err()
+                );
+            }
+            for error in [0., 0.8, 1., 1.1] {
+                let ordinary = select(BOX, error, ortho(), [200; 2], 100.).unwrap();
+                let disabled =
+                    select_hysteresis(BOX, error, ortho(), [200; 2], 100., previous, 0.).unwrap();
+                assert_eq!(ordinary.level, disabled.level);
+                assert_eq!(ordinary.reason, disabled.reason);
+                assert_eq!(ordinary.bound_pixels, disabled.bound_pixels);
+            }
+            assert!(select_hysteresis(BOX, 0.1, ortho(), [0, 1], 100., previous, 0.2).is_err());
+        }
+    }
+    #[test]
+    fn generated_hysteresis_sequence_matches_independent_orthographic_state_machine() {
+        let mut previous = Level::Fine;
+        let mut coarse = false;
+        let mut transitions = 0;
+        let mut seed = 719u64;
+        for _ in 0..10000 {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            // Avoid exact entry/exit ties; oracle outward rounding is conservative.
+            let error = ((seed >> 32) % 2000) as f32 / 1000. + 0.00025;
+            let displacement = f64::from(error) * 100.;
+            coarse = if coarse {
+                displacement <= 100.
+            } else {
+                displacement <= 80.
+            };
+            let selected =
+                select_hysteresis(BOX, error, ortho(), [200; 2], 100., previous, 0.2).unwrap();
+            assert_eq!(selected.level == Level::Coarse, coarse);
+            transitions += usize::from(selected.level != previous);
+            previous = selected.level;
+        }
+        assert!(transitions > 1000);
     }
     #[test]
     fn analytic_orthographic_displacement_and_zero_error() {
