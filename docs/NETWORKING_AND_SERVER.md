@@ -324,3 +324,21 @@ relay (`--network-faults`). Activation follows verified bootstrap; teardown disa
 faults before bounded close draining and joins the relay. Separate GPU/native input/
 WSI/replay tests pass under actual encrypted packet faults. No WAN/handshake-loss/
 load or general repair/reconnect claim. [Evidence](validation/M8_LIVE_PACKET_FAULTS.md).
+
+## M8 actual transport-neutral delta reconstruction
+
+`theia-protocol::delta` qualifies sorted full-actor replacements/removals against
+an explicit complete baseline tick. Replica accepts only its current/previous
+retained complete set; missing/evicted baseline returns `MissingBaseline` without
+changing either endpoint. The caller must obtain a full snapshot; no guessed
+actor values or partial delta application. Full repair obeys the same source,
+canonical state, monotonic tick and processed-movement watermark guards.
+
+Limits remain at most 128 actors, two retained sets, bounded delta lists and
+reconstruction union. Changes include creation/removal/health/observed respawn;
+this is full-actor replacement, not component bitpacking or a performance result.
+Older delta envelopes can be ignored as stale; same-tick reconstruction checks
+conflicts when its baseline is retained. Without the baseline, even a duplicate
+requires explicit repair. No baseline ACK policy/cache or wire message is added;
+THN2 network labs/viewers continue full snapshots. Next qualify an explicitly
+acknowledged sender baseline policy. [Evidence](validation/M8_DELTA_RECONSTRUCTION.md).

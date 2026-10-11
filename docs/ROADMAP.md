@@ -224,3 +224,9 @@ Live M8 viewer packet-fault qualification now passes bounded drops/reorders/
 duplicates, keyboard combat, WSI and replay. Next isolate transport-neutral bounded
 delta reconstruction/missing-baseline full-state repair before changing the tested
 wire version. Production baselines, accounts/persistence and scale remain open.
+
+M8 transport-neutral full-actor deltas now qualify exact named baselines, readonly
+atomic reconstruction, bounded membership, stale/foreign rejection and explicit
+full-state repair under synthetic loss/reordering. Next qualify a bounded sender's
+acknowledged baseline selection before wire integration. THN2 still sends full
+snapshots; this does not close the state-delta/persistence/network milestone.

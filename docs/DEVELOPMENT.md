@@ -688,3 +688,14 @@ Manual clients can add `--network-faults`. Faults activate after verified bootst
 final relay reports require actual positive drop/delay/reorder/duplicate counts and
 at most two retained packets. Native harness checks both viewers' reports.
 [Evidence/teardown limits](validation/M8_LIVE_PACKET_FAULTS.md).
+
+Transport-neutral bounded delta reconstruction/full-state repair oracle:
+
+```sh
+cargo test --locked --manifest-path crates/theia-protocol/Cargo.toml
+cargo run --locked --manifest-path crates/theia-protocol/Cargo.toml --example delta_repair
+```
+
+This is a synthetic application-message loss/reordering test. The encrypted THN2
+listener/viewers still exchange full snapshots; no transport baseline ACK/cache
+policy or network repair request is added. [Evidence](validation/M8_DELTA_RECONSTRUCTION.md).

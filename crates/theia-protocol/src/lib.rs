@@ -341,6 +341,7 @@ impl Authority {
 #[cfg(test)]
 mod tests;
 
+pub mod delta;
 pub mod replica;
 
 pub mod presentation;

@@ -4,6 +4,23 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 transport-neutral delta reconstruction — independently executed (2026-10-11)
+
+A bounded full-actor delta prototype names its exact complete baseline tick,
+canonical upserts/removals and target tick/watermark. Readonly publication accepts
+only a retained endpoint, reconstructs atomically and preserves state when the
+baseline is missing. Full snapshots explicitly repair history; source checks and
+monotonic ticks/watermarks remain mandatory. THN2 transport still sends full sets.
+
+Protocol tests 20 pass, including 3000 independent sparse-membership round trips,
+lifecycle/limits/conflicts/reset/baseline eviction. A 10000-generated-packet CPU
+loss/reordering example checks every publication against complete-state values,
+exercises 2922 missing-baseline repairs and verifies final full tick 10001. Renderer
+22 tests and encrypted fault regression pass; formatting/Clippy pass. This unit
+has no baseline ACK producer/cache policy, wire delta or network repair exchange.
+Next qualify a bounded sender's explicitly acknowledged baseline selection before
+wire integration. Windows/hosted CI unexecuted. [Evidence](validation/M8_DELTA_RECONSTRUCTION.md).
+
 ## M8 live GPU packet faults — independently executed (2026-10-11)
 
 Render Lab `--network-faults` reuses the bounded shared opaque UDP relay after

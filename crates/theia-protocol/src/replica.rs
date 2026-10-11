@@ -23,6 +23,7 @@ pub enum Error {
     InvalidState,
     ConflictingTick,
     RegressingWatermark,
+    MissingBaseline,
 }
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -95,8 +96,31 @@ impl Replica {
     pub fn previous(&self) -> Option<&Snapshot> {
         self.previous.as_ref()
     }
+    /// Reconstruct only against a retained complete endpoint. Missing baselines
+    /// preserve both endpoints and require a full-state repair from the caller.
+    pub fn publish_delta(
+        &mut self,
+        source: Source,
+        delta: &crate::delta::Delta,
+    ) -> Result<Publication, Error> {
+        if self.source != Some(source) {
+            return Err(Error::UnknownSource);
+        }
+        delta.validate(self.max_actors)?;
+        if self.latest.as_ref().is_some_and(|v| delta.tick < v.tick) {
+            return Ok(Publication::Stale);
+        }
+        let baseline = self
+            .latest
+            .iter()
+            .chain(self.previous.iter())
+            .find(|v| v.tick == delta.baseline_tick)
+            .ok_or(Error::MissingBaseline)?;
+        let snapshot = delta.reconstruct(baseline, self.max_actors)?;
+        self.publish(source, snapshot)
+    }
     /// Full-set publication is atomic after validation. Empty full sets remove every actor.
-    /// Missing intermediate ticks need no baseline; no delta messages are accepted here.
+    /// Missing intermediate ticks need no baseline; a full set also repairs delta history.
     pub fn publish(
         &mut self,
         source: Source,
@@ -105,19 +129,7 @@ impl Replica {
         if self.source != Some(source) {
             return Err(Error::UnknownSource);
         }
-        if snapshot.actors.len() > self.max_actors {
-            return Err(Error::ActorLimit);
-        }
-        if snapshot.actors.windows(2).any(|v| v[0].id >= v[1].id)
-            || snapshot.actors.iter().any(|v| {
-                v.position_mm
-                    .iter()
-                    .any(|p| !(-1_000_000..=1_000_000).contains(p))
-                    || v.health > 1_000_000
-            })
-        {
-            return Err(Error::InvalidState);
-        }
+        validate_actors(&snapshot.actors, self.max_actors)?;
         if let Some(current) = &self.latest {
             if snapshot.tick < current.tick {
                 return Ok(Publication::Stale);
@@ -141,6 +153,25 @@ impl Replica {
         self.previous = self.latest.replace(snapshot);
         Ok(Publication::New)
     }
+}
+pub(crate) fn validate_actors(actors: &[ActorState], max_actors: usize) -> Result<(), Error> {
+    if !(1..=128).contains(&max_actors) {
+        return Err(Error::InvalidLimit);
+    }
+    if actors.len() > max_actors {
+        return Err(Error::ActorLimit);
+    }
+    if actors.windows(2).any(|v| v[0].id >= v[1].id)
+        || actors.iter().any(|v| {
+            v.position_mm
+                .iter()
+                .any(|p| !(-1_000_000..=1_000_000).contains(p))
+                || v.health > 1_000_000
+        })
+    {
+        return Err(Error::InvalidState);
+    }
+    Ok(())
 }
 #[cfg(test)]
 mod tests {
