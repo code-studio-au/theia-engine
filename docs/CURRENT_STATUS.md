@@ -4,6 +4,18 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 maximum resident texture table — independently executed (2026-10-11)
+
+Actual indexed sampling now qualifies all 16 descriptor slots on RX 7900 XTX/RADV/X11.
+Four replay captures each verify all uploaded image texels and 85 framebuffer probes;
+triangle-centroid probes cover every descriptor index. Separate WSI smoke passes
+120 frames/ten generations with zero diagnostics. The measured 65536-byte image-only
+budget passes exactly; one byte less rejects the final image with clean validation
+teardown. Complete repeated cooking is identical, five existing producer tests pass.
+No runtime/shader changes or performance claim. Concurrent capacity replacements,
+aggregate bundle budgets at this capacity, other platforms/vendors and broader M4
+gates remain open. [Evidence](validation/M4_TEXTURE_CAPACITY.md).
+
 ## Windows GNU build/compatibility qualification — independently executed (2026-10-11)
 
 All 11 Rust CI packages cross-link normal/test/example targets and pass denied-

@@ -799,3 +799,10 @@ It closes only that prefix's wineserver, including failure paths. Wine CPU tests
 are compatibility evidence; native Windows/MSVC/GPU remains unqualified. The
 current Wine encrypted network executable fails its upstream IPv6-only socket
 query on an IPv4 socket; no fallback/patch is applied. [Evidence](validation/WINDOWS_BUILD.md).
+
+## Maximum resident texture-table qualification
+
+Use `tools/cook_texture_capacity.py` to produce four deterministic bundles sampling
+all 16 descriptor indices, then `tools/qualify_texture_capacity.py` for separate
+RenderDoc pixel/texel references, validation WSI and measured image-budget boundaries.
+Commands and limits: [M4 texture capacity](validation/M4_TEXTURE_CAPACITY.md).

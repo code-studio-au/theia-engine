@@ -269,3 +269,8 @@ denied-warning Clippy, 129 Wine compatibility tests and headless authority/scrip
 execution. Winsock oversized-UDP relay handling is corrected. Native Windows/MSVC/
 GPU/Quinn execution and the Wine encrypted-socket limitation remain explicit gates.
 Remaining M4/M7/M8 implementation slices can proceed independently.
+
+M4 now qualifies every slot of the bounded 16-image resident descriptor table on
+RADV/X11, including exact image-budget success and one-byte-short clean rejection.
+Concurrent full-capacity replacements and aggregate bundle admission at this boundary
+remain separate checks; general LOD and virtual textures remain open.
