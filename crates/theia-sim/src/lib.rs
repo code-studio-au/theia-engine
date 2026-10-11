@@ -86,7 +86,7 @@ impl Default for Rules {
         }
     }
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MoveInput {
     pub sequence: u64,
     pub axes: [i16; 2],

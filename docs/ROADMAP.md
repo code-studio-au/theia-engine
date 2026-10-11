@@ -167,3 +167,10 @@ holes and session-scoped replay protection. Next implement a bounded encrypted
 Quinn two-client loopback qualification with DATAGRAM movement and reliable
 request/outcome streams. Persistence, replication baselines and client rendering
 remain open; this does not close M7 or M8.
+
+Encrypted Quinn IPv4 loopback now qualifies two client contexts, DATAGRAM movement/
+full snapshots, separate reliable request/ACK streams, server-authoritative combat,
+certificate/ALPN rejection and bounded malformed/stalled-stream handling. Next
+qualify encrypted exchange under controlled packet loss/reordering, then bounded
+snapshot versioning/repair and client presentation integration. Persistence and
+accounts remain unimplemented; M8 is still open.

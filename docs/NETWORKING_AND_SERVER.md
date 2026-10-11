@@ -130,3 +130,37 @@ issues a fresh peer; old contexts fail. No cross-reconnect retry continuity,
 account binding, durable transactions, wire version, baseline replication or
 Quinn socket exists in this unit. Outcome delivery loss can be repaired by
 resubmitting the same unacknowledged request while the session remains live.
+
+## M8 actual encrypted loopback transport
+
+The separate `theia-network-lab` now qualifies Quinn/rustls/ring over IPv4
+loopback with two clients. Trusted fixture setup assigns logical IDs 10/20 to
+server-side connection contexts. TLS authenticates the generated localhost
+server certificate and negotiated `theia-lab-1` ALPN. Wrong hostname, untrusted
+root and ALPN mismatch fail. No client account identity or mutual TLS is implied.
+Both endpoints disable early data, and only complete handshakes enter gameplay.
+
+Movement messages and full two-actor snapshots use DATAGRAM. Each attack/semantic
+ACK uses its own bidirectional reliable stream. Queued/pending replies require
+same-ID retries until completion; lost outcome delivery can reuse the retained
+result. Application ACKs release outcomes through the adapter's contiguous floor.
+This wire prototype uses `THN1`, explicit little-endian fields and enum tags,
+exact lengths, strict ID/range/order checks and a 128-byte encoded limit. It is
+qualification-only, not an approved general replication schema. Full snapshots
+need no delta baseline and contain processed movement watermarks, not durable
+commit ACKs. General client snapshot version/clock/interpolation work remains open.
+
+Two connections each admit at most four concurrent stream handlers; whole stream
+exchanges have one-second deadlines. The authority event channel holds 32
+entries; movement drops when full. Reliable producers wait within their deadline.
+Transport windows bound per-stream/connection receive/send bytes to 256/4096/4096;
+DATAGRAM receive/send queues use 1024/128 bytes. Tick execution is a 50 ms lab
+interval with missed-tick skip, not a production scheduler or wall-clock fidelity
+claim. Default two-thread Tokio runtime, two actor contexts and four retained
+request IDs per peer bound this fixture. Stalled streams do not suspend ticks or
+another peer's request; shutdown aborts and joins workers.
+
+IPv6 address selection is explicit but this host disables IPv6, so bind fails
+without silent IPv4 fallback. Network faults, replication deltas/baseline repair,
+account authorization, durable effects, disconnect lifecycle/reconnect repair,
+renderer input/presentation integration and scale measurement remain unqualified.

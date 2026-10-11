@@ -1,6 +1,6 @@
 //! Basic server-owned range/LOS/cooldown/health. Point targets on the flat fixture.
 use crate::{World, WorldId};
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AttackInput {
     pub sequence: u64,
     pub target: WorldId,

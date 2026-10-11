@@ -538,3 +538,19 @@ mutually exclusive with `--ticks`/`--combat-test`. The lab validates mixed seque
 spaces, shuffled request arrivals, duplicate results, ACK holes, bounded cache
 pressure and an independent health model. See
 [request evidence](validation/M8_REQUEST_SEQUENCING.md) for limits.
+
+## M8 encrypted loopback qualification
+
+```sh
+cargo test --locked --manifest-path apps/theia-network-lab/Cargo.toml
+cargo clippy --locked --manifest-path apps/theia-network-lab/Cargo.toml --all-targets -- -D warnings
+cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml
+# On a host with enabled IPv6 loopback (not qualified on this machine):
+cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml -- --ipv6
+```
+
+This separate process hosts two clients and one authority over ephemeral
+localhost UDP ports. It generates a certificate in memory and trusts that
+specific certificate; no verification bypass or private-key file exists.
+The whole qualification has a 20-second deadline. No account service or persistent
+state is involved. See [evidence and limits](validation/M8_QUINN_LOOPBACK.md).

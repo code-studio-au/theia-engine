@@ -4,6 +4,24 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 encrypted two-client loopback — independently executed (2026-10-11)
+
+A separate `theia-network-lab` exchanges bounded versioned messages through
+Quinn 0.11.11/rustls/ring. Two TLS certificate-verified local clients send
+supersedable movement DATAGRAMs and independent reliable combat/ACK streams;
+the single-writer authority publishes full two-actor snapshot DATAGRAMs. ALPN
+matches explicitly, 0-RTT is disabled and certificates/keys stay in memory.
+Server connection context binds actors; no account authentication is present.
+
+IPv4 runs verify range rejection, movement application, two authoritative hits,
+immutable duplicate results, conflicts, window/ACK-hole repair, stale inputs,
+malformed messages and isolation of a stalled stream. Both clients observe
+health [75,75]. Three codec tests include all message truncations/extensions,
+explicit enum/ID/numeric limits and 20000 arbitrary-byte cases. Formatting and
+Clippy pass. IPv6 bind fails because this host disables IPv6; Windows/hosted CI
+remain unexecuted. Loss/reordering, deltas/baselines, persistence and renderer
+integration remain open. [Evidence](validation/M8_QUINN_LOOPBACK.md).
+
 ## M8 bounded request adapter — independently executed (2026-10-11)
 
 `theia-protocol` separates external supersedable movement sequences from reliable

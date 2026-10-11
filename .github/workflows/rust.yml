@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        package: [apps/theia-gpu-test, apps/theia-render-lab, crates/theia-ecs, apps/theia-ecs-lab, crates/theia-assets, tools/theia-gltf-import, crates/theia-sim, crates/theia-protocol, apps/theia-server-lab]
+        package: [apps/theia-gpu-test, apps/theia-render-lab, crates/theia-ecs, apps/theia-ecs-lab, crates/theia-assets, tools/theia-gltf-import, crates/theia-sim, crates/theia-protocol, apps/theia-server-lab, apps/theia-network-lab]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +36,16 @@ jobs:
         run: cargo run --locked --manifest-path apps/theia-server-lab/Cargo.toml -- --combat-test
       - name: Execute bounded request sequencing qualification
         run: cargo run --locked --manifest-path apps/theia-server-lab/Cargo.toml -- --protocol-test
+  network:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Execute certificate-verified two-client Quinn loopback
+        run: cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml
   shaders:
     runs-on: ubuntu-latest
     steps:
