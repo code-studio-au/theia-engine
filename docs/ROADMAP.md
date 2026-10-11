@@ -120,3 +120,10 @@ Pending sampled-image transfers now qualify submit/poll/finish/cancellation,
 including complete-set submission before startup waits. Next connect CPU
 bundle reservations, bounded I/O and all-resource GPU upload completion to
 frame-safe publication.
+
+Two complete v2 bundles now alternate through bounded asynchronous I/O, full-set
+CPU reservations, pending buffer/image uploads and frame-safe graphics generation
+publication. One/two-image count changes, budget deferrals and initial/replaced/
+restored replay pass. Publication uses conservative device-idle generation
+retirement. General LOD hierarchy/error selection, streamed terrain integration
+and texture mips/tiles remain open; next qualify a bounded LOD error contract.

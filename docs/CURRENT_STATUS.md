@@ -4,6 +4,28 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 complete indexed-bundle streaming — independently executed (2026-10-11)
+
+`--bundle <v2> --stream-bundle <v2>` alternates two complete fixed graphs.
+One bounded file worker loads roots/leaves; complete CPU reservation precedes
+four buffer and all image submissions. The frame loop polls every dedicated
+fence and retains the current set until all uploads complete. After its sole
+frame fence retires, it rebuilds a graphics generation with the entire new set,
+then publishes the CPU epoch. One/two-image descriptor-count changes pass.
+Generation retirement currently uses device idle; no overlap/performance claim.
+
+Six 120-frame/WSI cases qualify five complete replacements each (default,
+shared, reverse, exact CPU/physical/image budgets). Three one-byte-short budget
+cases retain the current set and record five deferrals each. Actual physical
+charges: two-image set 12704, alias set 8416; coexistence needs 21120 bytes and
+12288 image-only bytes. CPU coexistence shares one texture and charges 11012.
+Four captures verify initial/replaced/restored/shared states at 85 samples each.
+Late missing source/shader and initial-budget failures clean up without Vulkan
+diagnostics. Renderer checks (14), formatting/Clippy and preserved headless
+compute (256 values) pass. M4 remains open: general LOD/error/hierarchy,
+terrain integration and mip/virtual texture work are still outstanding. Details:
+[streaming evidence](validation/M4_BUNDLE_STREAMING.md).
+
 ## M4 submitted texture-set uploads — independently executed (2026-10-11)
 
 Resident image uploads now expose submit, readiness and completion ownership.

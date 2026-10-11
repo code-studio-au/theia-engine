@@ -72,3 +72,11 @@ publication with retained-reader ownership and unique encoded-byte accounting.
 It includes manifests, shares exact children across v1/v2 sets, and excludes
 I/O/decoded temporary memory and physical GPU allocation. Next qualify the
 separate asynchronous GPU publication/retirement path.
+
+The bounded two-v2-bundle viewer now performs asynchronous complete I/O and
+uploads, then frame-safe complete generation publication. CPU child sharing,
+active/pending physical buffer/image budgets, image-only budgets and count
+changes qualify locally. Publication currently retires/rebuilds a graphics
+generation with device idle; general world streaming and allocation reuse remain
+open. Next qualify a bounded LOD error/selection contract alongside existing
+immutable bundle ownership, keeping advanced GI deferred.

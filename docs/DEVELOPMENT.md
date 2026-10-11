@@ -438,3 +438,20 @@ sets from their sibling directories. Choose different non-contained sets, such
 as the two-image and alias fixture bundles. It verifies duplicate-stage sharing,
 atomic replacement, retained-reader budget rejection and last-owner reuse. This
 example performs no Vulkan work.
+
+## Complete indexed-bundle streaming
+
+Launch `--bundle <two-image v2 bundle> --stream-bundle <alias v2 bundle>
+--gpu 7900 --wsi-smoke-test`. The reference pair requires 11012 unique CPU
+encoded bytes, 21120 combined active/pending resource bytes, and 12288 combined
+image bytes on the qualified RADV device. Set `--bundle-byte-budget`,
+`--bundle-gpu-budget` and `--texture-budget` for explicit pressure tests. Defaults
+are 64 MiB, 32 MiB and 4 MiB respectively; physical charges vary by device.
+
+For replay retain `THEIA_CAPTURE_BUNDLE` and expected role paths for the set
+that should be active at the capture frame. Add `THEIA_CAPTURE_INITIAL_BUNDLE`
+and `THEIA_CAPTURE_STREAM_BUNDLE` for actual launch. The reference pair captures
+initial at frame 10, alias at 30, restored initial at 50. Every capture independently
+checks actual GPU bytes and table/sampled colours, so late publication cannot
+silently pass as the expected set. This mode rebuilds graphics generations and
+waits device idle at publication; it is not a performance test.

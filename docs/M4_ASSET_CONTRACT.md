@@ -584,3 +584,38 @@ pending images. Startup waits before target/descriptor construction. This is
 not yet asynchronous whole-bundle frame-time publication. Staging allocations
 remain separately counted and individually bounded; images retain their
 aggregate physical byte budget.
+
+### Complete indexed-bundle streaming qualification
+
+`--bundle <initial v2> --stream-bundle <replacement v2>` alternates fixed
+complete graphs every twenty presented frames with one I/O worker/channel slot
+and one pending GPU set. Each source root/leaf read is bounded by its admitted
+role length and format cap. Inputs and decoded admission temporaries are outside
+the CPU residency charge; file-read duration is not deadline bounded. Shutdown
+joins the local-file worker. There is no arbitrary dependency DAG or demand queue.
+
+`--bundle-byte-budget` (default 64 MiB) caps unique retained encoded owners,
+including manifests. `--bundle-gpu-budget` (default 32 MiB) caps all active plus
+pending geometry/factor/UV/table buffer and sampled-image physical allocations.
+`--texture-budget` additionally caps active plus pending image allocations.
+GPU owners are not deduplicated across sets; shared content is deduplicated only
+in CPU residency. Work buffers, targets, descriptors, samplers, command pools
+and staging allocations are excluded from these GPU charges. Staging bytes
+are logged separately; uploads retain preceding per-resource staging bounds.
+
+Every buffer/image uses a dedicated transfer fence. Pending transfers drop
+before CPU reservations; partial budget failure retires submitted work and
+keeps the current complete set. Publication requires all upload fences ready and
+the sole frame fence retired. Graphics/presentation are conservatively retired
+with device idle; the complete graphics generation is rebuilt, permitting the
+sampled-image array count to change. No frame sees a partially replaced set.
+Only then does the CPU epoch change. This rebuild is a qualification approach,
+not an upload/render-overlap or production latency claim. A source/driver/shader
+error terminates the viewer with orderly teardown; only budget pressure defers
+and retries. Target-construction failure is fatal and has no rollback guarantee.
+
+One/two-image alternating sets and source/table/framebuffer consistency pass
+local RX 7900 XTX validation/replay. Existing geometry-only streaming and fixed
+render modes remain separate. General GPU allocation reuse, geometry arenas for
+whole bundles, multi-frame retirement, fallback scheduling, derivative/mip/tile
+residency and a streamed world database remain open.

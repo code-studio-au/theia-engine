@@ -138,8 +138,16 @@ def qualify(report):
             child=Path(path).read_bytes()
             if encoded[16+i*40:48+i*40]!=hashlib.sha256(child).digest() or struct.unpack_from('<Q',encoded,48+i*40)[0]!=len(child):
                 raise RuntimeError('Bundle/expected dependency mismatch')
-        quoted_bundle=subprocess.list2cmdline([bundle_path]) if os.name=='nt' else shlex.quote(bundle_path)
-        arguments=f'--frames 180 --gpu 7900 --no-validation --bundle {quoted_bundle} --work-items {scenario}'
+        initial=os.environ.get('THEIA_CAPTURE_INITIAL_BUNDLE',bundle_path)
+        stream=os.environ.get('THEIA_CAPTURE_STREAM_BUNDLE')
+        if initial!=bundle_path and not stream:
+            raise RuntimeError('Different initial bundle requires streaming capture')
+        quote=lambda path: subprocess.list2cmdline([str(Path(path).resolve())]) if os.name=='nt' else shlex.quote(str(Path(path).resolve()))
+        arguments=f'--frames 180 --gpu 7900 --no-validation --bundle {quote(initial)} --work-items {scenario}'
+        if stream:
+            arguments+=f' --stream-bundle {quote(stream)}'
+            report['streaming_bundle_capture']=True
+            report['initial_bundle_content_id']=Path(initial).stem
         if shader_dir: arguments+=f' --shader-dir {quoted_dir}'
         report['bundle_dependencies_verified']=True
         report['bundle_content_id']=Path(bundle_path).stem

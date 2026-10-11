@@ -1,4 +1,5 @@
 mod asset;
+mod bundle_streaming;
 mod camera;
 mod gpu;
 mod indirect;
@@ -63,6 +64,9 @@ struct Options {
     texture_budget: Option<u64>,
     texture_table: Option<std::path::PathBuf>,
     bundle: Option<std::path::PathBuf>,
+    stream_bundle: Option<std::path::PathBuf>,
+    bundle_byte_budget: Option<usize>,
+    bundle_gpu_budget: Option<u64>,
 }
 impl Options {
     fn render_mode(&self) -> RenderMode {
@@ -81,6 +85,27 @@ impl Options {
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
+                "--stream-bundle" => {
+                    result.stream_bundle = Some(
+                        args.next()
+                            .ok_or("--stream-bundle needs replacement manifest")?
+                            .into(),
+                    )
+                }
+                "--bundle-byte-budget" => {
+                    result.bundle_byte_budget = Some(
+                        args.next()
+                            .ok_or("--bundle-byte-budget needs bytes")?
+                            .parse()?,
+                    )
+                }
+                "--bundle-gpu-budget" => {
+                    result.bundle_gpu_budget = Some(
+                        args.next()
+                            .ok_or("--bundle-gpu-budget needs bytes")?
+                            .parse()?,
+                    )
+                }
                 "--bundle" => {
                     result.bundle = Some(
                         args.next()
@@ -400,7 +425,7 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -432,6 +457,16 @@ impl Options {
             }
             result.material = true;
             result.mode = Some(RenderMode::Asset);
+        }
+        if let Some(path) = &result.stream_bundle {
+            if result.bundle.is_none() || result.texture_table.is_none() {
+                return Err("--stream-bundle requires an initial v2 --bundle".into());
+            }
+            if !texture::load_bundle(path)?.indexed {
+                return Err("Replacement bundle must use v2 texture table".into());
+            }
+        } else if result.bundle_byte_budget.is_some() || result.bundle_gpu_budget.is_some() {
+            return Err("Bundle residency budgets require --stream-bundle".into());
         }
         if (result.camera || result.frustum || result.material)
             && result.mode != Some(RenderMode::Asset)

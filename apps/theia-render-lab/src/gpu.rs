@@ -848,6 +848,7 @@ pub struct Renderer {
     // before work resources, and their device-owning context last as a lifetime backstop.
     chain: Option<Swapchain>,
     stream: Option<crate::streaming::Stream>,
+    bundle_stream: Option<crate::bundle_streaming::Stream>,
     work: Option<IndirectWork>,
     materials: Option<crate::asset::Buffer>,
     uvs: Option<crate::asset::Buffer>,
@@ -876,6 +877,7 @@ impl Renderer {
             ctx,
             chain: None,
             stream: None,
+            bundle_stream: None,
             recreate: true,
             generations: 0,
             mode: options.render_mode(),
@@ -1203,8 +1205,98 @@ impl Renderer {
                 ),
             )?);
         }
+        if let Some(path) = &options.stream_bundle {
+            let stream = crate::bundle_streaming::Stream::new(
+                [options.bundle.as_ref().unwrap().clone(), path.clone()],
+                options.bundle_byte_budget.unwrap_or(64 * 1024 * 1024),
+                options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
+                options
+                    .texture_budget
+                    .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64),
+            )?;
+            if renderer.bundle_resource_bytes() > stream.budget() {
+                return Err(
+                    "Initial complete bundle exceeds aggregate physical resource budget".into(),
+                );
+            }
+            renderer.bundle_stream = Some(stream);
+        }
         renderer.rebuild(renderer.ctx.window.inner_size())?;
         Ok(renderer)
+    }
+    fn bundle_resource_bytes(&self) -> u64 {
+        self.work.as_ref().map_or(0, IndirectWork::resident_bytes)
+            + self.materials.as_ref().map_or(0, |v| v.allocated_bytes)
+            + self.uvs.as_ref().map_or(0, |v| v.allocated_bytes)
+            + self.texture_table.as_ref().map_or(0, |v| v.allocated_bytes)
+            + self
+                .textures
+                .iter()
+                .map(|v| v.image.allocated_bytes)
+                .sum::<u64>()
+    }
+    fn tick_bundle(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let active_bytes = self.bundle_resource_bytes();
+        let active_image_bytes = self.textures.iter().map(|v| v.image.allocated_bytes).sum();
+        let Some(stream) = &mut self.bundle_stream else {
+            return Ok(());
+        };
+        // SAFETY: Context retains the selected physical device and its instance.
+        let (memory, limits, image_limits) = unsafe {
+            let instance = self.ctx.instance.as_ref().unwrap();
+            (
+                instance.get_physical_device_memory_properties(self.ctx.physical),
+                instance
+                    .get_physical_device_properties(self.ctx.physical)
+                    .limits,
+                instance.get_physical_device_image_format_properties(
+                    self.ctx.physical,
+                    vk::Format::R8G8B8A8_SRGB,
+                    vk::ImageType::TYPE_2D,
+                    vk::ImageTiling::OPTIMAL,
+                    vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                    vk::ImageCreateFlags::empty(),
+                )?,
+            )
+        };
+        let ready = stream.tick(
+            self.presented,
+            active_bytes,
+            active_image_bytes,
+            crate::bundle_streaming::Gpu {
+                device: self.ctx.device.as_ref().unwrap(),
+                memory: &memory,
+                family: self.ctx.graphics_family,
+                queue: self.ctx.graphics,
+                limits,
+                image_limits,
+            },
+        )?;
+        if let Some(ready) = ready {
+            // The sole frame fence is retired. Retire presentation and destroy graphics
+            // descriptors/pipelines before dropping their old resource owners. This
+            // qualification rebuilds a full generation, including descriptor-count changes.
+            if let Some(chain) = &mut self.chain {
+                chain.retire()?;
+            }
+            drop(self.chain.take());
+            let ([geometry, materials, uvs, table], images, publication) = ready.into_parts();
+            drop(self.work.as_mut().unwrap().replace_asset(geometry));
+            self.materials = Some(materials);
+            self.uvs = Some(uvs);
+            self.texture_table = Some(table);
+            self.textures = images;
+            self.recreate = true;
+            self.rebuild(size)?;
+            if self.recreate {
+                return Err("Bundle publication target generation unavailable".into());
+            }
+            self.bundle_stream
+                .as_mut()
+                .unwrap()
+                .published(publication, self.presented)?;
+        }
+        Ok(())
     }
     fn rebuild(&mut self, size: PhysicalSize<u32>) -> Result<()> {
         if size.width == 0 || size.height == 0 {
@@ -1331,6 +1423,7 @@ impl Renderer {
                 limit,
             )?;
         }
+        self.tick_bundle(size)?;
         let chain = self.chain.as_mut().unwrap();
         let ctx = &self.ctx;
         let device = ctx.device.as_ref().unwrap();
@@ -1614,6 +1707,15 @@ impl Renderer {
                 );
             }
         }
+        if let Some(stream) = &self.bundle_stream {
+            println!(
+                "Bundle qualification: {} complete publications, {} budget deferrals",
+                stream.publications, stream.rejections
+            );
+            if self.cycle_work && stream.publications < 2 && stream.rejections == 0 {
+                return Err("Bundle smoke did not qualify replacement or budget deferral".into());
+            }
+        }
         if self.probes.remaining() != 0 {
             return Err("WSI qualification ended before all four recovery probes ran".into());
         }
@@ -1626,6 +1728,7 @@ impl Drop for Renderer {
         // before Context destroys the device. This also runs when new() fails in rebuild().
         drop(self.chain.take());
         drop(self.stream.take());
+        drop(self.bundle_stream.take());
         drop(self.work.take());
         drop(self.materials.take());
         drop(self.uvs.take());
