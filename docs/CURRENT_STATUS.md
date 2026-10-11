@@ -4,6 +4,20 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 bounded material texture table — independently executed (2026-10-11)
+
+THEIATEX v1 binds an exact material-page hash to up to 16 hash-sorted immutable
+texture dependencies and one dense texture index per material. Pure Rust checks
+counts/budgets/digests/padding/UTF-8, index ranges, duplicate/unreferenced textures
+and every child KTX2/opacity/provenance. A two-material/two-texture file-backed
+example passes with deliberately reversed material/descriptor order.
+Three new tests bring the asset suite to 27; 13 Python tests and formatting/
+denied-warning Clippy pass. Repeated cooking is identical; independent source-
+order permutation preserves physical material-to-texture choices. This is CPU
+admission only; GPU indexed table lookup and multiple authored image import are
+not implemented by this unit. Next: bounded GPU material texture selection.
+[Contract](M4_ASSET_CONTRACT.md), [evidence](validation/M4_TEXTURES.md).
+
 ## M4 bounded authored PNG import — independently executed (2026-10-11)
 
 `--unlit-texture` now imports a shared external base-colour PNG for opaque unlit

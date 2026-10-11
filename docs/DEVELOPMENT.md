@@ -392,3 +392,16 @@ bundle paths. Run the emitted bundle as above. Standalone image cooking supports
 `tools/cook_texture.py --png --source <rgba8.png>` with the same qualified tool
 arguments. These narrow source/sampler limits are documented in the
 [normalizer workflow](../tools/theia-gltf-import/README.md).
+
+## Bounded material-to-texture CPU table
+
+```bash
+python3 tools/cook_texture_table.py --materials <material-page> --assignments <mapping.json>
+cargo run --locked --manifest-path crates/theia-assets/Cargo.toml --example texture_table -- <mesh> <material-page> <table>
+```
+
+Assignments are schema 1, exact `material_sha256`, `textures` hash-named KTX2
+paths, and one `material_textures` source index per material. All listed textures
+must be used. The cooker canonicalizes hash order and remaps the indices; the
+Rust example validates every sibling texture before admitting the set. This
+table has no GPU binding path yet.

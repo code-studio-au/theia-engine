@@ -156,3 +156,17 @@ jobs:
           assert data[offset:offset+size] == bytes(v for texel in raw['rgba'] for v in texel)
           subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'bundle', '--', report['bundle']['path']], check=True)
           PY
+      - name: Qualify bounded dense material texture table
+        run: |
+          python3 -m unittest discover -s tools -p test_texture_table.py
+          python3 tools/cook_texture.py --ktx "$RUNNER_TEMP/ktx-build/Release/ktx" --build-dir "$RUNNER_TEMP/ktx-build" --source-archive "$RUNNER_TEMP/ktx-source.tar.gz" --source fixtures/textures/alternate_2x2.json > build/alternate-texture-report.json
+          python3 - <<'PY'
+          import json, pathlib, subprocess, sys
+          mesh = json.load(open('build/assets/imported-report.json'))
+          alternate = json.load(open('build/alternate-texture-report.json'))
+          source = {'schema': 1, 'material_sha256': mesh['materials']['content_id'], 'textures': [mesh['texture']['path'], alternate['path']], 'material_textures': [1, 0]}
+          path = pathlib.Path('build/texture-table-assignments.json')
+          path.write_text(json.dumps(source, sort_keys=True))
+          table = json.loads(subprocess.check_output([sys.executable, 'tools/cook_texture_table.py', '--materials', mesh['materials']['path'], '--assignments', str(path)], text=True))
+          subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'texture_table', '--', mesh['path'], mesh['materials']['path'], table['path']], check=True)
+          PY

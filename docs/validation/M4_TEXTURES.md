@@ -219,3 +219,38 @@ readers.log,smoke.log,repeat-regression.json}`, negative logs under
 CI adds the authored-image sequence; hosted CI/Windows native tool and GPU
 execution are untested. No push or benchmark claim. Next: bounded per-material
 texture selection; mip/gradient/filtering and asynchronous residency remain open.
+
+## CPU material-to-texture table (2026-10-11)
+
+THEIATEX v1 adds a dense mapping from the exact material-page hash to a complete
+bounded set of hash-sorted immutable textures. Cap 16 textures/256 materials,
+table 1 MiB, metadata 64 KiB; each child retains its existing 4 MiB KTX2 budget.
+Every texture must be referenced. This unit changes no runtime/shader code and
+establishes no GPU table lookup, residency publication or new GPU capability.
+
+File-backed fixture uses the preceding authored geometry/material pair,
+its `146060...` PNG texture and a second synthetic raw 2x2 texture:
+916 bytes, SHA-256
+`ffd46b075fe9a6be2e61989c19f57c2ec330cab01575556088f110abb343539c`.
+Native raw cooking verifies all 16 source bytes with the same pinned KTX recipe.
+Texture table is 468 bytes, SHA-256
+`52ca7edc46470ad0b2f9c73c11a5c7884fd8e8c17d95b2c6142b2788a2c9f0ca`,
+bound to `de25e6...` material content. Independent Rust example admits both
+opaque children and the canonical material mapping [1,0], deliberately distinct
+from descriptor/hash order. Repeated table cooking is identical.
+
+Three new Rust tests bring the asset suite to 27: dense reuse with three material
+indices/two textures, full truncation/hash/count/binding checks, sorted unique
+dependencies, metadata/size/index errors, unreferenced dependencies and freshly
+hashed invalid-alpha children. Child lengths/hash are checked at complete
+admission, separately from structural manifest decoding. Two Python producer
+tests verify source-order permutation preserves physical material choices,
+determinism and invalid source binding/mapping/duplicates/missing files.
+All 13 Python tests, asset tests, fmt and denied-warning Clippy pass.
+
+Artifacts: `build/qualification/m4-texture-table-tests.log` and
+`m4-texture-table/{alternate-cook.json,assignments.json,cook.json,reader.log}`.
+CI configuration adds native second-texture/table production and independent
+Rust admission; hosted execution is untested. No push/benchmark claim.
+Next qualification is indexed GPU material texture selection; authored multiple
+PNG conversion, mip/gradient/filtering and asynchronous residency remain open.

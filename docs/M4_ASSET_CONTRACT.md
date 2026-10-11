@@ -122,6 +122,33 @@ Raw-JSON cooking still compares every source texel directly. This profile does
 not qualify arbitrary third-party authoring exports, multiple per-material
 textures, mips/derivatives/filtering, alpha or dependency streaming.
 
+### Dense resident material texture table
+
+THEIATEX v1 has an 88-byte header: magic, u32 version 1, u32 metadata length,
+u32 material count, u32 texture count, exact THEIAMAT SHA-256, payload SHA-256.
+Payload is UTF-8 provenance padded to four bytes, hash-sorted unique 40-byte
+texture dependency records (SHA-256/u64 length), then one u32 texture index per
+dense material. Full-file hash names `<hash>.theia-textures`. Budgets: table
+1 MiB, metadata 64 KiB, 1..256 materials matching the decoded material page,
+1..16 textures each 104 bytes..4 MiB. Every dependency must be referenced.
+
+Reader verifies checked exact lengths, both digests, material binding, canonical
+padding/UTF-8, texture order/count/lengths and mappings. Complete child admission
+requires every exact texture length/hash, bounded KTX2 semantics, opaque texels
+and cooked provenance. Borrowed texture views retain immutable encoded owners.
+This is CPU admission, not GPU descriptor publication/residency accounting.
+Aggregate encoded texture bytes can approach 64 MiB; decoded CPU ownership and
+physical GPU allocation budgets remain separate.
+
+`tools/cook_texture_table.py` accepts schema-1 assignments with exact
+`material_sha256`, `textures` file paths and `material_textures` source indices.
+It sorts dependency hashes and remaps every material index, preserving physical
+choices independently of source path order. Source/cooker/recipe hashes enter
+provenance; a changed source ordering changes the full content address even when
+canonical mapping bytes match. The cooker checks source structure/filenames;
+Rust validates full child semantics. Sampling stays opaque sRGB, nearest repeat,
+mip zero. The existing single-texture bundle/shader formats remain unchanged.
+
 ## Version 1 byte layout
 
 All integer/float words are little-endian. The 76-byte header is:

@@ -6,6 +6,7 @@ pub mod bundle;
 pub mod material;
 pub mod residency;
 pub mod texture;
+pub mod texture_table;
 pub mod uv;
 pub const HEADER_BYTES: usize = 76;
 pub const DEFAULT_BUDGET: usize = 64 * 1024 * 1024;
