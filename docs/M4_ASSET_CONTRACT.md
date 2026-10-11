@@ -88,6 +88,40 @@ shared resident texture, not a general dependency DAG, atomic multi-resource
 streaming publication, budget reservation/deduplication, world instance database
 or per-material image assignment. Missing children fail; no silent fallback.
 
+### Bounded shared authored PNG import
+
+Opt-in glTF `--unlit-texture` produces normalized schema 4, retaining geometry,
+UV and opaque double-sided unlit factor restrictions. Every selected material
+must reference the same source texture, TEXCOORD_0, explicit nearest min/mag
+filters, repeat S/T, and no texture/info/sampler/image extensions. This gives
+the fixed bundle's single texture an authored binding rather than an arbitrary
+viewer argument. Other source texture indices, missing base-colour textures,
+texture transforms and other sampler profiles fail.
+
+Selected image must be an unescaped relative external PNG confined to the
+source directory, including canonical symlink resolution. Embedded image URIs/
+buffer views, network/absolute/traversal paths and other MIME types fail. Encoded
+PNG is <=4 MiB, dimensions 1..1024, noninterlaced RGBA8; aggregate buffers plus
+image are <=64 MiB. Rust checks the bounded envelope and preserves encoded
+source bytes/hash; full PNG decoding/CRC/opaque-alpha validation happens through
+the pinned offline KTX tool. These are encoded limits, not process RSS limits.
+
+Normalized `texture` records include PNG base64/digest/dimensions, source image/
+texture indices and fixed sampler policy; `texture_materials` has one zero index
+per dense factor. Cooker checks exact source/hash/dimensions and every mapping,
+then produces KTX2 and the existing four-role bundle. Existing binary asset
+versions remain unchanged. PNG decoding happens offline and its recipe/tool/
+library/source digests enter texture provenance; the geometry also records its
+authored image dependency. No runtime PNG/glTF/native library is introduced.
+
+The general PNG producer verifies decoded opacity/dimensions and reports
+`texels_verified=false`: arbitrary compressed source bytes are not a direct raw
+texel oracle. Qualification independently compares this synthetic fixture's
+known 16 RGBA bytes to native output, then compares GPU texels/pixel sampling.
+Raw-JSON cooking still compares every source texel directly. This profile does
+not qualify arbitrary third-party authoring exports, multiple per-material
+textures, mips/derivatives/filtering, alpha or dependency streaming.
+
 ## Version 1 byte layout
 
 All integer/float words are little-endian. The 76-byte header is:

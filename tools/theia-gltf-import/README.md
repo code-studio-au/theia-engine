@@ -37,10 +37,11 @@ hash. Outputs vary with compiler/binary/configuration by design; repeatability i
 qualified for the same binary/input. File names/absolute source paths are not
 persistent logical identities. Cooked THEIAMES v1 stays unchanged.
 
-Eight unit tests cover analytic nested TRS/reflection, independent instances,
+Ten unit tests cover analytic nested TRS/reflection, independent instances,
 invalid bounds/URIs/tree/features, external/embedded/GLB geometry parity, and
 unlit primitive/instance assignment with unsupported-material rejection, and
-float2 UV count/type/finite/seam/reflection checks.
+float2 UV count/type/finite/seam/reflection checks, and bounded shared-image
+bytes/material/sampler/URI/PNG-envelope admission.
 Rust fmt, denied-warning Clippy and tests run locally; Windows execution and
 arbitrary third-party authoring exports remain unqualified.
 
@@ -95,3 +96,38 @@ The native cooker emits geometry, material and UV file paths in
 and run Render Lab `--asset <mesh> --uv-test <uv>`. That mode displays reconstructed
 UVs as diagnostic color and qualifies perspective interpolation; it does not
 sample authored textures or implement material/UV dependency residency.
+
+## Optional authored shared PNG texture
+
+```bash
+cargo run --locked --manifest-path tools/theia-gltf-import/Cargo.toml -- fixtures/gltf/transformed_scene_texture.gltf build/assets/imported-textured-scene.json --unlit-texture
+python3 tools/cook_meshlet_fixture.py --geometry build/assets/imported-textured-scene.json \
+  --library <meshoptimizer-library> --source-archive <qualified-meshoptimizer-archive> \
+  --ktx <ktx-build>/Release/ktx --ktx-build <ktx-build> --ktx-source-archive <qualified-ktx-archive>
+apps/theia-render-lab/target/debug/theia-render-lab --bundle <bundle-from-report> --gpu 7900 --wsi-smoke-test
+```
+
+The opt-in mode retains schema-3 geometry/UV/unlit requirements and requires
+every selected material to reference the same source base-colour texture with
+TEXCOORD_0 and explicit NEAREST min/mag filters, REPEAT S/T and no texture/info/
+sampler/image extensions. Other texture indices, missing base-colour textures,
+other filters/wrap modes and texture transforms fail. Lighting fallback
+properties remain ignored by unlit semantics; this is not a PBR importer.
+
+Only an external unescaped relative image path confined to the source directory
+is supported, with optional MIME image/png. Absolute/network/data URIs, directory
+traversal, symlink escape and image buffer views fail. Encoded PNG cap is 4 MiB,
+dimensions 1..1024, noninterlaced 8-bit RGBA envelope; total buffers plus image
+remain <=64 MiB. Rust checks the envelope and carries exact encoded PNG bytes;
+KTX performs full decoding/CRC/opaque-alpha checks offline during cooking.
+
+Normalized schema 4 adds a single encoded `texture` record with source image/
+texture indices, base64 PNG, digest/dimensions/sampler, and `texture_materials`
+containing one zero index per dense material. Geometry provenance includes the
+image dependency. The cooker checks source hash/dimensions/mapping, invokes
+pinned KTX-Software, writes unchanged geometry/material/UV formats plus KTX2,
+and packages the four-role bundle. Runtime still has no glTF/PNG/native decoder.
+Opaque sRGB texture sampling multiplies the authored linear factors. The
+synthetic transformed/reflected fixture exercises two factors, eight UV rows,
+four triangles and repeating UVs outside [0,1]. No multiple-texture material
+table, mip/gradient/filtering, transparency or dependency streaming claim.

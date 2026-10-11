@@ -383,3 +383,12 @@ exclusive with `--bundle`. For replay set `THEIA_CAPTURE_BUNDLE` plus all four
 expected child variables; the helper verifies the manifest matches those expected
 resources and launches the bundle entry path. Physical texture budget and shader
 directory options remain available.
+
+For the authored-image path use `theia-gltf-import --unlit-texture` with
+`fixtures/gltf/transformed_scene_texture.gltf`, then pass the qualified
+`--ktx`, `--ktx-build` and `--ktx-source-archive` options to the meshlet cooker.
+`build/assets/imported-report.json` includes geometry, factors, UV, texture and
+bundle paths. Run the emitted bundle as above. Standalone image cooking supports
+`tools/cook_texture.py --png --source <rgba8.png>` with the same qualified tool
+arguments. These narrow source/sampler limits are documented in the
+[normalizer workflow](../tools/theia-gltf-import/README.md).

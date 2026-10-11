@@ -3,10 +3,18 @@ import json
 import struct
 import unittest
 from pathlib import Path
-from cook_texture import package, pixels
+from cook_texture import package, pixels, png_profile
 
 
 class TextureCookTests(unittest.TestCase):
+    def test_png_profile_bounds_dimensions_format_and_interlace_without_decoding(self):
+        source=(Path(__file__).parent.parent/'fixtures/gltf/transformed_scene_texture.png').read_bytes()
+        self.assertEqual(png_profile(source),(2,2))
+        for offset in (0,8,12,16,24,25,26,27,28):
+            bad=bytearray(source);bad[offset]^=0x80
+            with self.subTest(offset=offset),self.assertRaises(ValueError):png_profile(bytes(bad))
+        for length in (0,8,24,32):
+            with self.assertRaises(ValueError):png_profile(source[:length])
     def test_source_dimensions_counts_channels_and_alpha_fail_closed(self):
         valid = {'schema': 1, 'width': 1, 'height': 1, 'rgba': [[1, 2, 3, 255]]}
         self.assertEqual(pixels(json.dumps(valid)), (1, 1, bytes([1, 2, 3, 255])))

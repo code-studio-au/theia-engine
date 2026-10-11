@@ -4,6 +4,28 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 bounded authored PNG import — independently executed (2026-10-11)
+
+`--unlit-texture` now imports a shared external base-colour PNG for opaque unlit
+materials with authored float2 UVs and explicit nearest-repeat sampling.
+Normalized schema 4 carries exact encoded PNG bytes/hash and source bindings;
+the cooker validates mapping/dimensions, uses pinned KTX offline to decode the
+bounded image, and emits the existing four-role bundle. No runtime image decoder
+or asset binary version change. Full fixture decoded texels match all 16 known
+source bytes. Ten normalizer tests and 11 Python tests pass; fmt/Clippy pass.
+
+All five Rust readers admit the final set. RX 7900 XTX WSI passes 120 frames/ten
+generations with zero diagnostics; default/shared captures each verify GPU bytes,
+identities/work/depth and 85 sampled colours, including repeated UVs. Three
+malformed PNGs, five malformed normalized texture records and symlink escape
+fail before publishing a usable bundle. Repeated normalization/cooking is
+identical; original grid/quad/triangle hashes remain unchanged.
+
+This admits one texture shared by all selected materials. Multiple authored
+textures, per-material image tables, mip/gradient/filtering and asynchronous
+dependency residency remain open. Next: bounded per-material texture selection.
+[Importer](../tools/theia-gltf-import/README.md), [evidence](validation/M4_TEXTURES.md).
+
 ## M4 immutable textured bundle admission — independently executed (2026-10-11)
 
 THEIABND v1 records four ordered content hashes/lengths: geometry, material

@@ -4,6 +4,7 @@
 The native third-party library is only loaded here, never by shipped Rust code.
 """
 import argparse
+import base64
 from collections import Counter
 import ctypes as c
 import hashlib
@@ -12,6 +13,8 @@ import math
 from pathlib import Path
 import struct
 import subprocess
+import sys
+import tempfile
 from qualify_height_lod import qualify
 from remap_materials import canonical, remap
 from cook_material_page import cook as cook_material
@@ -33,6 +36,9 @@ def main():
     parser.add_argument('--simplify-error', type=float, default=.02, help='Native absolute position error limit')
     parser.add_argument('--max-height-error', type=float, default=.03, help='Independent sampled vertical error limit')
     parser.add_argument('--output-dir', type=Path, default=Path('build/assets'))
+    parser.add_argument('--ktx',type=Path)
+    parser.add_argument('--ktx-build',type=Path)
+    parser.add_argument('--ktx-source-archive',type=Path)
     args = parser.parse_args()
     if args.geometry and (args.fixture != 'grid16' or args.simplify_ratio is not None):
         parser.error('Normalized geometry cannot combine with fixture selection/heightfield simplification')
@@ -77,7 +83,7 @@ def main():
         if len(normalized)>64*1024*1024:
             parser.error('Normalized JSON exceeds 64 MiB')
         imported = json.loads(normalized)
-        if type(imported.get('schema')) is not int or imported['schema'] not in (1,2,3) or not isinstance(imported.get('provenance'),dict):
+        if type(imported.get('schema')) is not int or imported['schema'] not in (1,2,3,4) or not isinstance(imported.get('provenance'),dict):
             parser.error('Unsupported normalized geometry schema/provenance')
         positions = imported.get('positions',[])
         indices = imported.get('indices',[])
@@ -158,7 +164,7 @@ def main():
         metadata['recipe'] = 'normalized-static-gltf-v1'
         metadata['normalization'] = imported['provenance']
         metadata['normalized_json_sha256'] = hashlib.sha256(normalized).hexdigest()
-        if imported['schema'] in (2,3):
+        if imported['schema'] in (2,3,4):
             metadata['recipe'] = 'normalized-static-gltf-unlit-v1'
             metadata['material_mapping'] = {'policy':'winding-preserving cyclic index triangle identity; reject conflicting duplicates',
                 'meshlet_cooker_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -180,7 +186,7 @@ def main():
     args.output_dir.mkdir(parents=True,exist_ok=True)
     material_report = None
     material_blob = None
-    if imported is not None and imported['schema'] in (2,3):
+    if imported is not None and imported['schema'] in (2,3,4):
         colors = imported.get('base_colors')
         assignments = imported.get('triangle_materials')
         if not isinstance(assignments,list):
@@ -195,12 +201,28 @@ def main():
                            'mapping':'winding-preserving cyclic index triangle identity; reject conflicting duplicate assignments'}
     uv_report = None
     uv_blob = None
-    if imported is not None and imported['schema'] == 3:
+    if imported is not None and imported['schema'] in (3,4):
         uv_source = json.dumps({'schema':1,'geometry_sha256':identifier,'texcoords':imported.get('texcoords')},sort_keys=True,separators=(',',':')).encode()
         uv_blob = cook_uv(blob,uv_source)
         uv_id = hashlib.sha256(uv_blob).hexdigest()
         uv_path = args.output_dir/(uv_id+'.theia-uv')
         uv_report = {'path':str(uv_path),'content_id':uv_id,'bytes':len(uv_blob),'geometry_id':identifier,'vertices':len(positions)}
+    texture_report=None
+    if imported is not None and imported['schema']==4:
+        if not all([args.ktx,args.ktx_build,args.ktx_source_archive]):raise ValueError('Textured import requires qualified KTX compiler/build/source archive')
+        texture=imported.get('texture');mapping=imported.get('texture_materials')
+        if not isinstance(texture,dict) or type(texture.get('schema')) is not int or texture['schema']!=1 or texture.get('kind')!='png-rgba8' or texture.get('sampler')!='nearest-repeat-mip0':
+            raise ValueError('Unsupported normalized texture profile')
+        if not isinstance(mapping,list) or len(mapping)!=len(colors) or any(type(v) is not int or v!=0 for v in mapping):raise ValueError('Every material must reference the single shared texture')
+        encoded=texture.get('png_base64')
+        if not isinstance(encoded,str) or len(encoded)>8*1024*1024:raise ValueError('Normalized PNG exceeds encoded budget')
+        png=base64.b64decode(encoded,validate=True)
+        from cook_texture import png_profile
+        width,height=png_profile(png)
+        if any(type(texture.get(axis)) is not int for axis in ('width','height')) or texture.get('png_sha256')!=hashlib.sha256(png).hexdigest() or (texture.get('width'),texture.get('height'))!=(width,height):raise ValueError('Normalized PNG content/dimensions mismatch')
+        with tempfile.TemporaryDirectory(prefix='theia-gltf-image-') as directory:
+            path=Path(directory)/'source.png';path.write_bytes(png)
+            texture_report=json.loads(subprocess.check_output([sys.executable,str(Path(__file__).with_name('cook_texture.py')),'--ktx',str(args.ktx),'--build-dir',str(args.ktx_build),'--source-archive',str(args.ktx_source_archive),'--source',str(path),'--png','--output-dir',str(args.output_dir)],text=True))
     destination = args.output_dir / (identifier+'.theia-mesh')
     destination.write_bytes(blob)
     if material_blob is not None:
@@ -213,6 +235,9 @@ def main():
         report['uv'] = uv_report
     if material_report is not None:
         report['materials'] = material_report
+    if texture_report is not None:
+        report['texture']=texture_report
+        report['bundle']=json.loads(subprocess.check_output([sys.executable,str(Path(__file__).with_name('package_texture_bundle.py')),'--mesh',str(destination),'--materials',str(material_path),'--uvs',str(uv_path),'--texture',texture_report['path'],'--output-dir',str(args.output_dir)],text=True))
     if lod is not None:
         report['lod'] = lod
     suffix = '-lod' if lod is not None else ''

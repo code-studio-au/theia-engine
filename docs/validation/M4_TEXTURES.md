@@ -162,3 +162,60 @@ admission after native cooking; hosted execution is untested. No push/benchmark
 claim. This fixed set does not implement asynchronous DAG publication,
 residency reservation/deduplication or authored per-material texture selection.
 Next is bounded authored image import; M4 remains open.
+
+## Bounded authored shared PNG (2026-10-11)
+
+The offline glTF normalizer adds opt-in `--unlit-texture` normalized schema 4:
+existing opaque double-sided unlit factors/float2 UVs plus one shared external
+PNG base-colour texture with explicit nearest-repeat sampler. It preserves
+source image/texture indices, PNG bytes/hash, material-to-shared-texture mapping
+and geometry provenance. Other source textures/sampler/URI/image/extension
+profiles fail explicitly. Rust checks the source envelope; pinned KTX performs
+full PNG decoding/CRC checking offline. No runtime parser/library or binary
+asset format version changes.
+
+The two transformed/reflected quads now reference a synthetic asymmetric RGBA8
+2x2 PNG, SHA-256
+`0016f27c6cc45584834ced00a220fe38aed4ab2ae65daa41a5d8d3c71054b93e`.
+All 16 native decoded texel bytes match the independently known raw fixture.
+Final content addresses:
+
+| Role | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Geometry: 8 vertices/4 triangles/1 meshlet | 2944 | `43e0a58528d4be9f0da385f9e5acc3d160a4add56ab8c3dada90025b5cd97f86` |
+| Two unlit factors/triangle assignments | 444 | `de25e6d1155a58a16a81948bcaf9a0d7677429da3aaa43d347e5466a7e4d5b78` |
+| Eight dense UV rows | 416 | `ceefc62001a3e74e397b913fa3beddbe5d9717da137916d99446999fd7be5dc1` |
+| Opaque 2x2 KTX2 texture | 932 | `1460604394ce91a7be0ad21dd04197b7e83bbaac372f976f01610a209dd58aff` |
+| Complete fixed bundle | 176 | `e3e78a89e0f755c2d7f21593ca88cf69c6f0570a7072e9c2aa88fc6e3e9983c6` |
+
+All five independent Rust readers accept the final set. The general PNG
+producer's `texels_verified=false` distinguishes decoded-opacity checking from
+raw-source equality; this fixture's exact raw equality is checked separately.
+Official KTX validation succeeds with the preceding custom-key warning recorded.
+Repeated normalization/native cooking with the same tools/input is identical.
+Original grid/quad/triangle content hashes are unchanged; legacy position-only,
+factor-only and UV import/cook/Rust-reader sequences still pass.
+
+Ten normalizer tests pass, adding source bytes/material/sampler bindings plus
+invalid sampler/UV/index/image URI/MIME/extension/PNG envelope cases. Eleven
+Python LOD/material/texture tests pass, including PNG-envelope bounds. Rust
+formatting and denied-warning Clippy pass. Separately executed failures reject
+CRC-corrupt, truncated and non-opaque PNGs before immutable texture publication;
+five normalized mapping/hash/dimension/sampler cases fail before bundle
+publication. A canonical symlink escape fails before reading the outside image.
+
+Final-bundle RX 7900 XTX/RADV synchronization-validation WSI presents 120 frames
+and ten generations with zero diagnostics including teardown. Separate default
+and shared identity captures each present 180 frames and verify manifest/actual
+GPU dependency bytes/texels, work/identity/depth and 85 sampled colours, including
+all four visible triangles. Three samples per capture have UVs outside [0,1],
+exercising repeat. Existing 2e-6 depth/two RGB-byte tolerances apply; capture
+validation is disabled and separate from standalone validation. Runtime/shader
+code is unchanged from the preceding qualified resident texture/bundle path.
+
+Artifacts: `build/qualification/m4-gltf-image-{import.log,cook.json,cook.log,
+readers.log,smoke.log,repeat-regression.json}`, negative logs under
+`m4-gltf-image-negative/`, and `{full,shared}/report.json` with captures/images.
+CI adds the authored-image sequence; hosted CI/Windows native tool and GPU
+execution are untested. No push or benchmark claim. Next: bounded per-material
+texture selection; mip/gradient/filtering and asynchronous residency remain open.

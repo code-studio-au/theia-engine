@@ -2,6 +2,7 @@
 """Qualify pinned offline KTX-Software output; package bounded opaque RGBA8 sRGB.
 
 Input schema 1 JSON contains width, height and row-major rgba integer texels.
+Opt-in --png accepts bounded noninterlaced 8-bit RGBA PNG decoded by KTX offline.
 Only KTX metadata/index packaging is performed here; the official tool writes DFD
 and image data. No native texture decoder becomes a runtime dependency.
 """
@@ -60,12 +61,22 @@ def package(blob, provenance):
     return bytes(result)
 
 
+def png_profile(source):
+    if len(source)>MAX_BYTES or len(source)<33 or source[:16]!=b'\x89PNG\r\n\x1a\n\0\0\0\rIHDR' or source[24:29]!=bytes([8,6,0,0,0]):
+        raise ValueError('PNG profile requires bounded noninterlaced 8-bit RGBA PNG')
+    width,height=struct.unpack_from('>2I',source,16)
+    if not 1<=width<=1024 or not 1<=height<=1024:
+        raise ValueError('PNG dimensions exceed qualification profile')
+    return width,height
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--ktx', type=Path, required=True)
     parser.add_argument('--build-dir', type=Path, required=True)
     parser.add_argument('--source-archive', type=Path, required=True)
     parser.add_argument('--source', type=Path, required=True)
+    parser.add_argument('--png', action='store_true')
     parser.add_argument('--output-dir', type=Path, default=Path('build/assets'))
     args = parser.parse_args()
     try:
@@ -87,18 +98,25 @@ def main():
         if version != 'ktx version: v4.4.2':
             raise ValueError('KTX compiler version mismatch')
         source = bounded(args.source, 64*1024*1024)
-        width, height, rgba = pixels(source)
+        if args.png:
+            width,height=png_profile(source);rgba=None
+        else:
+            width, height, rgba = pixels(source)
         # These tools may be native code; all processing remains offline and bounded.
         with tempfile.TemporaryDirectory(prefix='theia-ktx-') as directory:
-            raw, cooked = Path(directory)/'source.raw', Path(directory)/'texture.ktx2'
-            raw.write_bytes(rgba)
-            subprocess.run([str(tool), 'create', '--format', 'R8G8B8A8_SRGB', '--raw', '--width', str(width), '--height', str(height),
-                            '--assign-tf', 'srgb', '--assign-primaries', 'bt709', '--assign-texcoord-origin', 'top-left', str(raw), str(cooked)], check=True, timeout=60, stdout=sys.stderr)
+            raw, cooked = Path(directory)/('source.png' if args.png else 'source.raw'), Path(directory)/'texture.ktx2'
+            raw.write_bytes(source if args.png else rgba)
+            command=[str(tool),'create','--format','R8G8B8A8_SRGB']
+            if not args.png:command+=['--raw','--width',str(width),'--height',str(height)]
+            command+=['--assign-tf','srgb','--assign-primaries','bt709','--assign-texcoord-origin','top-left',str(raw),str(cooked)]
+            subprocess.run(command,check=True,timeout=60,stdout=sys.stderr)
             blob = bounded(cooked, MAX_BYTES)
             # Verify raw texels before metadata packaging; no implicit conversion.
             level, size, _ = struct.unpack_from('<3Q', blob, 80)
-            if size != len(rgba) or blob[level:level+size] != rgba:
+            if struct.unpack_from('<2I',blob,20)!=(width,height) or size!=width*height*4 or (rgba is not None and blob[level:level+size]!=rgba):
                 raise ValueError('Native texture pixels differ from source')
+            if any(value!=255 for value in blob[level+3:level+size:4]):
+                raise ValueError('PNG/native texture requires opaque decoded alpha')
             library = tool.parent/'libktx.so.4'
             if not library.is_file():
                 library = tool.parent.parent/'lib/libktx.so.4'
@@ -108,7 +126,7 @@ def main():
                           'source_sha256': hashlib.sha256(source).hexdigest(),
                           'cooker_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                           'compiler': subprocess.check_output(['c++', '--version'], text=True).splitlines()[0],
-                          'recipe': 'Release; KTX_FEATURE_ETC_UNPACK=OFF; raw RGBA8 sRGB/BT709; top-left; one mip; opaque'}
+                          'recipe': 'Release; KTX_FEATURE_ETC_UNPACK=OFF; '+('PNG decoded offline to ' if args.png else 'raw ')+'RGBA8 sRGB/BT709; top-left; one mip; opaque'}
             blob = package(blob, provenance)
             cooked.write_bytes(blob)
             subprocess.run([str(tool), 'validate', str(cooked)], check=True, timeout=60, stdout=sys.stderr)
@@ -117,7 +135,7 @@ def main():
         path = args.output_dir/(digest+'.ktx2')
         path.write_bytes(blob)
         print(json.dumps({'path': str(path), 'content_id': digest, 'bytes': len(blob), 'width': width, 'height': height,
-                          'texels_verified': True, 'official_ktx_validation': True, 'provenance': provenance}, indent=2))
+                          'texels_verified': rgba is not None, 'opaque_texels_verified': True, 'official_ktx_validation': True, 'provenance': provenance}, indent=2))
     except (OSError, ValueError, TypeError, struct.error, subprocess.SubprocessError) as error:
         parser.exit(1, f'Texture cooking failed: {error}\n')
 

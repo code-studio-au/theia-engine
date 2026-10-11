@@ -86,7 +86,10 @@ Position-only static glTF node transforms/reflections now feed the cooker/viewer
 with qualified source/tool provenance. Conservative GPU meshlet frustum selection
 now feeds indirect task/mesh work and passes CPU/replay checks. Cooked identity,
 depth and deferred diagnostic material resolve now connect those slices. Next
-qualify authored image import and material/dependency contracts.
+qualify bounded per-material texture selection, then asynchronous dependency residency.
+One shared authored external PNG now imports/cooks/samples through the fixed
+bundle against source-byte and GPU/replay checks; other image/sampler/mip
+profiles remain unqualified.
 Fixed four-role immutable bundle admission now checks geometry/factors/UV/texture
 as a complete set before Vulkan initialization; asynchronous dependency residency
 and per-material texture assignment remain open.
