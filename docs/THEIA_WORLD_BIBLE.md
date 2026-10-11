@@ -7,6 +7,8 @@ Project: Custom MMO Engine / Theia
 >
 > **STATUS KEY:** **CONFIRMED** = explicitly selected/approved by the user or consistently established. **WORKING** = assistant-proposed narrative/design subject to review. **OPEN** = deliberately unresolved. When a confirmed decision conflicts with an earlier proposal, the later confirmed decision wins.
 
+> **DETAILED COMPANION:** [THEIA_DETAILED_LORE_ARCHIVE.md](THEIA_DETAILED_LORE_ARCHIVE.md) expands the creation myth, First/Second Sunderings, complete divine relationships, peoples and institutions, Shattered Delegation, Guardians/Unmade shadow war, cross-continental incursions, launch story, zone catalogues and a reconstructed question-by-question decision register (Q376–Q444, with unanswered questions marked). **Read both files together.** This is not a verbatim export of any original chat that is unavailable to this project context.
+
 ## 1. Creative pillars [CONFIRMED]
 
 Theia is a large-scale high-fantasy MMORPG with layered, unreliable historical traditions, ancient lost magical achievement, living mortal civilizations, and a gradually reawakening existential danger. It should evoke the depth of an epic fantasy saga while remaining original.
