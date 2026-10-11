@@ -4,6 +4,24 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 actual authority/live GPU deltas — independently executed (2026-10-11)
+
+Live authority now prepares bounded per-recipient full/delta TDR1 states, selecting
+only application-acknowledged baselines. Clients reconstruct before atomic readonly
+publication, check the exact bootstrap roster and send snapshot ACK/full-repair
+DATAGRAMs. Movement and reliable combat retain independent sequence domains.
+Explicit revision THN3/ALPN `theia-lab-3` rejects older peers; no fallback guessing.
+
+Faulted two-GPU 180-frame run and 600-frame native combat pass full/delta publication,
+four acknowledged hits/death and zero Vulkan diagnostics. Explicit ACK-withholding
+qualification forces actual missing-baseline/full repair during faulted 120-frame/
+ten-generation WSI runs, both zero diagnostics. Repair replay matches 32387 sampled
+pixels; closed replay verifies 32400 background pixels. Laboratory profile, separate
+probes, direct/faulted gameplay and isolated replication regressions pass. Shared/
+renderer tests 11/22, formatting/Clippy pass. Windows/Wayland/hosted CI unexecuted;
+no persistence/accounts/general roster/reconnect/WAN/load/performance claim.
+M7/M8 remain open. [Evidence](validation/M8_LIVE_DELTA_REPLICATION.md).
+
 ## M8 isolated encrypted delta exchange — independently executed (2026-10-11)
 
 Separate network lab `--replication-test` now exchanges TDR1 full states/deltas and

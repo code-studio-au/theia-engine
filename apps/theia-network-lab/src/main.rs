@@ -156,7 +156,7 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
             .ok_or("missing handshake data")?
             .downcast::<quinn::crypto::rustls::HandshakeData>()
             .map_err(|_| "unexpected crypto stack")?;
-        assert_eq!(data.protocol.as_deref(), Some(b"theia-lab-2".as_slice()));
+        assert_eq!(data.protocol.as_deref(), Some(b"theia-lab-3".as_slice()));
     }
     let (stop_tx, stop_rx) = oneshot::channel();
     let server = tokio::spawn(server::run([server_first, server_second], stop_rx));
@@ -192,7 +192,7 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
     )
     .await?;
     let (mut stalled_send, mut stalled_recv) = first.open_bi().await?;
-    stalled_send.write_all(b"THN2").await?; // No FIN: this stream cannot stall the authority or another peer.
+    stalled_send.write_all(b"THN3").await?; // No FIN: this stream cannot stall the authority or another peer.
     assert_eq!(
         timeout(Duration::from_millis(600), complete(&second, 0, a))
             .await??
@@ -352,7 +352,7 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
     assert!(report.malformed >= if faults { 2 } else { 3 });
     assert!(report.rejected_moves >= 1);
     println!(
-        "Verified encrypted Quinn 0.11.11 {} loopback: two certificate-verified clients, ALPN theia-lab-2, wrong hostname, untrusted certificate and ALPN mismatch rejected; {} fixed ticks, {} admitted movement DATAGRAMs, {} hits, {} malformed messages and {} stale moves rejected; final health {:?}; reliable retry/conflict/ACK-hole/window repair and stalled-stream isolation and monotonic client snapshot publication passed.",
+        "Verified encrypted Quinn 0.11.11 {} loopback: two certificate-verified clients, ALPN theia-lab-3, wrong hostname, untrusted certificate and ALPN mismatch rejected; {} fixed ticks, {} admitted movement DATAGRAMs, {} hits, {} malformed messages and {} stale moves rejected; final health {:?}; reliable retry/conflict/ACK-hole/window repair and stalled-stream isolation and monotonic client snapshot publication passed.",
         if ipv6 { "IPv6" } else { "IPv4" },
         report.ticks,
         report.movements,
@@ -400,7 +400,17 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
         assert!(dropped > 0 && reordered > 0 && duplicated > 0);
     }
     println!(
-        "No account authentication, persistence, baseline deltas, renderer integration or scale/performance claim. Keys/certificates exist only in memory; 0-RTT disabled."
+        "Authoritative replication: full {}, delta {}, accepted snapshot ACKs {}, full repairs {}, rejected snapshot ACKs {}; clients {:?} / {:?}",
+        report.full_snapshots,
+        report.delta_snapshots,
+        report.snapshot_acks,
+        report.full_repairs,
+        report.rejected_snapshot_acks,
+        first_client.replication_stats(),
+        second_client.replication_stats()
+    );
+    println!(
+        "No account authentication, persistence, cross-reconnect continuity or scale/performance claim. Keys/certificates exist only in memory; 0-RTT disabled."
     );
     Ok(())
 }

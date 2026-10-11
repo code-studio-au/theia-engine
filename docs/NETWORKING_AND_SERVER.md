@@ -394,3 +394,26 @@ without reactivating baseline selection. Clients verify exact final state before
 accepting closure. All tasks/futures and endpoint/relay lifetimes remain bounded.
 Next revise the live protocol explicitly and integrate actual authority snapshots.
 [Evidence](validation/M8_ENCRYPTED_REPLICATION.md).
+
+## M8 actual authority/live delta adoption
+
+Live bootstrap/movement/combat now uses THN3 and TLS ALPN theia-lab-3. Previous
+versions reject before live exchange; TDR1 carries state/replication controls within
+this explicit qualification profile. Each actual authority peer has an eight-set
+prepared sender history. Snapshot ACKs select exact retained baselines; eviction
+forces full state and repair fences delayed ACKs. DATAGRAM input/control shares
+bounded event admission; reliable combat retains separate handlers/request IDs.
+
+Clients verify exact retained connection before consumption, reconstruct delta
+against either readonly endpoint, validate the complete two-actor bootstrap roster
+before publication, then queue application ACK. Missing baseline leaves both sets
+intact and queues repair; repeated incoming deltas retry lost repair. GPU front
+retains its previous verified state/receipt time until a new complete tick arrives.
+No partial health/position publication, local World or gameplay authority.
+
+Explicit `--network-repair-test` withholds ACKs for deltas until receiver eviction
+requests repair, then resumes normal ACKs. Default clients do not inject withholding.
+Faulted WSI/replay confirms actual authority→readonly reconstruction→GPU full repair.
+This remains a fixed two-actor/profile fixture, not general roster changes, baseline
+leases, production schema negotiation, persistence or reconnect continuity.
+[Evidence](validation/M8_LIVE_DELTA_REPLICATION.md).

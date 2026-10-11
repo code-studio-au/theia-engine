@@ -39,7 +39,7 @@ pub async fn serve(arguments: &[String]) -> Result<()> {
     };
     println!(
         "{}",
-        serde_json::json!({"listener":true,"address":endpoint.local_addr()?.to_string(),"certificate":absolute,"profile":profile as u8,"alpn":"theia-lab-2","clients":2})
+        serde_json::json!({"listener":true,"address":endpoint.local_addr()?.to_string(),"certificate":absolute,"profile":profile as u8,"alpn":"theia-lab-3","clients":2})
     );
     let result = async {
         let mut connections = Vec::with_capacity(2);

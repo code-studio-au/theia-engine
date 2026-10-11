@@ -35,8 +35,9 @@ def qualify(report, output):
     scripted = os.environ.get('THEIA_AUTHORITY_SCRIPT') == '1'
     network = os.environ.get('THEIA_AUTHORITY_NETWORK') == '1'
     faults = os.environ.get('THEIA_AUTHORITY_FAULTS') == '1'
-    if faults and not network:
-        raise RuntimeError('Packet faults require network capture')
+    repair = os.environ.get('THEIA_AUTHORITY_REPAIR') == '1'
+    if (faults or repair) and not network:
+        raise RuntimeError('Packet faults/repair qualification require network capture')
     unpaired = os.environ.get('THEIA_AUTHORITY_UNPAIRED') == '1'
     laboratory = os.environ.get('THEIA_AUTHORITY_LABORATORY') == '1'
     closed = os.environ.get('THEIA_AUTHORITY_CLOSED') == '1'
@@ -62,6 +63,7 @@ def qualify(report, output):
         if ready is None: raise RuntimeError('Network listener did not publish readiness')
         network_args = ['--network-client',ready['address'],'--network-certificate',ready['certificate']]
         if faults: network_args.append('--network-faults')
+        if repair: network_args.append('--network-repair-test')
         if not unpaired:
             child_logs.append((output/'companion.log').open('w'))
             children.append(subprocess.Popen([str(executable),'--gpu','7900',*network_args,'--frames','30' if closed else '240'],stdout=child_logs[-1],stderr=subprocess.STDOUT))
@@ -153,7 +155,7 @@ def qualify(report, output):
         save.resourceId = color.resourceId
         save.destType = rd.FileType.PNG
         require(controller.SaveTexture(save, str(output/'replay.png')))
-        report.update(capture=capture, alpha=None if scripted else alpha, scripted=scripted, network=network, faults=faults, unpaired=unpaired, laboratory=laboratory, closed=closed, mesh_groups=[3,1,1], sampled_pixels=checked,
+        report.update(capture=capture, alpha=None if scripted else alpha, scripted=scripted, network=network, faults=faults, repair=repair, unpaired=unpaired, laboratory=laboratory, closed=closed, mesh_groups=[3,1,1], sampled_pixels=checked,
             actor_obstacle_background_counts=counts, reference=reference, replay_verified=True)
     finally:
         if controller is not None:

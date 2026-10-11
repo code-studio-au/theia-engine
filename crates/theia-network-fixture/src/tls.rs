@@ -5,7 +5,7 @@ use quinn::{
     rustls,
 };
 use std::{net::SocketAddr, sync::Arc, time::Duration};
-const ALPN: &[u8] = b"theia-lab-2";
+const ALPN: &[u8] = b"theia-lab-3";
 fn transport() -> Arc<TransportConfig> {
     let mut t = TransportConfig::default();
     t.max_concurrent_bidi_streams(4u8.into())
@@ -48,14 +48,15 @@ pub fn client_from_der(bytes: &[u8]) -> Result<ClientConfig> {
     roots.add(rustls::pki_types::CertificateDer::from(bytes.to_vec()))?;
     client_config(roots, ALPN)
 }
-pub fn endpoints(bind: SocketAddr) -> Result<(Endpoint, ClientConfig, [ClientConfig; 2])> {
+pub fn endpoints(bind: SocketAddr) -> Result<(Endpoint, ClientConfig, [ClientConfig; 3])> {
     let (endpoint, der) = server_endpoint(bind)?;
     let mut roots = rustls::RootCertStore::empty();
     roots.add(der)?;
     let good = client_config(roots.clone(), ALPN)?;
     let untrusted = client_config(rustls::RootCertStore::empty(), ALPN)?;
-    let wrong_protocol = client_config(roots, b"wrong-lab")?;
-    Ok((endpoint, good, [untrusted, wrong_protocol]))
+    let wrong_protocol = client_config(roots.clone(), b"wrong-lab")?;
+    let old_protocol = client_config(roots, b"theia-lab-2")?;
+    Ok((endpoint, good, [untrusted, wrong_protocol, old_protocol]))
 }
 fn client_config(roots: rustls::RootCertStore, alpn: &[u8]) -> Result<ClientConfig> {
     let mut crypto = rustls::ClientConfig::builder()

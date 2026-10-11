@@ -21,7 +21,7 @@ def verify_faults(log):
         raise RuntimeError('Faults were not exercised within bounds: '+str(counts))
 
 
-def qualify(output, laboratory=False, wsi=False, faults=False):
+def qualify(output, laboratory=False, wsi=False, faults=False, repair=False):
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     suffix = '.exe' if os.name == 'nt' else ''
@@ -59,6 +59,8 @@ def qualify(output, laboratory=False, wsi=False, faults=False):
                 '--network-certificate', ready['certificate']]
             if faults:
                 arguments.append('--network-faults')
+            if repair:
+                arguments.append('--network-repair-test')
             arguments += ['--wsi-smoke-test'] if wsi else ['--frames', '180']
             process = subprocess.Popen(arguments, stdout=handles[-1], stderr=subprocess.STDOUT)
             processes.append(process)
@@ -76,12 +78,23 @@ def qualify(output, laboratory=False, wsi=False, faults=False):
             if len(assigned)!=1:
                 raise RuntimeError('Invalid server-owned identity: '+log)
             roles.extend(assigned)
+            import re
+            replication = re.search(r'Live replication: ReplicationStats \{ full: (\d+), delta: (\d+), acks_sent: (\d+), repairs_sent: (\d+), withheld_acks: (\d+) \}',log)
+            if replication is None or not all(int(value)>0 for value in replication.groups()[:3]):
+                raise RuntimeError('Viewer did not consume full/delta states and send snapshot ACKs: '+log)
+            if repair and not all(int(value)>0 for value in replication.groups()[3:]):
+                raise RuntimeError('ACK withholding/full repair not exercised: '+log)
             if faults:
                 verify_faults(log)
         if sorted(roles)!=[10,20] or server.wait(timeout=10)!=0:
             raise RuntimeError('Pair shutdown or identity check failed: '+server_log.read_text())
+        if repair:
+            import re
+            count = re.search(r'full_repairs: (\d+)',server_log.read_text())
+            if count is None or int(count.group(1))==0:
+                raise RuntimeError('Server did not consume a full repair request')
         print('Qualified separate encrypted GPU viewers:', roles, 'profile', ready['profile'],
-              'WSI', wsi, 'faults', faults, '; logs', output)
+              'WSI', wsi, 'faults', faults, 'repair', repair, '; logs', output)
     finally:
         for process in processes:
             if process.poll() is None:
@@ -101,5 +114,6 @@ if __name__ == '__main__':
     parser.add_argument('--laboratory', action='store_true')
     parser.add_argument('--wsi', action='store_true')
     parser.add_argument('--faults', action='store_true')
+    parser.add_argument('--repair', action='store_true')
     args = parser.parse_args()
-    qualify(args.output, args.laboratory, args.wsi, args.faults)
+    qualify(args.output, args.laboratory, args.wsi, args.faults, args.repair)

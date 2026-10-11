@@ -725,3 +725,20 @@ Uses a synthetic complete-state source and independent client oracle, deliberate
 withholds early ACKs to exercise missing-baseline repair, verifies final tick 120
 before closure and bounds the whole run to 20 seconds. This test does not replace
 live THN2 gameplay/viewer transport. [Evidence](validation/M8_ENCRYPTED_REPLICATION.md).
+
+Live authority/viewers now require THN3/ALPN `theia-lab-3`; rebuild **both** labs
+before pairing. Old versions reject. TDR1 snapshot ACKs govern only replication
+baselines, independently of movement sequences and reliable combat outcome ACKs.
+For explicit baseline-eviction/full-repair qualification:
+
+```sh
+python3 tools/qualify_network_viewer.py --faults --repair --wsi --output build/qualification/live-delta-repair
+THEIA_AUTHORITY_NETWORK=1 THEIA_AUTHORITY_FAULTS=1 THEIA_AUTHORITY_REPAIR=1 THEIA_CAPTURE_OUTPUT="$PWD/build/qualification/live-delta-replay" qrenderdoc --python tools/renderdoc_authority_qualify.py
+```
+
+Manual `--network-repair-test` withholds snapshot ACKs after a reconstructed delta
+until its missing baseline triggers full repair. It is explicit test injection,
+never default input/network behavior. Live replication counters distinguish accepted
+full/delta state, queued ACK/repair and intentionally withheld ACKs. Profile roster
+stays exactly two server-assigned actors; general lifecycle replication remains open.
+[Evidence](validation/M8_LIVE_DELTA_REPLICATION.md).

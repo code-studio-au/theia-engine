@@ -1,5 +1,5 @@
-//! Separate bounded replication-envelope codec. Not yet used by the qualified
-//! THN2 listener/viewer; TDR1 explicitly rejects other wire versions.
+//! Separate bounded replication-envelope codec. The revised
+//! THN3 listener/viewer uses this state envelope; other wire versions reject.
 use theia_protocol::{delta::Delta, replica::Snapshot};
 use theia_sim::{ActorState, WorldId};
 pub const MAX_BYTES: usize = 128;

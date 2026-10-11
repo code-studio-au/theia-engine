@@ -30,6 +30,7 @@ struct View {
     received: Instant,
     snapshots: u64,
     outcomes: u64,
+    replication: client::ReplicationStats,
 }
 impl View {
     fn new() -> Self {
@@ -43,6 +44,7 @@ impl View {
             received: Instant::now(),
             snapshots: 0,
             outcomes: 0,
+            replication: client::ReplicationStats::default(),
         }
     }
     fn closed(&mut self, message: &str) {
@@ -60,7 +62,12 @@ pub struct Viewer {
     thread: Option<thread::JoinHandle<()>>,
 }
 impl Viewer {
-    pub fn new(address: SocketAddr, certificate: &Path, faults: bool) -> Result<Self> {
+    pub fn new(
+        address: SocketAddr,
+        certificate: &Path,
+        faults: bool,
+        repair_test: bool,
+    ) -> Result<Self> {
         use std::io::Read;
         if !address.ip().is_loopback() {
             return Err("Network viewer fixture requires loopback".into());
@@ -91,6 +98,7 @@ impl Viewer {
                             worker_controls,
                             worker_view.clone(),
                             faults,
+                            repair_test,
                             stop_rx,
                         )
                         .await
@@ -161,6 +169,7 @@ impl Viewer {
             "Network viewer: {} readonly snapshots, {} acknowledged outcomes; latest observed server tick {}; no local authority",
             view.snapshots, view.outcomes, view.tick
         );
+        println!("Live replication: {:?}", view.replication);
         Ok(())
     }
 }
@@ -234,6 +243,7 @@ async fn run(
     controls: Arc<Mutex<Controls>>,
     view: Arc<Mutex<View>>,
     faults: bool,
+    repair_test: bool,
     mut stop: oneshot::Receiver<()>,
 ) -> theia_network_fixture::Result<()> {
     let relay = if faults {
@@ -243,7 +253,7 @@ async fn run(
     };
     let destination = relay.as_ref().map_or(address, |relay| relay.address);
     let result = tokio::select! {
-        result = connected(endpoint, destination, controls, view.clone(), relay.as_ref()) => result,
+        result = connected(endpoint, destination, controls, view.clone(), relay.as_ref(), repair_test) => result,
         _ = &mut stop => Ok(()),
     };
     if let Ok(mut view) = view.lock() {
@@ -266,6 +276,7 @@ async fn connected(
     controls: Arc<Mutex<Controls>>,
     view: Arc<Mutex<View>>,
     relay: Option<&proxy::Relay>,
+    repair_test: bool,
 ) -> theia_network_fixture::Result<()> {
     let connection = tokio::time::timeout(
         Duration::from_secs(5),
@@ -276,6 +287,10 @@ async fn connected(
     let welcome = client::receive_welcome(&connection).await?;
     let mut replica = client::Client::new()?;
     replica.bind(&connection, welcome)?;
+    if repair_test {
+        replica.qualify_baseline_eviction()?;
+        println!("Qualification: withholding snapshot ACKs until missing-baseline full repair");
+    }
     {
         let mut view = view.lock().map_err(|_| "Viewer state poisoned")?;
         view.welcome = Some(welcome);
@@ -318,8 +333,9 @@ async fn connected(
                 }
                 received=replica.receive(&connection)=> {
                     received?;
-                    let current=replica.latest().ok_or("Missing verified replica")?;
+                    let Some(current)=replica.latest() else {continue;};
                     let mut view=view.lock().map_err(|_| "Viewer state poisoned")?;
+                    view.replication=replica.replication_stats();
                     if view.current.is_empty() || current.tick>view.tick {
                         view.previous=replica.previous().map_or_else(Vec::new,|v|v.actors.clone());
                         view.previous_tick=replica.previous().map(|v|v.tick);view.current=current.actors.clone();view.tick=current.tick;
@@ -336,6 +352,7 @@ async fn connected(
     }.await;
     requests.abort_all();
     while requests.join_next().await.is_some() {}
+    println!("Live replication: {:?}", replica.replication_stats());
     replica.disconnect()?;
     connection.close(0u8.into(), b"viewer disconnected");
     result

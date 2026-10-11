@@ -42,6 +42,8 @@ Quinn IPv4 loopback, controlled post-handshake packet faults and readonly snapsh
 CPU interpolation oracles now have local qualification logs. No WAN/load, accounts,
 persistence, general baseline repair or client prediction is qualified. Separate
 loopback GPU viewers now consume verified readonly authority snapshots; bounded
-arrival-relative smoothing is not network clock synchronization. Prototype units/tick/gap profiles are test settings, not locked network
+arrival-relative smoothing is not network clock synchronization. Actual authority
+full/delta baseline ACK/repair now qualifies on the live GPU path; this remains a
+fixed two-actor profile with no general lifecycle/persistence or WAN/load evidence. Prototype units/tick/gap profiles are test settings, not locked network
 precision or cadence choices. IPv6 is disabled on the local host; Windows/hosted
 CI remain unexecuted. See CURRENT_STATUS and M7/M8 validation reports.

@@ -247,3 +247,9 @@ snapshot ACKs and full repair under controlled packet faults. Synthetic values a
 not gameplay authority. Next explicitly revise live protocol and adopt the tested
 contract for actual authority/GPU clients. Accounts/persistence, production baseline
 leases/feature negotiation and remaining milestone gates stay open.
+
+Actual authority and GPU viewers now adopt acknowledged full/delta replication
+through explicit THN3/ALPN revision. Faulted input/combat, WSI, replay and deliberate
+baseline eviction/full repair pass. Remaining gates include general lifecycle/
+roster and baseline leases, account/session recovery, persistence and scale. M8
+remains open; broader Windows/Wayland qualification and M4/M5 gates also remain.

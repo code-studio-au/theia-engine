@@ -1,5 +1,5 @@
 use crate::{
-    Result,
+    Result, replication_wire,
     wire::{self, Message, Profile, Welcome},
 };
 use quinn::Connection;
@@ -10,16 +10,24 @@ use std::{
     },
     time::Duration,
 };
-use theia_protocol::{Authority, Limits, Peer, Reply};
+use theia_protocol::{
+    Authority, Limits, Peer, Reply,
+    replica::Snapshot,
+    replication::{Packet, Sender},
+};
 use theia_sim::{Rect, Rules, Scene, WorldId};
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinSet,
     time::{MissedTickBehavior, timeout},
 };
+enum Payload {
+    Gameplay(Message),
+    Replication(replication_wire::Message),
+}
 struct Event {
     peer: Peer,
-    message: Message,
+    message: Payload,
     response: Option<oneshot::Sender<Message>>,
 }
 #[derive(Debug, Default)]
@@ -30,6 +38,11 @@ pub struct Report {
     pub malformed: u64,
     pub rejected_moves: u64,
     pub health: [u32; 2],
+    pub full_snapshots: u64,
+    pub delta_snapshots: u64,
+    pub snapshot_acks: u64,
+    pub full_repairs: u64,
+    pub rejected_snapshot_acks: u64,
 }
 async fn read_peer(
     connection: Connection,
@@ -49,7 +62,7 @@ async fn read_peer(
                         let message = wire::decode(&bytes)?;
                         if !matches!(message, Message::Attack(_) | Message::Ack(_)) { return Err("wrong reliable message kind".into()); }
                         let (tx, rx) = oneshot::channel();
-                        events.send(Event { peer, message, response: Some(tx) }).await.map_err(|_| "authority stopped")?;
+                        events.send(Event { peer, message: Payload::Gameplay(message), response: Some(tx) }).await.map_err(|_| "authority stopped")?;
                         let response = rx.await?;
                         send.write_all(&wire::encode(&response)).await?; send.finish()?;
                         Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
@@ -60,10 +73,16 @@ async fn read_peer(
             }
             datagram = connection.read_datagram() => {
                 let Ok(bytes) = datagram else { break };
-                match wire::decode(&bytes) {
-                    Ok(message @ Message::Move(_)) => { let _ = events.try_send(Event { peer, message, response: None }); }
-                    _ => { malformed.fetch_add(1, Ordering::Relaxed); }
-                }
+                let payload = if bytes.starts_with(b"TDR1") {
+                    match replication_wire::decode(&bytes) {
+                        Ok(message @ (replication_wire::Message::Ack(_) | replication_wire::Message::Repair)) => Some(Payload::Replication(message)),
+                        _ => None,
+                    }
+                } else {
+                    match wire::decode(&bytes) { Ok(message @ Message::Move(_)) => Some(Payload::Gameplay(message)), _ => None }
+                };
+                if let Some(message) = payload { let _ = events.try_send(Event { peer, message, response: None }); }
+                else { malformed.fetch_add(1, Ordering::Relaxed); }
             }
             _ = streams.join_next(), if !streams.is_empty() => {}
         }
@@ -131,6 +150,8 @@ pub async fn run_profile(
         })
         .await??;
     }
+    let mut senders = [Sender::new(2, 8)?, Sender::new(2, 8)?];
+    let recipients = [senders[0].connect()?, senders[1].connect()?];
     let (tx, mut rx) = mpsc::channel(32);
     let malformed = Arc::new(AtomicU64::new(0));
     let mut workers = JoinSet::new();
@@ -153,9 +174,18 @@ pub async fn run_profile(
                 event = rx.recv() => {
                     let Some(event) = event else { break };
                     let response = match event.message {
-                        Message::Move(input) => { match authority.movement(event.peer, input) { Ok(()) => report.movements += 1, Err(_) => report.rejected_moves += 1 }; None }
-                        Message::Attack(input) => Some(Message::Response { request: input.sequence, reply: authority.attack(event.peer, input).map_err(Into::into) }),
-                        Message::Ack(request) => Some(Message::Response { request, reply: authority.acknowledge(event.peer, request).map(|()| Reply::Acknowledged).map_err(Into::into) }),
+                        Payload::Replication(message) => {
+                            let index = peers.iter().position(|peer| *peer == event.peer).ok_or("Unknown replication peer")?;
+                            match message {
+                                replication_wire::Message::Ack(tick) => match senders[index].acknowledge(recipients[index],tick) {Ok(_)=>report.snapshot_acks+=1,Err(_)=>report.rejected_snapshot_acks+=1},
+                                replication_wire::Message::Repair => {senders[index].request_full(recipients[index])?;report.full_repairs+=1;},
+                                _=>return Err("Reader admitted wrong replication control".into()),
+                            }
+                            None
+                        }
+                        Payload::Gameplay(Message::Move(input)) => { match authority.movement(event.peer, input) { Ok(()) => report.movements += 1, Err(_) => report.rejected_moves += 1 }; None }
+                        Payload::Gameplay(Message::Attack(input)) => Some(Message::Response { request: input.sequence, reply: authority.attack(event.peer, input).map_err(Into::into) }),
+                        Payload::Gameplay(Message::Ack(request)) => Some(Message::Response { request, reply: authority.acknowledge(event.peer, request).map(|()| Reply::Acknowledged).map_err(Into::into) }),
                         _ => return Err("reader admitted wrong message".into()),
                     };
                     if let (Some(tx), Some(response)) = (event.response, response) { let _ = tx.send(response); }
@@ -166,8 +196,10 @@ pub async fn run_profile(
                     let mut actors = authority.snapshot(); actors.sort_by_key(|v| v.id);
                     let actors = [actors[0], actors[1]];
                     for i in 0..2 {
-                        let snapshot = Message::Snapshot { tick: report.ticks, applied_move: authority.applied_move(peers[i])?, actors };
-                        match connections[i].send_datagram(wire::encode(&snapshot).into()) {
+                        let state = Snapshot {tick:report.ticks, applied_move:authority.applied_move(peers[i])?, actors:actors.to_vec()};
+                        let packet = senders[i].prepare(recipients[i],state)?;
+                        let snapshot = match packet {Packet::Full(s)=>{report.full_snapshots+=1;replication_wire::Message::Full(s)},Packet::Delta(d)=>{report.delta_snapshots+=1;replication_wire::Message::Delta(d)}};
+                        match connections[i].send_datagram(replication_wire::encode(&snapshot)?.into()) {
                             Ok(()) => {}, Err(quinn::SendDatagramError::ConnectionLost(_)) => break 'serving,
                             Err(error) => return Err(error.into()),
                         }

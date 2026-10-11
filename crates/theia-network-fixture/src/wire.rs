@@ -86,7 +86,7 @@ impl Read<'_> {
 }
 pub fn encode(message: &Message) -> Vec<u8> {
     let mut b = Vec::with_capacity(MAX_BYTES);
-    b.extend_from_slice(b"THN2");
+    b.extend_from_slice(b"THN3");
     match message {
         Message::Welcome(v) => {
             b.push(5);
@@ -182,7 +182,7 @@ pub fn decode(bytes: &[u8]) -> Result<Message, &'static str> {
         return Err("oversize message");
     }
     let mut r = Read(bytes);
-    if r.take::<4>()? != *b"THN2" {
+    if r.take::<4>()? != *b"THN3" {
         return Err("unknown version");
     }
     let message = match r.byte()? {
@@ -415,7 +415,7 @@ mod tests {
             sequence: 0,
             axes: [0, 0],
         }));
-        assert_eq!(movement, [b"THN2".as_slice(), &[0; 13]].concat());
+        assert_eq!(movement, [b"THN3".as_slice(), &[0; 13]].concat());
         let mut invalid = movement;
         invalid[13..15].copy_from_slice(&1001i16.to_le_bytes());
         assert!(decode(&invalid).is_err());
@@ -488,8 +488,10 @@ mod tests {
             sequence: 0,
             axes: [0, 0],
         }));
-        old[3] = b'1';
-        assert!(decode(&old).is_err());
+        for version in *b"12" {
+            old[3] = version;
+            assert!(decode(&old).is_err());
+        }
     }
     #[test]
     fn arbitrary_bytes_are_bounded_and_canonical_when_accepted() {
@@ -501,7 +503,7 @@ mod tests {
                 *v = (seed >> 32) as u8;
             }
             if n % 2 == 0 && b.len() >= 4 {
-                b[..4].copy_from_slice(b"THN2");
+                b[..4].copy_from_slice(b"THN3");
             }
             if let Ok(message) = decode(&b) {
                 assert_eq!(encode(&message), b);
