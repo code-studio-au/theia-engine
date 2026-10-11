@@ -565,3 +565,8 @@ Faults activate after verified TLS handshakes and preserve encrypted packets.
 The relay holds at most two packets and logs observed drop/reorder/duplicate
 counts. Movement retries until the applied watermark; complete snapshots recover
 lost state. See [fault evidence](validation/M8_NETWORK_FAULTS.md) for limits.
+
+The network lab now routes consumed snapshots through the readonly replica in
+`theia-protocol::replica`. Its five tests run with the protocol suite. Connection
+reset clears previous state; older/conflicting snapshots cannot overwrite newer
+presentation data. See [client snapshot evidence](validation/M8_CLIENT_SNAPSHOTS.md).

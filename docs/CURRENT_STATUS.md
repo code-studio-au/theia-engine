@@ -4,6 +4,24 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 readonly client snapshot publication — independently executed (2026-10-11)
+
+The transport-neutral `theia-protocol::replica` now publishes complete readonly
+client state by server tick. Newest validated sets replace atomically; older sets
+are stale and identical same-tick sets are idempotent. Contradictory same-tick
+state or regressing processed movement watermarks fail without changing the
+current state. Locally issued connection contexts reject old/foreign delivery;
+reset/disconnect clear the prior replica. Logical IDs are independent of rows.
+
+Five new tests bring the protocol suite to 12, including a 10000-delivery loss/
+reordering oracle, complete lifecycle replacement, validation/limits/exhaustion,
+connection reset and spare-allocation normalization. Both direct and faulted
+encrypted two-client labs now consume snapshots through this store and observe
+health [75,75]. App tests (four), formatting/Clippy and the 10000-tick request
+regression pass. No interpolation/prediction, delta baseline or renderer connection
+yet. Next qualify bounded presentation interpolation using separate clocks.
+[Evidence](validation/M8_CLIENT_SNAPSHOTS.md).
+
 ## M8 encrypted packet fault qualification — independently executed (2026-10-11)
 
 `theia-network-lab --faults` routes each established Quinn connection through a

@@ -1,4 +1,5 @@
 //! Encrypted two-client loopback qualification, not a production server/account service.
+mod client;
 mod proxy;
 mod server;
 mod tls;
@@ -73,16 +74,21 @@ async fn complete(connection: &Connection, request: u64, target: WorldId) -> Res
     })
     .await?
 }
-async fn movement(connection: &Connection, input: MoveInput) -> Result<Message> {
+async fn movement(
+    connection: &Connection,
+    client: &mut client::Client,
+    input: MoveInput,
+) -> Result<theia_protocol::replica::Snapshot> {
     timeout(Duration::from_secs(2), async {
         let mut retry = tokio::time::interval(Duration::from_millis(50));
         retry.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             tokio::select! {
                 _ = retry.tick() => connection.send_datagram(wire::encode(&Message::Move(input)).into())?,
-                datagram = connection.read_datagram() => {
-                    let message = wire::decode(&datagram?)?;
-                    if matches!(&message, Message::Snapshot { applied_move: Some(v), .. } if *v >= input.sequence) { return Ok(message); }
+                received = client.receive(connection) => {
+                    received?;
+                    let snapshot = client.latest().ok_or("missing published snapshot")?;
+                    if snapshot.applied_move.is_some_and(|v| v >= input.sequence) { return Ok(snapshot.clone()); }
                 }
             }
         }
@@ -156,10 +162,13 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
     }
     let (stop_tx, stop_rx) = oneshot::channel();
     let server = tokio::spawn(server::run([server_first, server_second], stop_rx));
+    let mut first_client = client::Client::new()?;
+    let mut second_client = client::Client::new()?;
     let a = WorldId::new(10)?;
     let b = WorldId::new(20)?;
     movement(
         &first,
+        &mut first_client,
         MoveInput {
             sequence: 1_000_000,
             axes: [0, 0],
@@ -168,6 +177,7 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
     .await?;
     movement(
         &second,
+        &mut second_client,
         MoveInput {
             sequence: 2_000_000,
             axes: [0, 0],
@@ -197,17 +207,15 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
     let mut sequence = 1_000_000;
     loop {
         sequence += 1;
-        let Message::Snapshot { actors, .. } = movement(
+        let theia_protocol::replica::Snapshot { actors, .. } = movement(
             &first,
+            &mut first_client,
             MoveInput {
                 sequence,
                 axes: [1000, 0],
             },
         )
-        .await?
-        else {
-            unreachable!()
-        };
+        .await?;
         if actors[1].position_mm[0] - actors[0].position_mm[0] <= 1400 {
             break;
         }
@@ -219,6 +227,7 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
     });
     movement(
         &first,
+        &mut first_client,
         MoveInput {
             sequence,
             axes: [0, 0],
@@ -307,6 +316,7 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
     sequence += 1;
     movement(
         &first,
+        &mut first_client,
         MoveInput {
             sequence,
             axes: [0, 0],
@@ -314,15 +324,14 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
     )
     .await?;
     tokio::time::sleep(Duration::from_millis(30)).await;
-    for connection in [&first, &second] {
+    for (connection, client) in [(&first, &mut first_client), (&second, &mut second_client)] {
         timeout(Duration::from_secs(2), async {
             loop {
-                let Message::Snapshot { actors, .. } =
-                    wire::decode(&connection.read_datagram().await?)?
-                else {
-                    return Err("expected snapshot".into());
-                };
-                if actors.iter().all(|v| v.health == 75) {
+                client.receive(connection).await?;
+                if client
+                    .latest()
+                    .is_some_and(|snapshot| snapshot.actors.iter().all(|v| v.health == 75))
+                {
                     return Ok::<_, Box<dyn Error + Send + Sync>>(());
                 }
             }
@@ -336,7 +345,7 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
     assert!(report.malformed >= if faults { 2 } else { 3 });
     assert!(report.rejected_moves >= 1);
     println!(
-        "Verified encrypted Quinn 0.11.11 {} loopback: two certificate-verified clients, ALPN theia-lab-1, wrong hostname, untrusted certificate and ALPN mismatch rejected; {} fixed ticks, {} admitted movement DATAGRAMs, {} hits, {} malformed messages and {} stale moves rejected; final health {:?}; reliable retry/conflict/ACK-hole/window repair and stalled-stream isolation passed.",
+        "Verified encrypted Quinn 0.11.11 {} loopback: two certificate-verified clients, ALPN theia-lab-1, wrong hostname, untrusted certificate and ALPN mismatch rejected; {} fixed ticks, {} admitted movement DATAGRAMs, {} hits, {} malformed messages and {} stale moves rejected; final health {:?}; reliable retry/conflict/ACK-hole/window repair and stalled-stream isolation and monotonic client snapshot publication passed.",
         if ipv6 { "IPv6" } else { "IPv4" },
         report.ticks,
         report.movements,
@@ -345,6 +354,9 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
         report.rejected_moves,
         report.health
     );
+    first_client.disconnect()?;
+    second_client.disconnect()?;
+    assert!(first_client.latest().is_none() && second_client.latest().is_none());
     if let Some(relays) = &relays {
         for relay in relays {
             relay.enable(false);

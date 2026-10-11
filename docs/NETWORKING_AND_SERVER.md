@@ -190,3 +190,28 @@ drop/delay/reordering/duplication. The opaque relay cannot attribute a dropped
 packet to a specific gameplay message. Faults start after handshake and end
 before close draining. No burst outage, WAN/MTU/congestion/load, handshake-loss,
 account/persistence or performance qualification is implied.
+
+## M8 actual readonly client snapshot store
+
+`theia-protocol::replica` accepts complete sorted logical-ID actor sets within a
+configured cap (1..128 actors). Prototype positions/health follow the preceding
+integer-mm +/-1M/health <=1M profile. Complete-set validation precedes atomic
+publication; caller spare vector capacity is discarded before retention. One
+current full set is retained, with immutable borrowed access; it cannot mutate
+server authority. Full empty sets remove all actors and later sets can replace
+identities/lifecycle membership without dense-row identity assumptions.
+
+A server tick is this prototype's snapshot version. Older snapshots are stale;
+identical same-tick snapshots are duplicates; contradictory same-tick snapshots
+fail. Newer snapshots cannot regress or erase an already processed movement
+watermark. Missing intermediate ticks need no baseline for a complete set.
+The issuing server must publish one immutable completed state per tick; a future
+protocol supporting revisions within a tick will need an explicit revision.
+
+Opaque locally issued connection contexts bind delivery to a replica instance.
+New connection/reset clears prior state, stale/foreign sources fail, disconnect
+clears the current set, and counters never wrap. This local context is not a wire
+credential, server partition authority epoch, authentication or durable reconnect
+protocol. Both network-lab clients feed every consumed snapshot through the store
+and clear it at shutdown. Screen interpolation/extrapolation, clock synchronization,
+prediction, delta baseline/repair and renderer integration remain unimplemented.

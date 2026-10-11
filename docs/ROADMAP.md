@@ -180,3 +180,10 @@ loopback through bounded opaque UDP relays, with sequenced movement retransmissi
 and repeated full-state recovery. Next qualify client-side snapshot ordering and
 session reset before visual integration. General delta baselines, disconnect/
 reconnect repair, persistence/accounts and scale remain open.
+
+Readonly client full-snapshot publication now qualifies monotonic tick selection,
+idempotent duplicates, conflict/watermark rejection, atomic complete-set replacement,
+bounded retention and local connection reset. Both encrypted modes use it. Next
+qualify bounded interpolation for presentation with explicit simulation/screen
+clock inputs; prediction, general deltas, lifecycle/account repair and renderer
+integration remain open.
