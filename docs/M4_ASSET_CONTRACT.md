@@ -88,6 +88,30 @@ shared resident texture, not a general dependency DAG, atomic multi-resource
 streaming publication, budget reservation/deduplication, world instance database
 or per-material image assignment. Missing children fail; no silent fallback.
 
+### Indexed bundle and multiple authored images
+
+THEIABND v2 retains the 176-byte four-root layout, replacing the final KTX2
+root with a THEIATEX texture table (88 bytes..1 MiB). Version 1 is unchanged.
+`validate_table_roots` checks all roots and exact geometry/material/UV/table
+bindings; callers must additionally run `table.validate_textures` against every
+child to admit the complete set. The bundle example and viewer do both before
+GPU initialization. `package_texture_bundle.py --texture-table` selects v2;
+`--texture` selects v1. Explicit render modes and individual resource paths
+cannot be combined with `--bundle`. No arbitrary dependency graph is admitted.
+
+Opt-in `--unlit-textures` emits normalized schema 5: a `textures` array and one
+`texture_materials` image index per dense material. Each source image retains
+schema-4 PNG/sampler restrictions. At most 16 distinct source texture bindings
+are accepted; exact encoded PNG SHA-256 deduplicates image aliases. Different
+encodings of identical pixels are separate images. Source texture bindings
+remain in provenance. Unique encoded PNG bytes plus source buffers fit 64 MiB;
+normalized JSON output also fits 64 MiB. Every image must be referenced.
+Cooking validates mappings/digests, decodes each unique PNG offline, sorts KTX2
+hashes through THEIATEX, and emits a v2 bundle. Failed cooking may leave cached
+immutable children but publishes no usable new bundle; filesystem transaction
+or crash durability is not claimed. Renderer execution currently qualifies one
+and two images. Residency remains fixed for the lifetime of the viewer.
+
 ### Bounded shared authored PNG import
 
 Opt-in glTF `--unlit-texture` produces normalized schema 4, retaining geometry,

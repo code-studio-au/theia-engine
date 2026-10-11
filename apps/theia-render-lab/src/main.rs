@@ -416,14 +416,20 @@ impl Options {
                 || result.uvs.is_some()
                 || result.texture.is_some()
                 || result.texture_table.is_some()
+                || result.mode.is_some()
             {
                 return Err("--bundle owns all four asset roles; do not combine explicit asset/cell/fallback/material/UV/texture paths".into());
             }
-            let [mesh, materials, uvs, texture] = texture::load_bundle(path)?;
+            let bundle = texture::load_bundle(path)?;
+            let [mesh, materials, uvs, texture] = bundle.paths;
             result.asset = Some(mesh);
             result.materials = Some(materials);
             result.uvs = Some(uvs);
-            result.texture = Some(texture);
+            if bundle.indexed {
+                result.texture_table = Some(texture);
+            } else {
+                result.texture = Some(texture);
+            }
             result.material = true;
             result.mode = Some(RenderMode::Asset);
         }
@@ -465,12 +471,14 @@ impl Options {
             {
                 return Err("--texture-table needs fixed --asset/--materials/--uv-test without single texture/cell/fallback".into());
             }
-            texture::admit_table(
-                path,
-                result.asset.as_deref().unwrap(),
-                result.materials.as_deref().unwrap(),
-                result.uvs.as_deref().unwrap(),
-            )?;
+            if result.bundle.is_none() {
+                texture::admit_table(
+                    path,
+                    result.asset.as_deref().unwrap(),
+                    result.materials.as_deref().unwrap(),
+                    result.uvs.as_deref().unwrap(),
+                )?;
+            }
         }
         if result.texture_budget.is_some()
             && result.texture.is_none()

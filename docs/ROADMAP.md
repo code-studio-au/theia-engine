@@ -89,7 +89,9 @@ depth and deferred diagnostic material resolve now connect those slices. Next
 qualify bounded per-material texture selection, then asynchronous dependency residency.
 The CPU material-bound texture table now admits a complete bounded texture set;
 GPU table lookup now passes one/two-texture execution and per-material/reuse
-replay checks. Authored multiple-image normalization/bundling remains open.
+replay checks. Authored multiple-image normalization and v2 complete bundle admission now pass
+source-byte, deduplication and GPU/replay checks. Next qualify bounded CPU
+complete-resource-set staging/publication, then asynchronous GPU residency.
 One shared authored external PNG now imports/cooks/samples through the fixed
 bundle against source-byte and GPU/replay checks; other image/sampler/mip
 profiles remain unqualified.

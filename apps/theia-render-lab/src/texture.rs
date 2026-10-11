@@ -25,7 +25,11 @@ pub fn load(path: &Path) -> Result<Vec<u8>> {
     }
     Ok(data)
 }
-pub fn load_bundle(path: &Path) -> Result<[std::path::PathBuf; 4]> {
+pub struct BundlePaths {
+    pub paths: [std::path::PathBuf; 4],
+    pub indexed: bool,
+}
+pub fn load_bundle(path: &Path) -> Result<BundlePaths> {
     use theia_assets::bundle::{BYTES, Bundle};
     let mut bytes = Vec::new();
     std::fs::File::open(path)?
@@ -36,7 +40,13 @@ pub fn load_bundle(path: &Path) -> Result<[std::path::PathBuf; 4]> {
         return Err("Bundle hash filename mismatch".into());
     }
     let bundle = Bundle::decode(&bytes, None)?;
-    let extensions = ["theia-mesh", "theia-material", "theia-uv", "ktx2"];
+    let indexed = bundle.profile == theia_assets::bundle::BundleProfile::TextureTable;
+    let extensions = [
+        "theia-mesh",
+        "theia-material",
+        "theia-uv",
+        if indexed { "theia-textures" } else { "ktx2" },
+    ];
     let paths = std::array::from_fn(|i| {
         path.parent().unwrap().join(format!(
             "{}.{}",
@@ -52,22 +62,24 @@ pub fn load_bundle(path: &Path) -> Result<[std::path::PathBuf; 4]> {
             .read_to_end(&mut data)?;
         children.push(data);
     }
-    let checked = bundle.validate(std::array::from_fn(|i| children[i].as_slice()))?;
-    if checked.mesh.meshlets.len() > 32
-        || checked
-            .uvs
-            .texcoords
-            .iter()
-            .flatten()
-            .any(|v| v.abs() > 64.)
-    {
+    let slices = std::array::from_fn(|i| children[i].as_slice());
+    let (mesh, uvs) = if indexed {
+        let checked = bundle.validate_table_roots(slices)?;
+        load_set(&paths[3], &checked.materials)?;
+        (checked.mesh, checked.uvs)
+    } else {
+        let checked = bundle.validate(slices)?;
+        (checked.mesh, checked.uvs)
+    };
+    if mesh.meshlets.len() > 32 || uvs.texcoords.iter().flatten().any(|v| v.abs() > 64.) {
         return Err("Bundle exceeds renderer meshlet/UV qualification profile".into());
     }
     println!(
-        "Complete immutable texture bundle admitted: four dependency hashes/lengths, geometry bindings and opaque texture verified before Vulkan initialization"
+        "Complete immutable texture bundle admitted: four roots and all texture dependencies, hashes/lengths/bindings verified before Vulkan initialization; indexed={indexed}"
     );
-    Ok(paths)
+    Ok(BundlePaths { paths, indexed })
 }
+
 pub struct ResidentTexture {
     pub image: Image,
     pub sampler: vk::Sampler,

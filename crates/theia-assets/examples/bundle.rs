@@ -1,7 +1,7 @@
 //! Independently validate a complete immutable textured mesh dependency set.
 use std::{error::Error, io::Read, path::Path};
 use theia_assets::{
-    bundle::{BYTES, Bundle},
+    bundle::{BYTES, Bundle, BundleProfile},
     content_id,
 };
 fn read(path: &Path, budget: usize) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -25,7 +25,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Err("Bundle filename hash mismatch".into());
     }
     let bundle = Bundle::decode(&data, None)?;
-    let extensions = ["theia-mesh", "theia-material", "theia-uv", "ktx2"];
+    let extensions = [
+        "theia-mesh",
+        "theia-material",
+        "theia-uv",
+        if bundle.profile == BundleProfile::SingleTexture {
+            "ktx2"
+        } else {
+            "theia-textures"
+        },
+    ];
     let mut children = Vec::new();
     for (dep, extension) in bundle.dependencies.iter().zip(extensions) {
         children.push(read(
@@ -35,6 +44,28 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .join(format!("{}.{extension}", hex(dep.content_id))),
             dep.bytes as usize,
         )?);
+    }
+    if bundle.profile == BundleProfile::TextureTable {
+        let checked =
+            bundle.validate_table_roots(std::array::from_fn(|i| children[i].as_slice()))?;
+        let mut texture_bytes = Vec::new();
+        for dep in &checked.table.textures {
+            texture_bytes.push(read(
+                &path.parent().unwrap().join(hex(dep.content_id) + ".ktx2"),
+                dep.bytes as usize,
+            )?);
+        }
+        let textures = checked
+            .table
+            .validate_textures(&texture_bytes.iter().map(Vec::as_slice).collect::<Vec<_>>())?;
+        println!(
+            "Verified complete indexed bundle: {} vertices, {} materials, {} textures, mappings {:?}",
+            checked.mesh.positions.len(),
+            checked.materials.base_colors.len(),
+            textures.len(),
+            checked.table.material_textures
+        );
+        return Ok(());
     }
     let validated = bundle.validate(std::array::from_fn(|i| children[i].as_slice()))?;
     println!(

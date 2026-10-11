@@ -4,6 +4,24 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 authored multiple-image bundle — independently executed (2026-10-11)
+
+Opt-in glTF `--unlit-textures` imports distinct material-selected external PNGs,
+deduplicates exact encoded image bytes, and preserves source bindings in
+provenance. Schema 5 cooks the existing geometry/factor/UV containers, KTX2
+children and dense texture table. THEIABND v2 replaces the fourth root with
+that table; complete root and texture-child admission precedes Vulkan setup.
+Version 1 and manual indexed paths remain available.
+
+Two-image default/shared and one-image alias captures pass 85 CPU/GPU samples
+each. Four standalone 120-frame/ten-generation cases (two-image bundle, alias,
+legacy bundle, manual table) pass synchronization validation without diagnostics.
+Both fixture images match all 32 known source RGBA bytes after offline decode.
+Missing leaves and five malformed normalized sets fail; repeated cooking is
+identical. Assets/importer/renderer/Python checks pass 28/12/14/13 tests.
+No asynchronous complete-resource-set publication is implemented yet; that is
+the next bounded M4 unit. Details: [texture evidence](validation/M4_TEXTURES.md).
+
 ## M4 GPU material texture selection — independently executed (2026-10-11)
 
 `--texture-table` admits fixed geometry/factors/UVs and the complete indexed

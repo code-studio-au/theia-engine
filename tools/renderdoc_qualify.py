@@ -128,13 +128,13 @@ def qualify(report):
                 asset_path = fallback
     bundle_path = os.environ.get('THEIA_CAPTURE_BUNDLE')
     if bundle_path:
-        if not (asset_path and authored and uv_page and texture_page) or cell_path or os.environ.get('THEIA_CAPTURE_FALLBACK') or os.environ.get('THEIA_CAPTURE_BUDGET'):
+        if not (asset_path and authored and uv_page and (texture_page or texture_table)) or cell_path or os.environ.get('THEIA_CAPTURE_FALLBACK') or os.environ.get('THEIA_CAPTURE_BUDGET'):
             raise RuntimeError('Bundle capture requires all expected fixed dependency paths without cell/fallback')
         bundle_path = str(Path(bundle_path).resolve())
         encoded = Path(bundle_path).read_bytes()
-        if len(encoded)!=176 or encoded[:16]!=b'THEIABND'+struct.pack('<2I',1,4) or Path(bundle_path).stem!=hashlib.sha256(encoded).hexdigest():
+        if len(encoded)!=176 or encoded[:16]!=b'THEIABND'+struct.pack('<2I',2 if texture_table else 1,4) or Path(bundle_path).stem!=hashlib.sha256(encoded).hexdigest():
             raise RuntimeError('Invalid expected bundle manifest')
-        for i,path in enumerate([asset_path,authored,uv_page,texture_page]):
+        for i,path in enumerate([asset_path,authored,uv_page,texture_table or texture_page]):
             child=Path(path).read_bytes()
             if encoded[16+i*40:48+i*40]!=hashlib.sha256(child).digest() or struct.unpack_from('<Q',encoded,48+i*40)[0]!=len(child):
                 raise RuntimeError('Bundle/expected dependency mismatch')

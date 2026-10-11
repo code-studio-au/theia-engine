@@ -1,10 +1,15 @@
 //! Fixed immutable dependency set for the bounded opaque textured mesh profile.
 //! Roles are ordered: geometry, material factors, UVs, one shared resident texture.
 use crate::{
-    AssetError, Mesh, Result, content_id, material::MaterialPage, texture::Texture, uv::UvPage,
-    word,
+    AssetError, Mesh, Result, content_id, material::MaterialPage, texture::Texture,
+    texture_table::TextureTable, uv::UvPage, word,
 };
 pub const BYTES: usize = 176;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BundleProfile {
+    SingleTexture,
+    TextureTable,
+}
 #[derive(Clone, Copy, Debug)]
 pub struct Dependency {
     pub content_id: [u8; 32],
@@ -14,6 +19,7 @@ pub struct Dependency {
 pub struct Bundle {
     pub content_id: [u8; 32],
     pub dependencies: [Dependency; 4],
+    pub profile: BundleProfile,
 }
 pub struct Validated<'a> {
     pub mesh: Mesh,
@@ -21,15 +27,26 @@ pub struct Validated<'a> {
     pub uvs: UvPage,
     pub texture: Texture<'a>,
 }
+pub struct ValidatedTable {
+    pub mesh: Mesh,
+    pub materials: MaterialPage,
+    pub uvs: UvPage,
+    pub table: TextureTable,
+}
 impl Bundle {
     pub fn decode(bytes: &[u8], expected: Option<[u8; 32]>) -> Result<Self> {
         if bytes.len() != BYTES
             || &bytes[..8] != b"THEIABND"
-            || word(bytes, 8)? != 1
+            || !matches!(word(bytes, 8)?, 1 | 2)
             || word(bytes, 12)? != 4
         {
             return Err(AssetError("invalid texture bundle header/version/roles"));
         }
+        let profile = if word(bytes, 8)? == 1 {
+            BundleProfile::SingleTexture
+        } else {
+            BundleProfile::TextureTable
+        };
         let mut dependencies = [Dependency {
             content_id: [0; 32],
             bytes: 0,
@@ -38,13 +55,21 @@ impl Bundle {
             crate::HEADER_BYTES,
             crate::material::HEADER_BYTES,
             crate::uv::HEADER_BYTES,
-            104,
+            if profile == BundleProfile::SingleTexture {
+                104
+            } else {
+                crate::texture_table::HEADER_BYTES
+            },
         ];
         let maxima = [
             crate::DEFAULT_BUDGET,
             crate::material::DEFAULT_BUDGET,
             crate::uv::DEFAULT_BUDGET,
-            crate::texture::DEFAULT_BUDGET,
+            if profile == BundleProfile::SingleTexture {
+                crate::texture::DEFAULT_BUDGET
+            } else {
+                crate::texture_table::DEFAULT_BUDGET
+            },
         ];
         for (i, dep) in dependencies.iter_mut().enumerate() {
             let start = 16 + i * 40;
@@ -69,16 +94,18 @@ impl Bundle {
         Ok(Self {
             content_id: id,
             dependencies,
+            profile,
         })
     }
     /// Validate every immutable child and exact geometry binding before publication.
     /// This is admission; it does not publish GPU descriptors or reserve residency.
     pub fn validate<'a>(&self, bytes: [&'a [u8]; 4]) -> Result<Validated<'a>> {
-        for (dep, data) in self.dependencies.iter().zip(bytes) {
-            if data.len() as u64 != dep.bytes || content_id(data) != dep.content_id {
-                return Err(AssetError("texture bundle child length/hash mismatch"));
-            }
+        if self.profile != BundleProfile::SingleTexture {
+            return Err(AssetError(
+                "indexed bundle requires table/texture-set admission",
+            ));
         }
+        self.check_children(bytes)?;
         let mesh = Mesh::decode(bytes[0], None, crate::DEFAULT_BUDGET)?;
         let materials =
             MaterialPage::decode(bytes[1], None, &mesh, crate::material::DEFAULT_BUDGET)?;
@@ -92,6 +119,39 @@ impl Bundle {
             materials,
             uvs,
             texture,
+        })
+    }
+    fn check_children(&self, bytes: [&[u8]; 4]) -> Result<()> {
+        for (dep, data) in self.dependencies.iter().zip(bytes) {
+            if data.len() as u64 != dep.bytes || content_id(data) != dep.content_id {
+                return Err(AssetError("texture bundle child length/hash mismatch"));
+            }
+        }
+        Ok(())
+    }
+    /// Admit four indexed roots; caller must additionally validate all table textures.
+    pub fn validate_table_roots(&self, bytes: [&[u8]; 4]) -> Result<ValidatedTable> {
+        if self.profile != BundleProfile::TextureTable {
+            return Err(AssetError(
+                "single-texture bundle requires single-texture admission",
+            ));
+        }
+        self.check_children(bytes)?;
+        let mesh = Mesh::decode(bytes[0], None, crate::DEFAULT_BUDGET)?;
+        let materials =
+            MaterialPage::decode(bytes[1], None, &mesh, crate::material::DEFAULT_BUDGET)?;
+        let uvs = UvPage::decode(bytes[2], None, &mesh, crate::uv::DEFAULT_BUDGET)?;
+        let table = TextureTable::decode(
+            bytes[3],
+            None,
+            &materials,
+            crate::texture_table::DEFAULT_BUDGET,
+        )?;
+        Ok(ValidatedTable {
+            mesh,
+            materials,
+            uvs,
+            table,
         })
     }
 }
@@ -210,6 +270,55 @@ mod tests {
         assert!(
             bundle
                 .validate(std::array::from_fn(|i| children[i].as_slice()))
+                .is_err()
+        );
+    }
+    #[test]
+    fn indexed_roots_require_complete_child_admission_and_exact_material_binding() {
+        let (_, children) = fixture();
+        let mut payload = b"table\0\0\0".to_vec();
+        payload.extend(content_id(&children[3]));
+        payload.extend((children[3].len() as u64).to_le_bytes());
+        payload.extend(0u32.to_le_bytes());
+        let mut table = b"THEIATEX".to_vec();
+        for v in [1u32, 5, 1, 1] {
+            table.extend(v.to_le_bytes());
+        }
+        table.extend(content_id(&children[1]));
+        table.extend(content_id(&payload));
+        table.extend(payload);
+        let mut roots = children.clone();
+        roots[3] = table;
+        let mut encoded = b"THEIABND".to_vec();
+        encoded.extend(2u32.to_le_bytes());
+        encoded.extend(4u32.to_le_bytes());
+        for root in &roots {
+            encoded.extend(content_id(root));
+            encoded.extend((root.len() as u64).to_le_bytes());
+        }
+        let bundle = Bundle::decode(&encoded, None).unwrap();
+        assert_eq!(bundle.profile, BundleProfile::TextureTable);
+        assert!(
+            bundle
+                .validate(std::array::from_fn(|i| roots[i].as_slice()))
+                .is_err()
+        );
+        let validated = bundle
+            .validate_table_roots(std::array::from_fn(|i| roots[i].as_slice()))
+            .unwrap();
+        assert!(validated.table.validate_textures(&[]).is_err());
+        assert!(
+            validated
+                .table
+                .validate_textures(&[children[3].as_slice()])
+                .is_ok()
+        );
+        roots[3][24] ^= 1;
+        encoded[136..168].copy_from_slice(&content_id(&roots[3]));
+        let rebound = Bundle::decode(&encoded, None).unwrap();
+        assert!(
+            rebound
+                .validate_table_roots(std::array::from_fn(|i| roots[i].as_slice()))
                 .is_err()
         );
     }

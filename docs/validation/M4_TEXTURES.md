@@ -328,3 +328,46 @@ regression-single,regression-m3}/report.json` with captures/images.
 No hosted CI, push, performance or Windows GPU claim. Multiple authored PNG
 normalization/bundling is next; asynchronous residency and mip/derivative/
 filtering/virtual textures remain open.
+
+## Authored multiple-image import and v2 bundle (2026-10-11)
+
+The eight-vertex/four-triangle fixture selects source textures [1,0]. Schema 5
+retains those source bindings, emits first-use images [alternate,primary], and
+cooks a hash-sorted table mapping [1,0]. Final SHA-256 identities:
+
+| Resource | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Geometry | 3160 | `62ccf42158af3b2f90923b888552ef1ea1231f097fa7deec591fb8da2a56ed2d` |
+| Factors | 444 | `0d8a0a3932611f33b41305efb8b4d2cbee7d5e274e0ed8ed7ee5747b8ae5a9f8` |
+| UVs | 416 | `f6231d0e3d51e7ca6779611707349a05b36ca42bb5be567f2ee39ebcd3bea32d` |
+| Texture table | 468 | `ae3cc44bb3f96b8ff6610e04cf23683cac3807dcffc4ddba7daa9c5e955550ff` |
+| V2 bundle | 176 | `29c3473e08e536f55ed60dc744506ea2fd64db45bbe7d44ab0703340aeda9ec0` |
+| Primary KTX2 | 932 | `1460604394ce91a7be0ad21dd04197b7e83bbaac372f976f01610a209dd58aff` |
+| Alternate KTX2 | 932 | `d02cb6d8d672819498a8a6ac9b4ed08f1d2ffb8101fa417e7e1d58ed2dcc1eab` |
+
+Both decoded fixture images equal all 32 known source RGBA bytes. Repeated
+normalization/cooking gives identical assets. A synthetic alias retains source
+texture bindings [1,0], normalizes one exact PNG and maps both materials [0,0];
+its v2 bundle is `5b294574af37496f45fb116b06387c047df60763f9cb6e3f6b7cfe187befa876`.
+
+Four standalone cases (v2 two-image, alias, v1 bundle, direct table) each present
+120 frames/ten generations with zero synchronization-validation diagnostics.
+Separate default/shared two-image and alias captures each present 180 frames
+and pass 85 samples including all four triangles, exact GPU dependency bytes,
+texture pixels, work/identities, depth and sampled colours. Legacy v1 replay
+also passes 85 samples. Existing depth/RGB tolerances apply.
+
+A v2 set with all roots but a missing leaf fails before Vulkan initialization.
+Five malformed normalized sets (duplicate image, unreferenced image, invalid
+index, boolean index, bad second image digest) fail before usable bundle
+publication. Previous source files remain intact. Legacy factor/UV/shared-image
+imports and original grid/quad/triangle hashes pass regression checks. Rust
+assets/importer/renderer pass 28/12/14 tests; Python passes 13. Formatting and
+denied-warning Clippy pass. Existing shaders/uploads are retained.
+
+Artifacts: `build/qualification/m4-multi-image-cook.json`,
+`m4-multi-image-repeat-regression.json`, `m4-multi-image-{full,shared}/report.json`,
+`m4-multi-image-alias-capture/report.json`, alias and negative directories,
+`m4-multi-image-regression-v1/report.json`, smoke/regression/test logs.
+No hosted CI, Windows GPU, performance, all-16-image execution or asynchronous
+complete-set residency claim. The next unit is bounded complete-set residency.

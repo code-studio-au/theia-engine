@@ -131,3 +131,18 @@ Opaque sRGB texture sampling multiplies the authored linear factors. The
 synthetic transformed/reflected fixture exercises two factors, eight UV rows,
 four triangles and repeating UVs outside [0,1]. No multiple-texture material
 table, mip/gradient/filtering, transparency or dependency streaming claim.
+
+## Optional material-selected PNG set
+
+Use `--unlit-textures` with `fixtures/gltf/transformed_scene_textures.gltf`.
+The same cooker arguments shown above produce schema-5 geometry, factors, UVs,
+KTX2 images, a dense material texture table and a THEIABND v2 manifest. Run
+`--bundle <bundle-from-report>` to select the complete indexed set.
+
+All shared-PNG restrictions still apply. Up to 16 source texture bindings are
+accepted; exact PNG bytes deduplicate image aliases. Source bindings remain in
+provenance; normalized material indices address unique images. Unique images
+plus source buffers and the final JSON each have a 64 MiB cap. Different PNG
+encodings are not merged by decoded pixels. The original `--unlit-texture`
+profile and v1 bundle remain available. Twelve importer tests pass locally;
+GPU qualification covers distinct two-image bindings and a one-image alias set.

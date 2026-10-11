@@ -59,3 +59,10 @@ this is not a general glTF scene importer or GPU instancing implementation.
 [Workflow/limits](../tools/theia-gltf-import/README.md).
 
 Begin with Blender/CLI exporters and focused visualization tools (asset viewer, world cell inspector, residency debugging, ECS inspection). Dedicated native Rust world editor only when clear authoring requirements exceed existing tools. Use immutable base world + authored overrides + mutable gameplay-state layer; but **environment physical geometry is static in gameplay**.
+
+Multiple authored external PNGs now normalize with exact encoded-image alias
+deduplication and cook into a material-bound table plus THEIABND v2. Complete
+root/leaf admission and fixed resident GPU sampling pass local qualification.
+Next: bounded whole-resource-set CPU staging/publication and retained-reader
+accounting before extending asynchronous GPU publication. Mips, gradients,
+filtering and virtual texture streaming remain open.

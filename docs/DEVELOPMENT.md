@@ -415,3 +415,17 @@ For replay set `THEIA_CAPTURE_TEXTURE_TABLE` with expected asset, factor and UV
 paths, without single texture/bundle variables. Reports include table/GPU texel
 checks and sampled material/texture indices. Only one/two texture counts have
 executed GPU qualification so far.
+
+## Material-selected authored images
+
+Normalize `fixtures/gltf/transformed_scene_textures.gltf` using the importer
+with `--unlit-textures`; feed its JSON to the existing meshlet cooker with the
+qualified meshoptimizer library/archive and KTX tool/build/archive arguments.
+`build/assets/imported-report.json` gives geometry, material, UV, texture table,
+images and v2 bundle paths. Launch `--bundle <report bundle path> --gpu 7900
+--wsi-smoke-test` for standalone validation. For separate RenderDoc replay,
+set `THEIA_CAPTURE_BUNDLE`, `THEIA_CAPTURE_ASSET`,
+`THEIA_CAPTURE_MATERIAL_PAGE`, `THEIA_CAPTURE_UV_PAGE` and
+`THEIA_CAPTURE_TEXTURE_TABLE` to the matching report paths; omit
+`THEIA_CAPTURE_TEXTURE_PAGE`. Capture validation remains disabled; standalone
+synchronization validation supplies independent diagnostic evidence.

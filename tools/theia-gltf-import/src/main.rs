@@ -57,6 +57,8 @@ struct Scene {
     uv: bool,
     texture: bool,
     texture_index: Option<usize>,
+    multiple: bool,
+    material_texture_indices: Vec<usize>,
     texcoords: Vec<[f32; 2]>,
     base_colors: Vec<[f32; 4]>,
     material_indices: BTreeMap<usize, u32>,
@@ -94,7 +96,7 @@ impl Scene {
                 || sampler.mag_filter() != Some(gltf::texture::MagFilter::Nearest)
                 || sampler.wrap_s() != gltf::texture::WrappingMode::Repeat
                 || sampler.wrap_t() != gltf::texture::WrappingMode::Repeat
-                || self.texture_index.is_some_and(|v| v != texture.index())
+                || (!self.multiple && self.texture_index.is_some_and(|v| v != texture.index()))
             {
                 return Err("Texture profile requires one shared explicit nearest-repeat TEXCOORD_0 texture without extensions".into());
             }
@@ -108,6 +110,10 @@ impl Scene {
         }
         let id = self.base_colors.len() as u32;
         self.base_colors.push(factor);
+        if self.texture {
+            self.material_texture_indices
+                .push(pbr.base_color_texture().unwrap().texture().index());
+        }
         self.material_indices.insert(index, id);
         Ok(id)
     }
@@ -266,6 +272,51 @@ impl Scene {
         Ok(())
     }
 }
+fn image_record(texture: gltf::Texture<'_>, directory: &Path) -> Result<(Value, Value, usize)> {
+    let index = texture.index();
+    let image = texture.source();
+    if image.extensions().is_some_and(|v| !v.is_empty()) {
+        return Err("Image extensions unsupported".into());
+    }
+    let (uri, mime) = match image.source() {
+        gltf::image::Source::Uri { uri, mime_type } => (uri, mime_type),
+        _ => return Err(
+            "Texture profile requires an external confined PNG; embedded images are not qualified"
+                .into(),
+        ),
+    };
+    let relative = Path::new(uri);
+    if mime.is_some_and(|v| v != "image/png")
+        || uri.contains([':', '%', '?', '#', '\\'])
+        || !relative
+            .components()
+            .all(|v| matches!(v, Component::Normal(_) | Component::CurDir))
+    {
+        return Err("Image URI must be an unescaped relative local PNG".into());
+    }
+    let resolved = directory.join(relative).canonicalize()?;
+    if !resolved.starts_with(directory) {
+        return Err("Image resolves outside source directory".into());
+    }
+    let data = read_limited(&resolved, 4 * 1024 * 1024)?;
+    if data.len() > 4 * 1024 * 1024
+        || data.len() < 33
+        || &data[..8] != b"\x89PNG\r\n\x1a\n"
+        || data[8..16] != [0, 0, 0, 13, b'I', b'H', b'D', b'R']
+        || data[24..29] != [8, 6, 0, 0, 0]
+    {
+        return Err("Image profile requires bounded noninterlaced 8-bit RGBA PNG".into());
+    }
+    let width = u32::from_be_bytes(data[16..20].try_into().unwrap());
+    let height = u32::from_be_bytes(data[20..24].try_into().unwrap());
+    if !(1..=1024).contains(&width) || !(1..=1024).contains(&height) {
+        return Err("PNG dimensions exceed profile".into());
+    }
+    let record = json!({"schema":1,"kind":"png-rgba8","width":width,"height":height,"png_base64":base64::engine::general_purpose::STANDARD.encode(&data),"png_sha256":hex(&data),"source_texture_index":index,"source_image_index":image.index(),"sampler":"nearest-repeat-mip0"});
+    let provenance =
+        json!({"uri":uri,"bytes":data.len(),"sha256":hex(&data),"index":image.index()});
+    Ok((record, provenance, data.len()))
+}
 fn normalize(path: &Path) -> Result<Value> {
     normalize_mode(path, false)
 }
@@ -276,6 +327,15 @@ fn normalize_attributes(path: &Path, unlit: bool, uv: bool) -> Result<Value> {
     normalize_profile(path, unlit, uv, false)
 }
 fn normalize_profile(path: &Path, unlit: bool, uv: bool, texture: bool) -> Result<Value> {
+    normalize_texture_profile(path, unlit, uv, texture, false)
+}
+fn normalize_texture_profile(
+    path: &Path,
+    unlit: bool,
+    uv: bool,
+    texture: bool,
+    multiple: bool,
+) -> Result<Value> {
     let source = read(path)?;
     let gltf = gltf::Gltf::from_slice(&source)?;
     if gltf
@@ -404,6 +464,8 @@ fn normalize_profile(path: &Path, unlit: bool, uv: bool, texture: bool) -> Resul
         uv,
         texture,
         texture_index: None,
+        multiple,
+        material_texture_indices: Vec::new(),
         texcoords: Vec::new(),
         base_colors: Vec::new(),
         material_indices: BTreeMap::new(),
@@ -452,79 +514,111 @@ fn normalize_profile(path: &Path, unlit: bool, uv: bool, texture: bool) -> Resul
             json!("float2 TEXCOORD_0; source UV unchanged through node transforms/reflections");
     }
     if texture {
-        let index = normalized
-            .texture_index
-            .ok_or("Texture profile has no selected texture")?;
-        let image = gltf
-            .textures()
-            .nth(index)
-            .ok_or("Invalid selected texture")?
-            .source();
-        if image.extensions().is_some_and(|v| !v.is_empty()) {
-            return Err("Image extensions unsupported".into());
+        let mut source_bytes = buffers.iter().map(Vec::len).sum::<usize>();
+        if multiple {
+            if normalized
+                .material_texture_indices
+                .iter()
+                .copied()
+                .collect::<BTreeSet<_>>()
+                .len()
+                > 16
+            {
+                return Err("Source texture count exceeds 16".into());
+            }
+            let mut cache: BTreeMap<usize, u32> = BTreeMap::new();
+            let mut image_hashes: BTreeMap<String, u32> = BTreeMap::new();
+            let mut records = Vec::new();
+            let mut images = Vec::new();
+            let mut mappings = Vec::new();
+            for &index in &normalized.material_texture_indices {
+                let dense = if let Some(&dense) = cache.get(&index) {
+                    dense
+                } else {
+                    let (record, provenance, size) = image_record(
+                        gltf.textures()
+                            .nth(index)
+                            .ok_or("Invalid selected texture")?,
+                        &directory,
+                    )?;
+                    let hash = record["png_sha256"].as_str().unwrap().to_owned();
+                    let dense = if let Some(&dense) = image_hashes.get(&hash) {
+                        dense
+                    } else {
+                        source_bytes = source_bytes
+                            .checked_add(size)
+                            .ok_or("Source image byte overflow")?;
+                        if source_bytes > MAX_BYTES {
+                            return Err("Aggregate source buffers/images exceed 64 MiB".into());
+                        }
+                        let dense = records.len() as u32;
+                        image_hashes.insert(hash, dense);
+                        records.push(record);
+                        images.push(provenance);
+                        dense
+                    };
+                    cache.insert(index, dense);
+                    dense
+                };
+                mappings.push(dense);
+            }
+            result["schema"] = json!(5);
+            result["textures"] = json!(records);
+            result["texture_materials"] = json!(mappings);
+            result["provenance"]["images"] = json!(images);
+            result["provenance"]["material_source_textures"] =
+                json!(normalized.material_texture_indices);
+            result["provenance"]["shading"] = json!(
+                "opaque double-sided KHR_materials_unlit; bounded material-selected PNG textures; authored TEXCOORD_0; explicit nearest repeat mip zero; exact PNG-content deduplication"
+            );
+        } else {
+            let index = normalized
+                .texture_index
+                .ok_or("Texture profile has no selected texture")?;
+            let (record, provenance, size) = image_record(
+                gltf.textures()
+                    .nth(index)
+                    .ok_or("Invalid selected texture")?,
+                &directory,
+            )?;
+            if source_bytes + size > MAX_BYTES {
+                return Err("Aggregate source buffers/image exceed 64 MiB".into());
+            }
+            result["schema"] = json!(4);
+            result["texture_materials"] = json!(vec![0u32; normalized.base_colors.len()]);
+            result["texture"] = record;
+            result["provenance"]["image"] = provenance;
+            result["provenance"]["shading"] = json!(
+                "opaque double-sided KHR_materials_unlit; one shared PNG base-colour texture; authored TEXCOORD_0; explicit nearest repeat mip zero"
+            );
         }
-        let (uri,mime)=match image.source() {
-            gltf::image::Source::Uri {uri,mime_type} => (uri,mime_type),
-            _=>return Err("Texture profile requires an external confined PNG; embedded images are not qualified".into()),
-        };
-        let relative = Path::new(uri);
-        if mime.is_some_and(|v| v != "image/png")
-            || uri.contains([':', '%', '?', '#', '\\'])
-            || !relative
-                .components()
-                .all(|v| matches!(v, Component::Normal(_) | Component::CurDir))
-        {
-            return Err("Image URI must be an unescaped relative local PNG".into());
-        }
-        let resolved = directory.join(relative).canonicalize()?;
-        if !resolved.starts_with(&directory) {
-            return Err("Image resolves outside source directory".into());
-        }
-        let data = read_limited(&resolved, 4 * 1024 * 1024)?;
-        if data.len() > 4 * 1024 * 1024
-            || data.len() < 33
-            || &data[..8] != b"\x89PNG\r\n\x1a\n"
-            || data[8..16] != [0, 0, 0, 13, b'I', b'H', b'D', b'R']
-            || data[24..29] != [8, 6, 0, 0, 0]
-        {
-            return Err("Image profile requires bounded noninterlaced 8-bit RGBA PNG".into());
-        }
-        let width = u32::from_be_bytes(data[16..20].try_into().unwrap());
-        let height = u32::from_be_bytes(data[20..24].try_into().unwrap());
-        if !(1..=1024).contains(&width)
-            || !(1..=1024).contains(&height)
-            || buffers.iter().map(Vec::len).sum::<usize>() + data.len() > MAX_BYTES
-        {
-            return Err("PNG dimensions or aggregate source bytes exceed profile".into());
-        }
-        result["schema"] = json!(4);
-        result["texture_materials"] = json!(vec![0u32; normalized.base_colors.len()]);
-        result["texture"] = json!({"schema":1,"kind":"png-rgba8","width":width,"height":height,"png_base64":base64::engine::general_purpose::STANDARD.encode(&data),"png_sha256":hex(&data),"source_texture_index":index,"source_image_index":image.index(),"sampler":"nearest-repeat-mip0"});
-        result["provenance"]["image"] =
-            json!({"uri":uri,"bytes":data.len(),"sha256":hex(&data),"index":image.index()});
-        result["provenance"]["shading"] = json!(
-            "opaque double-sided KHR_materials_unlit; one shared PNG base-colour texture; authored TEXCOORD_0; explicit nearest repeat mip zero"
-        );
     }
     Ok(result)
 }
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
     let input = args.next().ok_or(
-        "usage: theia-gltf-import <source.gltf/glb> <normalized.json> [--unlit-factors|--unlit-uv|--unlit-texture]",
+        "usage: theia-gltf-import <source.gltf/glb> <normalized.json> [--unlit-factors|--unlit-uv|--unlit-texture|--unlit-textures]",
     )?;
     let output = args.next().ok_or("normalized output path required")?;
-    let (unlit, uv, texture) = match args.next().as_deref() {
-        None => (false, false, false),
-        Some("--unlit-factors") => (true, false, false),
-        Some("--unlit-uv") => (true, true, false),
-        Some("--unlit-texture") => (true, true, true),
-        _ => return Err("Only --unlit-factors, --unlit-uv or --unlit-texture is supported".into()),
-    };
+    let (unlit, uv, texture, multiple) =
+        match args.next().as_deref() {
+            None => (false, false, false, false),
+            Some("--unlit-factors") => (true, false, false, false),
+            Some("--unlit-uv") => (true, true, false, false),
+            Some("--unlit-texture") => (true, true, true, false),
+            Some("--unlit-textures") => (true, true, true, true),
+            _ => return Err(
+                "Only --unlit-factors, --unlit-uv --unlit-texture or --unlit-textures is supported"
+                    .into(),
+            ),
+        };
     if args.next().is_some() {
         return Err("Too many arguments".into());
     }
-    let normalized = if texture {
+    let normalized = if multiple {
+        normalize_texture_profile(Path::new(&input), true, true, true, true)?
+    } else if texture {
         normalize_profile(Path::new(&input), true, true, true)?
     } else if uv {
         normalize_attributes(Path::new(&input), true, true)?
@@ -533,7 +627,11 @@ fn main() -> Result<()> {
     } else {
         normalize(Path::new(&input))?
     };
-    std::fs::write(&output, serde_json::to_vec(&normalized)?)?;
+    let encoded = serde_json::to_vec(&normalized)?;
+    if encoded.len() > MAX_BYTES {
+        return Err("Normalized JSON exceeds 64 MiB output limit".into());
+    }
+    std::fs::write(&output, encoded)?;
     println!(
         "Normalized {} vertices / {} triangles into {output}",
         normalized["positions"].as_array().unwrap().len(),
@@ -804,6 +902,95 @@ mod tests {
             assert!(normalize_attributes(&path, true, true).is_err(), "case {i}");
         }
     }
+    fn indexed_fixture_run(document: &Value) -> Result<Value> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("scene.gltf");
+        std::fs::write(&path, serde_json::to_vec(document)?)?;
+        std::fs::write(
+            directory.path().join("transformed_scene_texture.png"),
+            include_bytes!("../../../fixtures/gltf/transformed_scene_texture.png"),
+        )?;
+        std::fs::write(
+            directory.path().join("transformed_scene_texture_alt.png"),
+            include_bytes!("../../../fixtures/gltf/transformed_scene_texture_alt.png"),
+        )?;
+        normalize_texture_profile(&path, true, true, true, true)
+    }
+    #[test]
+    fn indexed_png_material_choices_and_exact_source_image_deduplication() {
+        let mut source: Value = serde_json::from_slice(include_bytes!(
+            "../../../fixtures/gltf/transformed_scene_textures.gltf"
+        ))
+        .unwrap();
+        let result = indexed_fixture_run(&source).unwrap();
+        assert_eq!(result["schema"], json!(5));
+        assert_eq!(result["textures"].as_array().unwrap().len(), 2);
+        assert_eq!(result["texture_materials"], json!([0, 1]));
+        assert_eq!(
+            result["provenance"]["material_source_textures"],
+            json!([1, 0])
+        );
+        assert_eq!(
+            result["textures"][0]["png_sha256"],
+            json!(hex(include_bytes!(
+                "../../../fixtures/gltf/transformed_scene_texture_alt.png"
+            )))
+        );
+        assert_eq!(
+            result["textures"][1]["png_sha256"],
+            json!(hex(include_bytes!(
+                "../../../fixtures/gltf/transformed_scene_texture.png"
+            )))
+        );
+        assert_eq!(result["triangle_materials"], json!([0, 0, 1, 1]));
+        source["images"][1]["uri"] = json!("transformed_scene_texture.png");
+        let aliased = indexed_fixture_run(&source).unwrap();
+        assert_eq!(aliased["textures"].as_array().unwrap().len(), 1);
+        assert_eq!(aliased["texture_materials"], json!([0, 0]));
+        assert_eq!(
+            aliased["provenance"]["material_source_textures"],
+            json!([1, 0])
+        );
+    }
+    #[test]
+    fn indexed_png_profile_enforces_source_count_and_second_image_constraints() {
+        let source: Value = serde_json::from_slice(include_bytes!(
+            "../../../fixtures/gltf/transformed_scene_textures.gltf"
+        ))
+        .unwrap();
+        let mut invalid = source.clone();
+        invalid["images"][1]["uri"] = json!("../escape.png");
+        assert!(indexed_fixture_run(&invalid).is_err());
+        let mut invalid = source.clone();
+        invalid["images"][1]["mimeType"] = json!("image/jpeg");
+        assert!(indexed_fixture_run(&invalid).is_err());
+        let mut invalid = source.clone();
+        invalid["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"]["texCoord"] = json!(1);
+        assert!(indexed_fixture_run(&invalid).is_err());
+        let mut large = source.clone();
+        let mut materials = Vec::new();
+        let mut textures = Vec::new();
+        let mut meshes = Vec::new();
+        let mut nodes = Vec::new();
+        for i in 0..17 {
+            let mut material = source["materials"][0].clone();
+            material["pbrMetallicRoughness"]["baseColorTexture"]["index"] = json!(i);
+            materials.push(material);
+            textures.push(json!({"sampler":0,"source":0}));
+            let mut mesh = source["meshes"][0].clone();
+            mesh["primitives"][0]["material"] = json!(i);
+            meshes.push(mesh);
+            nodes.push(json!({"mesh":i}));
+        }
+        large["materials"] = json!(materials);
+        large["textures"] = json!(textures);
+        large["meshes"] = json!(meshes);
+        large["nodes"] = json!(nodes);
+        large["scenes"][0]["nodes"] = json!((0..17).collect::<Vec<_>>());
+        let error = indexed_fixture_run(&large).unwrap_err().to_string();
+        assert!(error.contains("Source texture count exceeds 16"), "{error}");
+    }
+
     fn texture_fixture_run(document: &Value, png: &[u8]) -> Result<Value> {
         let directory = tempfile::tempdir()?;
         let path = directory.path().join("scene.gltf");
