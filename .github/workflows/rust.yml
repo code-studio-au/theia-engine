@@ -46,6 +46,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Execute certificate-verified two-client Quinn loopback
         run: cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml
+      - name: Execute controlled encrypted packet fault qualification
+        run: cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml -- --faults
   shaders:
     runs-on: ubuntu-latest
     steps:

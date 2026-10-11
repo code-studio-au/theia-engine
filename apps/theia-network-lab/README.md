@@ -8,6 +8,7 @@ actors and all gameplay effects remain in the authoritative simulation.
 
 ```sh
 cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml
+cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml -- --faults
 cargo test --locked --manifest-path apps/theia-network-lab/Cargo.toml
 ```
 
@@ -16,3 +17,7 @@ locally; this host disables IPv6. The whole run has a 20-second deadline.
 No account authentication, persistence, general replication/deltas, renderer
 integration or performance claim. Prototype wire/rules are not engine constants.
 See [qualification evidence](../../docs/validation/M8_QUINN_LOOPBACK.md).
+
+`--faults` enables bounded encrypted packet drop/delay/reordering/duplication after
+handshake. Movement retries until a snapshot's applied watermark. See
+[fault evidence](../../docs/validation/M8_NETWORK_FAULTS.md); no WAN/load claim.

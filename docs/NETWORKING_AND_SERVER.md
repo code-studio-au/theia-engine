@@ -164,3 +164,29 @@ IPv6 address selection is explicit but this host disables IPv6, so bind fails
 without silent IPv4 fallback. Network faults, replication deltas/baseline repair,
 account authorization, durable effects, disconnect lifecycle/reconnect repair,
 renderer input/presentation integration and scale measurement remain unqualified.
+
+## M8 actual controlled packet faults
+
+`--faults` inserts one UDP relay per connection, enabling directional packet-count
+faults after verified handshakes. Every eleventh eligible packet drops; every
+seventh holds for up to 10 ms; a following packet forwards first and releases the
+held one. Every thirteenth eligible directly forwarded packet duplicates. Exact
+counts depend on QUIC packet scheduling. Payloads remain encrypted and unchanged.
+Each relay accepts only its fixed server/client socket addresses; unknown sources
+are ignored. Packets exceeding 2048 bytes are rejected (2049-byte receive buffer
+allows detecting truncation). One pending packet per direction bounds payload
+retention to 4096 bytes per relay, excluding receive buffers and OS/Quinn queues.
+Relays abort on dropped owners and join during explicit shutdown.
+
+The client retransmits a supersedable movement intent every 50 ms until it sees
+that sequence's applied watermark, under a two-second deadline. Same-sequence
+retries do not reapply movement or refresh held motion. Repeated complete snapshots
+repair lost state naturally; this does not implement delta baseline ACKs. Reliable
+requests/outcomes retain the preceding bounded application result semantics.
+Packet duplication is also handled by the existing audited QUIC stack.
+
+The controlled lab keeps exactly two hits and health [75,75] under actual packet
+drop/delay/reordering/duplication. The opaque relay cannot attribute a dropped
+packet to a specific gameplay message. Faults start after handshake and end
+before close draining. No burst outage, WAN/MTU/congestion/load, handshake-loss,
+account/persistence or performance qualification is implied.

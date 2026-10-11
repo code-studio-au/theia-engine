@@ -4,6 +4,24 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 encrypted packet fault qualification — independently executed (2026-10-11)
+
+`theia-network-lab --faults` routes each established Quinn connection through a
+bounded localhost UDP relay. Directional ordinal rules drop every eleventh,
+hold every seventh (up to 10 ms), and duplicate every thirteenth eligible packet.
+A successor overtaking a held packet explicitly reorders it. Relays do not decode
+or modify encrypted payloads and hold at most one packet per direction.
+
+The faulted two-client scenario preserves exactly two hits/health [75,75], reliable
+cached results/conflicts/ACK repair and independent movement sequences. Movement
+retries at 50 ms until a processed watermark appears in repeated full snapshots.
+Four unit tests and formatting/Clippy pass; the relay test verifies both routes,
+unknown-source rejection and oversized-packet rejection without retained growth.
+Default loopback still passes. This is controlled post-handshake loopback loss,
+not WAN congestion, handshake-loss qualification or scale measurement. Next
+qualify client snapshot ordering/session reset before presentation integration.
+[Evidence](validation/M8_NETWORK_FAULTS.md).
+
 ## M8 encrypted two-client loopback — independently executed (2026-10-11)
 
 A separate `theia-network-lab` exchanges bounded versioned messages through

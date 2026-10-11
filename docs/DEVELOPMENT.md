@@ -554,3 +554,14 @@ localhost UDP ports. It generates a certificate in memory and trusts that
 specific certificate; no verification bypass or private-key file exists.
 The whole qualification has a 20-second deadline. No account service or persistent
 state is involved. See [evidence and limits](validation/M8_QUINN_LOOPBACK.md).
+
+Run the same encrypted two-client checks through controlled UDP faults:
+
+```sh
+cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml -- --faults
+```
+
+Faults activate after verified TLS handshakes and preserve encrypted packets.
+The relay holds at most two packets and logs observed drop/reorder/duplicate
+counts. Movement retries until the applied watermark; complete snapshots recover
+lost state. See [fault evidence](validation/M8_NETWORK_FAULTS.md) for limits.

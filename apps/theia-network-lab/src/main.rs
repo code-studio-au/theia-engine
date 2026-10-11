@@ -1,4 +1,5 @@
 //! Encrypted two-client loopback qualification, not a production server/account service.
+mod proxy;
 mod server;
 mod tls;
 mod wire;
@@ -14,7 +15,15 @@ async fn connect(
     client: &Endpoint,
     hostname: &str,
 ) -> Result<(Connection, Connection)> {
-    let outgoing = client.connect(server.local_addr()?, hostname)?;
+    connect_at(server, client, hostname, server.local_addr()?).await
+}
+async fn connect_at(
+    server: &Endpoint,
+    client: &Endpoint,
+    hostname: &str,
+    destination: SocketAddr,
+) -> Result<(Connection, Connection)> {
+    let outgoing = client.connect(destination, hostname)?;
     let incoming = async {
         server
             .accept()
@@ -64,15 +73,22 @@ async fn complete(connection: &Connection, request: u64, target: WorldId) -> Res
     })
     .await?
 }
-async fn snapshot(connection: &Connection, minimum_sequence: u64) -> Result<Message> {
+async fn movement(connection: &Connection, input: MoveInput) -> Result<Message> {
     timeout(Duration::from_secs(2), async {
+        let mut retry = tokio::time::interval(Duration::from_millis(50));
+        retry.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
-            let message = wire::decode(&connection.read_datagram().await?)?;
-            if matches!(&message, Message::Snapshot { applied_move: Some(v), .. } if *v >= minimum_sequence) { return Ok(message); }
+            tokio::select! {
+                _ = retry.tick() => connection.send_datagram(wire::encode(&Message::Move(input)).into())?,
+                datagram = connection.read_datagram() => {
+                    let message = wire::decode(&datagram?)?;
+                    if matches!(&message, Message::Snapshot { applied_move: Some(v), .. } if *v >= input.sequence) { return Ok(message); }
+                }
+            }
         }
     }).await?
 }
-async fn qualify(ipv6: bool) -> Result<()> {
+async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
     let bind: SocketAddr = if ipv6 { "[::1]:0" } else { "127.0.0.1:0" }.parse()?;
     let (server_endpoint, config, negative_configs) = tls::endpoints(bind)?;
     let mut first_endpoint = Endpoint::client(bind)?;
@@ -93,8 +109,38 @@ async fn qualify(ipv6: bool) -> Result<()> {
         );
     }
     first_endpoint.set_default_client_config(config.clone());
-    let (first, server_first) = connect(&server_endpoint, &first_endpoint, "localhost").await?;
-    let (second, server_second) = connect(&server_endpoint, &second_endpoint, "localhost").await?;
+    let relays = if faults {
+        Some([
+            proxy::Relay::new(server_endpoint.local_addr()?, first_endpoint.local_addr()?).await?,
+            proxy::Relay::new(server_endpoint.local_addr()?, second_endpoint.local_addr()?).await?,
+        ])
+    } else {
+        None
+    };
+    let destinations = if let Some(relays) = &relays {
+        [relays[0].address, relays[1].address]
+    } else {
+        [server_endpoint.local_addr()?; 2]
+    };
+    let (first, server_first) = connect_at(
+        &server_endpoint,
+        &first_endpoint,
+        "localhost",
+        destinations[0],
+    )
+    .await?;
+    let (second, server_second) = connect_at(
+        &server_endpoint,
+        &second_endpoint,
+        "localhost",
+        destinations[1],
+    )
+    .await?;
+    if let Some(relays) = &relays {
+        for relay in relays {
+            relay.enable(true);
+        }
+    }
     for connection in [&first, &second] {
         assert!(
             connection
@@ -112,22 +158,22 @@ async fn qualify(ipv6: bool) -> Result<()> {
     let server = tokio::spawn(server::run([server_first, server_second], stop_rx));
     let a = WorldId::new(10)?;
     let b = WorldId::new(20)?;
-    first.send_datagram(
-        wire::encode(&Message::Move(MoveInput {
+    movement(
+        &first,
+        MoveInput {
             sequence: 1_000_000,
             axes: [0, 0],
-        }))
-        .into(),
-    )?;
-    second.send_datagram(
-        wire::encode(&Message::Move(MoveInput {
+        },
+    )
+    .await?;
+    movement(
+        &second,
+        MoveInput {
             sequence: 2_000_000,
             axes: [0, 0],
-        }))
-        .into(),
-    )?;
-    snapshot(&first, 1_000_000).await?;
-    snapshot(&second, 2_000_000).await?;
+        },
+    )
+    .await?;
     let (mut stalled_send, mut stalled_recv) = first.open_bi().await?;
     stalled_send.write_all(b"THN1").await?; // No FIN: this stream cannot stall the authority or another peer.
     assert_eq!(
@@ -151,14 +197,15 @@ async fn qualify(ipv6: bool) -> Result<()> {
     let mut sequence = 1_000_000;
     loop {
         sequence += 1;
-        first.send_datagram(
-            wire::encode(&Message::Move(MoveInput {
+        let Message::Snapshot { actors, .. } = movement(
+            &first,
+            MoveInput {
                 sequence,
                 axes: [1000, 0],
-            }))
-            .into(),
-        )?;
-        let Message::Snapshot { actors, .. } = snapshot(&first, sequence).await? else {
+            },
+        )
+        .await?
+        else {
             unreachable!()
         };
         if actors[1].position_mm[0] - actors[0].position_mm[0] <= 1400 {
@@ -170,8 +217,14 @@ async fn qualify(ipv6: bool) -> Result<()> {
         sequence,
         axes: [0, 0],
     });
-    first.send_datagram(wire::encode(&stop_move).into())?;
-    snapshot(&first, sequence).await?;
+    movement(
+        &first,
+        MoveInput {
+            sequence,
+            axes: [0, 0],
+        },
+    )
+    .await?;
     let first_hit = complete(&first, 1, b).await?;
     assert_eq!(first_hit.result, AttackResult::Hit { health_after: 75 });
     assert_eq!(complete(&first, 1, b).await?, first_hit);
@@ -247,17 +300,19 @@ async fn qualify(ipv6: bool) -> Result<()> {
     );
     first.send_datagram(vec![0; 5].into())?;
     tokio::time::sleep(Duration::from_millis(50)).await;
-    first.send_datagram(wire::encode(&stop_move).into())?; // replay, never new movement
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    for _ in 0..5 {
+        first.send_datagram(wire::encode(&stop_move).into())?; // Superseded sequence cannot move again.
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
     sequence += 1;
-    first.send_datagram(
-        wire::encode(&Message::Move(MoveInput {
+    movement(
+        &first,
+        MoveInput {
             sequence,
             axes: [0, 0],
-        }))
-        .into(),
-    )?;
-    snapshot(&first, sequence).await?;
+        },
+    )
+    .await?;
     tokio::time::sleep(Duration::from_millis(30)).await;
     for connection in [&first, &second] {
         timeout(Duration::from_secs(2), async {
@@ -278,7 +333,7 @@ async fn qualify(ipv6: bool) -> Result<()> {
     let report = server.await??;
     assert_eq!(report.hits, 2);
     assert_eq!(report.health, [75, 75]);
-    assert!(report.malformed >= 3);
+    assert!(report.malformed >= if faults { 2 } else { 3 });
     assert!(report.rejected_moves >= 1);
     println!(
         "Verified encrypted Quinn 0.11.11 {} loopback: two certificate-verified clients, ALPN theia-lab-1, wrong hostname, untrusted certificate and ALPN mismatch rejected; {} fixed ticks, {} admitted movement DATAGRAMs, {} hits, {} malformed messages and {} stale moves rejected; final health {:?}; reliable retry/conflict/ACK-hole/window repair and stalled-stream isolation passed.",
@@ -290,6 +345,11 @@ async fn qualify(ipv6: bool) -> Result<()> {
         report.rejected_moves,
         report.health
     );
+    if let Some(relays) = &relays {
+        for relay in relays {
+            relay.enable(false);
+        }
+    }
     for connection in [&first, &second] {
         connection.close(0u8.into(), b"qualification complete");
     }
@@ -301,24 +361,42 @@ async fn qualify(ipv6: bool) -> Result<()> {
         second_endpoint.wait_idle(),
         server_endpoint.wait_idle()
     );
+    if let Some(relays) = relays {
+        let mut dropped = 0;
+        let mut reordered = 0;
+        let mut duplicated = 0;
+        for relay in relays {
+            let report = relay.finish().await?;
+            dropped += report.dropped;
+            reordered += report.reordered;
+            duplicated += report.duplicated;
+            assert!(report.max_pending <= 2);
+            println!("Controlled encrypted packet relay: {report:?}");
+        }
+        assert!(dropped > 0 && reordered > 0 && duplicated > 0);
+    }
     println!(
-        "No account authentication, packet-loss proxy, persistence, baseline deltas, renderer integration or scale/performance claim. Keys/certificates exist only in memory; 0-RTT disabled."
+        "No account authentication, persistence, baseline deltas, renderer integration or scale/performance claim. Keys/certificates exist only in memory; 0-RTT disabled."
     );
     Ok(())
 }
 #[tokio::main(worker_threads = 2)]
 async fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    let ipv6 = match args.as_slice() {
-        [] => false,
-        [arg] if arg == "--ipv6" => true,
-        [arg] if arg == "--help" => {
-            println!(
-                "Theia encrypted two-client loopback lab: [--ipv6]; default IPv4; ephemeral localhost ports/certificates only"
-            );
-            return Ok(());
+    let mut ipv6 = false;
+    let mut faults = false;
+    for arg in args {
+        match arg.as_str() {
+            "--ipv6" => ipv6 = true,
+            "--faults" => faults = true,
+            "--help" => {
+                println!(
+                    "Theia encrypted two-client loopback lab: [--ipv6] [--faults]; default IPv4; ephemeral localhost ports/certificates only"
+                );
+                return Ok(());
+            }
+            _ => return Err("Use --ipv6, --faults or --help".into()),
         }
-        _ => return Err("Use --ipv6 or --help".into()),
-    };
-    timeout(Duration::from_secs(20), qualify(ipv6)).await?
+    }
+    timeout(Duration::from_secs(20), qualify(ipv6, faults)).await?
 }

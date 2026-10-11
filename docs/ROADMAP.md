@@ -174,3 +174,9 @@ certificate/ALPN rejection and bounded malformed/stalled-stream handling. Next
 qualify encrypted exchange under controlled packet loss/reordering, then bounded
 snapshot versioning/repair and client presentation integration. Persistence and
 accounts remain unimplemented; M8 is still open.
+
+Encrypted post-handshake loss/delay/reordering/duplication now passes two-client
+loopback through bounded opaque UDP relays, with sequenced movement retransmission
+and repeated full-state recovery. Next qualify client-side snapshot ordering and
+session reset before visual integration. General delta baselines, disconnect/
+reconnect repair, persistence/accounts and scale remain open.
