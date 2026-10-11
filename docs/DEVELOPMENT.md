@@ -429,3 +429,12 @@ set `THEIA_CAPTURE_BUNDLE`, `THEIA_CAPTURE_ASSET`,
 `THEIA_CAPTURE_TEXTURE_TABLE` to the matching report paths; omit
 `THEIA_CAPTURE_TEXTURE_PAGE`. Capture validation remains disabled; standalone
 synchronization validation supplies independent diagnostic evidence.
+
+## Complete-bundle CPU ownership qualification
+
+`cargo run --locked --manifest-path crates/theia-assets/Cargo.toml --example
+bundle_residency -- <first bundle> <second bundle>` loads two hash-named complete
+sets from their sibling directories. Choose different non-contained sets, such
+as the two-image and alias fixture bundles. It verifies duplicate-stage sharing,
+atomic replacement, retained-reader budget rejection and last-owner reuse. This
+example performs no Vulkan work.

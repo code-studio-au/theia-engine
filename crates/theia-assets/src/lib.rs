@@ -3,6 +3,7 @@ use sha2::{Digest, Sha256};
 use std::{error::Error, fmt};
 pub mod arena;
 pub mod bundle;
+pub mod bundle_residency;
 pub mod material;
 pub mod residency;
 pub mod texture;

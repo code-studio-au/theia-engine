@@ -156,9 +156,9 @@ impl Bundle {
     }
 }
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
-    fn fixture() -> (Vec<u8>, [Vec<u8>; 4]) {
+    pub(crate) fn fixture() -> (Vec<u8>, [Vec<u8>; 4]) {
         let mesh = crate::tests::fixture();
         let mesh_id = content_id(&mesh);
         let mut material_payload = b"mat\0".to_vec();

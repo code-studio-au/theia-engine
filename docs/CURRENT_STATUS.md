@@ -4,6 +4,24 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 complete-bundle CPU residency — independently executed (2026-10-11)
+
+A separate `theia_assets::bundle_residency` store admits every v1/v2 root and
+texture leaf before reserving ownership. Staging reserves the complete set or
+fails; identical encoded resources share owners. CPU publication replaces the
+whole set at a checked epoch. Pending stages and retained reader snapshots
+remain charged until their last owner releases them. The budget includes
+manifest bytes and excludes caller I/O, decoded temporary data and VRAM.
+
+Thirty-three asset tests pass, including five complete-set tests and a 3,000-step
+independent live-byte-union oracle. Real two-image/alias bundles charge
+6528/5416 bytes separately, 11012 together (932 shared); v2/v1 bundles charge
+6528/4912 separately, 10508 together (932 shared). Both examples verify budget
+rejection, atomic current-set preservation, reader retention and last-owner
+reuse. Existing geometry-only residency is preserved. GPU upload completion and
+atomic descriptor publication remain the next gate. See
+[residency evidence](validation/M4_BUNDLE_RESIDENCY.md).
+
 ## M4 authored multiple-image bundle — independently executed (2026-10-11)
 
 Opt-in glTF `--unlit-textures` imports distinct material-selected external PNGs,

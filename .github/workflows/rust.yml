@@ -172,6 +172,7 @@ jobs:
           PY
       - name: Qualify authored multiple-image bundle
         run: |
+          cp build/assets/imported-report.json build/shared-image-report.json
           cargo run --locked --manifest-path tools/theia-gltf-import/Cargo.toml -- fixtures/gltf/transformed_scene_textures.gltf build/assets/imported-multi-image-scene.json --unlit-textures
           python3 tools/cook_meshlet_fixture.py --geometry build/assets/imported-multi-image-scene.json --library "$RUNNER_TEMP/meshopt-build/libmeshoptimizer.so" --source-archive "$RUNNER_TEMP/meshoptimizer.tar.gz" --ktx "$RUNNER_TEMP/ktx-build/Release/ktx" --ktx-build "$RUNNER_TEMP/ktx-build" --ktx-source-archive "$RUNNER_TEMP/ktx-source.tar.gz"
           python3 - <<'PY'
@@ -184,4 +185,12 @@ jobs:
               raw = json.load(open('fixtures/textures/' + fixture + '.json'))
               assert data[offset:offset+size] == bytes(v for texel in raw['rgba'] for v in texel)
           subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'bundle', '--', report['bundle']['path']], check=True)
+          PY
+      - name: Qualify complete-bundle CPU residency
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          first = json.load(open('build/assets/imported-report.json'))['bundle']['path']
+          second = json.load(open('build/shared-image-report.json'))['bundle']['path']
+          subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'bundle_residency', '--', first, second], check=True)
           PY

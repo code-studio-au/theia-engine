@@ -110,3 +110,8 @@ vertex Slang mesh / GLSL fragment interface passes replay alongside the default
 expanded-vertex Slang test. General
 LOD/hierarchy errors, broader page dependencies/readers and virtual texture
 residency remain open. Retain the current viewer/fixture checks; M5 GI stays deferred.
+
+Complete-bundle CPU residency now passes full-set admission/reservation,
+content-addressed sharing, atomic epoch replacement and retained-reader budget
+checks. Next integrate bounded asynchronous whole-set uploads and frame-safe
+GPU publication; fixed-renderer texture residency is still unchanged.

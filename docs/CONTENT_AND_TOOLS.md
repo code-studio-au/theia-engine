@@ -66,3 +66,9 @@ root/leaf admission and fixed resident GPU sampling pass local qualification.
 Next: bounded whole-resource-set CPU staging/publication and retained-reader
 accounting before extending asynchronous GPU publication. Mips, gradients,
 filtering and virtual texture streaming remain open.
+
+The complete-bundle CPU store now qualifies atomic full-set reservation and
+publication with retained-reader ownership and unique encoded-byte accounting.
+It includes manifests, shares exact children across v1/v2 sets, and excludes
+I/O/decoded temporary memory and physical GPU allocation. Next qualify the
+separate asynchronous GPU publication/retirement path.

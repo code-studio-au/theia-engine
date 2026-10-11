@@ -88,6 +88,25 @@ shared resident texture, not a general dependency DAG, atomic multi-resource
 streaming publication, budget reservation/deduplication, world instance database
 or per-material image assignment. Missing children fail; no silent fallback.
 
+### Complete-bundle CPU residency
+
+`bundle_residency::Residency` owns one current complete set and tracks unique
+encoded resource owners by content hash. `stage(manifest, expected_id, roots,
+leaves)` semantically admits the entire fixed graph before checking a complete
+reservation. Version 1 accepts zero extra leaves; version 2 requires every
+canonical table leaf. The reservation includes the manifest and all roots and
+leaves, deduplicated across profiles, stages, current sets and retained readers.
+Failures leave current publication and live-byte accounting unchanged. Dropping
+an opaque staged token cancels its reservation. Foreign store tokens fail.
+
+`publish(Some(token))` atomically replaces the CPU set with a checked epoch;
+`publish(None)` publishes an empty set. Snapshots retain all their immutable
+bytes and can safely outlive the store. Releasing the last owner permits budget
+reuse. This is a unique encoded-byte budget, excluding caller-owned inputs,
+decoded admission temporaries, Arc/map overhead and Vulkan physical allocations.
+The API owns no I/O worker, GPU fences or descriptors, and makes no GPU
+publication claim. Geometry-only THEIACEL residency remains separate.
+
 ### Indexed bundle and multiple authored images
 
 THEIABND v2 retains the 176-byte four-root layout, replacing the final KTX2
