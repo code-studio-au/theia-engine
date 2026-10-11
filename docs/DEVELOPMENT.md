@@ -806,3 +806,8 @@ Use `tools/cook_texture_capacity.py` to produce four deterministic bundles sampl
 all 16 descriptor indices, then `tools/qualify_texture_capacity.py` for separate
 RenderDoc pixel/texel references, validation WSI and measured image-budget boundaries.
 Commands and limits: [M4 texture capacity](validation/M4_TEXTURE_CAPACITY.md).
+
+`tools/qualify_texture_streaming_capacity.py` extends that fixture to complete-set
+replacement at exact coexistence budgets and independently one byte below CPU, GPU
+and image limits. [Capacity replacement evidence](validation/M4_TEXTURE_STREAMING_CAPACITY.md)
+records the commands, included resource charges and retained/replaced replay proof.

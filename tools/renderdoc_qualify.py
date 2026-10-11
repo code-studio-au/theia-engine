@@ -152,6 +152,14 @@ def qualify(report):
             arguments+=f' --stream-bundle {quote(stream)}'
             report['streaming_bundle_capture']=True
             report['initial_bundle_content_id']=Path(initial).stem
+            for setting,option in [('THEIA_CAPTURE_BUNDLE_GPU_BUDGET','--bundle-gpu-budget'),
+                                   ('THEIA_CAPTURE_BUNDLE_BYTE_BUDGET','--bundle-byte-budget'),
+                                   ('THEIA_CAPTURE_TEXTURE_BUDGET','--texture-budget')]:
+                value=os.environ.get(setting)
+                if value is not None:
+                    budget=int(value)
+                    if budget<=0: raise RuntimeError('Capture budgets must be positive')
+                    arguments+=f' {option} {budget}'
         if shader_dir: arguments+=f' --shader-dir {quoted_dir}'
         report['bundle_dependencies_verified']=True
         report['bundle_content_id']=Path(bundle_path).stem

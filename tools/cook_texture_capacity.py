@@ -7,6 +7,7 @@ Each bundle assigns four consecutive material/descriptor indices to four triangl
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -25,7 +26,8 @@ def main():
 
     def run(name, *options):
         return json.loads(subprocess.check_output(
-            [sys.executable, str(tools / name), *map(str, options)], timeout=120))
+            [sys.executable, str(tools / name), *map(str, options)], timeout=120,
+            env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'}))
 
     try:
         reference = json.loads(args.reference.read_bytes())

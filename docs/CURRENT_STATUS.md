@@ -4,6 +4,18 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 full-capacity texture replacement — independently executed (2026-10-11)
+
+Two 16-image complete sets now qualify asynchronous upload/publication and exact
+coexistence budgets: 22088 unique encoded CPU bytes (independent hash-union check),
+141760 GPU root/image bytes and 131072 image bytes. Exact limits publish five times;
+one byte below each limit independently defers five times and retains the initial
+complete set through 120 frames. All four validation runs pass zero diagnostics.
+Four replay captures verify retained/replaced material sampling, all 16 image texels
+and 85 pixels each. No Rust/shader changes, runtime readback or performance claim.
+Device-idle retirement, general streaming/LOD/virtual texture and platform gates
+remain open. [Evidence](validation/M4_TEXTURE_STREAMING_CAPACITY.md).
+
 ## M4 maximum resident texture table — independently executed (2026-10-11)
 
 Actual indexed sampling now qualifies all 16 descriptor slots on RX 7900 XTX/RADV/X11.

@@ -274,3 +274,8 @@ M4 now qualifies every slot of the bounded 16-image resident descriptor table on
 RADV/X11, including exact image-budget success and one-byte-short clean rejection.
 Concurrent full-capacity replacements and aggregate bundle admission at this boundary
 remain separate checks; general LOD and virtual textures remain open.
+
+M4 full-capacity replacement now qualifies 32 simultaneously allocated images,
+complete-set publication and independent exact/one-byte-short CPU/GPU/image budgets.
+Replay verifies the replacement at exact limits and retained materials under all
+three deferrals. Conservative retirement and broader M4 gates remain open.
