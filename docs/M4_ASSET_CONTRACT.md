@@ -748,3 +748,14 @@ texels borrow immutable bytes. The offline `cook_texture_mips.py` qualifies expl
 authored raw levels using pinned KTX 4.4.2 and verifies every byte, without filtering.
 [Contract evidence](validation/M4_TEXTURE_MIP_CONTRACT.md). GPU adoption, mip selection,
 derivatives, filtering and tiled/partial residency remain separate gates.
+
+### GPU complete-chain fixed views
+
+`--texture-mip-test <file level>` admits the separate complete authored chain before
+Vulkan setup, rechecks immutable bytes and device mip/extent limits, then uploads
+all levels with one staging allocation/transfer and full-range barriers. One image
+view exposes the selected mip; the unchanged Slang fragment samples view-relative
+level zero with nearest repeat. No per-frame host mip choice or runtime readback.
+`--texture-mip-reference` provides a readonly CPU sampling oracle. Existing single-
+mip/table/bundle paths stay separate. [GPU evidence](validation/M4_GPU_TEXTURE_MIPS.md).
+Automatic mip choice, gradients/filtering and tiled/partial residency remain open.

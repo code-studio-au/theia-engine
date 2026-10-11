@@ -54,6 +54,11 @@ def qualify(report):
     uv_page = os.environ.get('THEIA_CAPTURE_UV_PAGE')
     authored = os.environ.get('THEIA_CAPTURE_MATERIAL_PAGE')
     texture_page = os.environ.get('THEIA_CAPTURE_TEXTURE_PAGE')
+    texture_mip_level = os.environ.get('THEIA_CAPTURE_TEXTURE_MIP_LEVEL')
+    if texture_mip_level is not None:
+        texture_mip_level=int(texture_mip_level)
+        if texture_mip_level<0 or not texture_page or os.environ.get('THEIA_CAPTURE_BUNDLE'):
+            raise RuntimeError('Fixed mip capture requires an explicit texture page without bundle')
     texture_table = os.environ.get('THEIA_CAPTURE_TEXTURE_TABLE')
     if texture_page and texture_table: raise RuntimeError('Choose single texture or indexed table capture')
     if (texture_page or texture_table) and not (authored and uv_page): raise RuntimeError('Texture capture requires factor and UV pages')
@@ -89,8 +94,9 @@ def qualify(report):
             else: texture_page = selected_texture
             quoted_material = subprocess.list2cmdline([authored]) if os.name == 'nt' else shlex.quote(authored)
             quoted_texture = subprocess.list2cmdline([selected_texture]) if os.name == 'nt' else shlex.quote(selected_texture)
-            texture_option = '--texture-table' if texture_table else '--texture-test'
+            texture_option = '--texture-table' if texture_table else '--texture-mip-test' if texture_mip_level is not None else '--texture-test'
             arguments += f' --materials {quoted_material} {texture_option} {quoted_texture}'
+            if texture_mip_level is not None: arguments+=f' {texture_mip_level}'
     elif authored:
         if cell_path: raise RuntimeError('Authored material capture requires a fixed geometry page')
         authored = str(Path(authored).resolve())
@@ -350,7 +356,7 @@ def qualify(report):
                 report['lod_framebuffer_verified']=False
                 report['lod_guard_only']=True
             elif camera:
-                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material, authored, uv_page, texture_page, texture_table)
+                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material, authored, uv_page, texture_page, texture_table, texture_mip_level)
             else:
                 verify_asset(controller, present.copyDestination, source, count, report)
         save = rd.TextureSave()
@@ -473,7 +479,7 @@ def verify_asset(controller, color_id, source, count, report):
     report.update(asset_surface_samples=samples, asset_surface_verified=True, selected_triangles=len(geometry))
 
 
-def verify_camera(controller, executable, root, color_id, asset_path, scenario, report, cull=False, material=False, authored=None, uv_page=None, texture_page=None, texture_table=None):
+def verify_camera(controller, executable, root, color_id, asset_path, scenario, report, cull=False, material=False, authored=None, uv_page=None, texture_page=None, texture_table=None, texture_mip_level=None):
     textures = controller.GetTextures()
     color = next(texture for texture in textures if texture.resourceId == color_id)
     depths = [texture for texture in textures if texture.format.compType == rd.CompType.Depth
@@ -516,6 +522,18 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
         offset,size,_=struct.unpack_from('<3Q',data,80)
         matches=[tex for tex in textures if tex.width==width and tex.height==height and controller.GetTextureData(tex.resourceId,rd.Subresource())==data[offset:offset+size]]
         if len(matches)!=1: raise RuntimeError('Expected exact resident texture GPU texels')
+        if texture_mip_level is not None:
+            count=struct.unpack_from('<I',data,40)[0]
+            texture=matches[0]
+            if texture.mips!=count or texture_mip_level>=count:
+                raise RuntimeError('GPU mip count/fixed view is outside the complete chain')
+            for level in range(count):
+                start,length,_=struct.unpack_from('<3Q',data,80+level*24)
+                subresource=rd.Subresource();subresource.mip=level
+                if controller.GetTextureData(texture.resourceId,subresource)!=data[start:start+length]:
+                    raise RuntimeError('GPU mip texels differ from complete authored source')
+            report.update(texture_gpu_mips_verified=True,texture_mip_count=count,
+                          texture_fixed_view_level=texture_mip_level)
         report['texture_gpu_texels_verified']=True
         report['texture_dimensions']=[width,height]
     if authored or uv_page:
@@ -544,6 +562,8 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
     samples = []
     for pixel in points:
         reference = [str(executable), '--texture-table-reference', asset_path, authored, uv_page, texture_table] if texture_table else [str(executable), '--texture-reference', asset_path, authored, uv_page, texture_page] if texture_page else [str(executable), '--uv-reference', asset_path, uv_page] if uv_page else [str(executable), '--authored-reference', asset_path, authored] if authored else [str(executable), '--material-reference' if material else '--frustum-reference' if cull else '--camera-reference', asset_path]
+        if texture_mip_level is not None:
+            reference=[str(executable),'--texture-mip-reference',asset_path,authored,uv_page,texture_page,str(texture_mip_level)]
         expected = json.loads(subprocess.check_output(reference + [
                               str(pixel[0]), str(pixel[1]), str(color.width), str(color.height), str(scenario)], cwd=root))
         offset = pixel[1]*color.width+pixel[0]

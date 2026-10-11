@@ -296,3 +296,8 @@ demand and texture mip/tile fallback remain implementation gates.
 M4 now qualifies a separate complete authored mip-chain CPU/native-cooker contract.
 Next qualify full-chain GPU upload and fixed mip-view sampling before automatic mip
 selection, material derivatives, filtering or tiled fallback publication.
+
+M4 complete authored mip upload and fixed-view sampling now qualify on RADV with
+all-level byte proof, per-view raster/WSI and allocation-boundary cleanup. Next
+implement a bounded perspective-correct UV-gradient/texture-footprint contract,
+then qualify GPU automatic mip selection before filtering/tiled fallback.

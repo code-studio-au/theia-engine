@@ -832,3 +832,9 @@ history under a stricter entry threshold. Default zero preserves old selection.
 source build and preserves every authored texel. Inspect the emitted hash-named file
 with the assets `texture_mips` example. This is separate from the existing single-mip
 renderer profile. [Commands/evidence](validation/M4_TEXTURE_MIP_CONTRACT.md).
+
+`--texture-mip-test <file level>` adds a fixed view to the complete authored chain
+using existing mesh/material/UV inputs. `tools/qualify_texture_mips.py` checks GPU
+level bytes, CPU pixel references, WSI and measured budget limits. Owned Wayland
+checks accept `--mip-case <geometry-cook-report> <texture-cook-report>`.
+[GPU mip commands/evidence](validation/M4_GPU_TEXTURE_MIPS.md).

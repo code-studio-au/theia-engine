@@ -1122,12 +1122,36 @@ impl Renderer {
                 )?);
             }
             if let Some(path) = &options.texture {
-                let bytes = crate::texture::load(path)?;
-                let texture = theia_assets::texture::Texture::decode(
-                    &bytes,
-                    None,
-                    theia_assets::texture::DEFAULT_BUDGET,
-                )?;
+                let bytes = if options.texture_mip_level.is_some() {
+                    crate::texture::load_mips(path)?
+                } else {
+                    crate::texture::load(path)?
+                };
+                let mips = options
+                    .texture_mip_level
+                    .map(|_| {
+                        theia_assets::texture_mips::TextureMipChain::decode(
+                            &bytes,
+                            None,
+                            theia_assets::texture::DEFAULT_BUDGET,
+                        )
+                    })
+                    .transpose()?;
+                let texture = if mips.is_none() {
+                    Some(theia_assets::texture::Texture::decode(
+                        &bytes,
+                        None,
+                        theia_assets::texture::DEFAULT_BUDGET,
+                    )?)
+                } else {
+                    None
+                };
+                let (width, height, count) = if let Some(chain) = &mips {
+                    (chain.width, chain.height, chain.levels.len() as u32)
+                } else {
+                    let tex = texture.as_ref().unwrap();
+                    (tex.width, tex.height, 1)
+                };
                 // SAFETY: Selected physical device and instance are retained and live.
                 let properties = unsafe {
                     renderer
@@ -1144,21 +1168,35 @@ impl Renderer {
                             vk::ImageCreateFlags::empty(),
                         )?
                 };
-                if texture.width > properties.max_extent.width
-                    || texture.height > properties.max_extent.height
+                if width > properties.max_extent.width
+                    || height > properties.max_extent.height
+                    || count > properties.max_mip_levels
                 {
                     return Err("Resident texture exceeds device image limits".into());
                 }
-                renderer.texture = Some(crate::texture::ResidentTexture::upload(
-                    renderer.ctx.device.as_ref().unwrap(),
-                    &memory,
-                    &texture,
-                    renderer.ctx.graphics_family,
-                    renderer.ctx.graphics,
-                    options
-                        .texture_budget
-                        .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64),
-                )?);
+                let budget = options
+                    .texture_budget
+                    .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64);
+                renderer.texture = Some(if let Some(chain) = &mips {
+                    crate::texture::ResidentTexture::upload_mips(
+                        renderer.ctx.device.as_ref().unwrap(),
+                        &memory,
+                        chain,
+                        options.texture_mip_level.unwrap(),
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        budget,
+                    )?
+                } else {
+                    crate::texture::ResidentTexture::upload(
+                        renderer.ctx.device.as_ref().unwrap(),
+                        &memory,
+                        texture.as_ref().unwrap(),
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        budget,
+                    )?
+                });
             }
             if let Some(path) = &options.texture_table {
                 let mesh = theia_assets::Mesh::decode(

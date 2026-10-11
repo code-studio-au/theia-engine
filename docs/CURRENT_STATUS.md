@@ -4,6 +4,19 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 GPU authored mip chains — independently executed (2026-10-11)
+
+Explicit fixed-mip viewing now uploads complete admitted chains into one Vulkan
+image, copies all levels with full-range barriers and uses a one-level view with
+the existing Slang shader. Twelve square/odd/thin/shared captures verify all uploaded
+mip bytes and 85 pixels each. Per-view WSI, exact/one-byte-short physical image budgets
+and preserved indirect/authority/16-image streaming pass zero diagnostics. Invalid
+mip index/alpha reject before Vulkan setup. Native Wayland nine-mode execution passes;
+Windows GNU 11 packages and 137 Wine CPU tests pass. Renderer/assets tests 23/46,
+formatting/Clippy and active SPIR-V checks pass. Automatic mip choice, gradients,
+filtering and tiled/partial or full-chain replacement remain open; no performance or
+native Windows GPU claim. [Evidence](validation/M4_GPU_TEXTURE_MIPS.md).
+
 ## M4 authored texture mip-chain contract — independently executed (2026-10-11)
 
 A separate bounded pure-Rust reader admits complete opaque RGBA8 sRGB KTX2 chains,

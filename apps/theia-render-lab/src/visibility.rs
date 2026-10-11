@@ -9,6 +9,7 @@ pub(super) struct Image {
     pub(super) view: vk::ImageView,
     aspect: vk::ImageAspectFlags,
     pub(super) allocated_bytes: u64,
+    mip_levels: u32,
 }
 impl Image {
     pub(super) fn new(
@@ -30,6 +31,48 @@ impl Image {
         usage: vk::ImageUsageFlags,
         budget: u64,
     ) -> Result<Self> {
+        Self::allocate(
+            device,
+            memory,
+            extent,
+            format,
+            aspect,
+            usage,
+            (budget, 1, 0),
+        )
+    }
+    pub(super) fn bounded_mips(
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        extent: vk::Extent2D,
+        format: vk::Format,
+        usage: vk::ImageUsageFlags,
+        budget: u64,
+        levels: (u32, u32),
+    ) -> Result<Self> {
+        Self::allocate(
+            device,
+            memory,
+            extent,
+            format,
+            vk::ImageAspectFlags::COLOR,
+            usage,
+            (budget, levels.0, levels.1),
+        )
+    }
+    fn allocate(
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        extent: vk::Extent2D,
+        format: vk::Format,
+        aspect: vk::ImageAspectFlags,
+        usage: vk::ImageUsageFlags,
+        allocation: (u64, u32, u32),
+    ) -> Result<Self> {
+        let (budget, mip_levels, view_level) = allocation;
+        if mip_levels == 0 || mip_levels > 11 || view_level >= mip_levels {
+            return Err("Invalid image mip allocation/view range".into());
+        }
         let mut image = Self {
             device: device.clone(),
             handle: vk::Image::null(),
@@ -37,6 +80,7 @@ impl Image {
             view: vk::ImageView::null(),
             aspect,
             allocated_bytes: 0,
+            mip_levels,
         };
         // SAFETY: Device and create-info storage are live. Each successful handle is immediately retained.
         unsafe {
@@ -49,7 +93,7 @@ impl Image {
                         height: extent.height,
                         depth: 1,
                     })
-                    .mip_levels(1)
+                    .mip_levels(mip_levels)
                     .array_layers(1)
                     .samples(vk::SampleCountFlags::TYPE_1)
                     .tiling(vk::ImageTiling::OPTIMAL)
@@ -82,7 +126,7 @@ impl Image {
                     .image(image.handle)
                     .view_type(vk::ImageViewType::TYPE_2D)
                     .format(format)
-                    .subresource_range(image.range()),
+                    .subresource_range(image.range().base_mip_level(view_level).level_count(1)),
                 None,
             )?;
         }
@@ -91,7 +135,7 @@ impl Image {
     pub(super) fn range(&self) -> vk::ImageSubresourceRange {
         vk::ImageSubresourceRange::default()
             .aspect_mask(self.aspect)
-            .level_count(1)
+            .level_count(self.mip_levels)
             .layer_count(1)
     }
 }

@@ -8,6 +8,22 @@ use ash::vk;
 use std::{io::Read, path::Path};
 use theia_assets::texture::{DEFAULT_BUDGET, Texture as AssetTexture};
 pub fn load(path: &Path) -> Result<Vec<u8>> {
+    let data = load_bytes(path)?;
+    let texture = AssetTexture::decode(&data, None, DEFAULT_BUDGET)?;
+    if texture.provenance.is_none() {
+        return Err("Texture requires cooked provenance".into());
+    }
+    Ok(data)
+}
+pub fn load_mips(path: &Path) -> Result<Vec<u8>> {
+    let data = load_bytes(path)?;
+    let texture = theia_assets::texture_mips::TextureMipChain::decode(&data, None, DEFAULT_BUDGET)?;
+    if texture.provenance.is_none() {
+        return Err("Mip texture requires cooked provenance".into());
+    }
+    Ok(data)
+}
+fn load_bytes(path: &Path) -> Result<Vec<u8>> {
     let mut data = Vec::new();
     std::fs::File::open(path)?
         .take(DEFAULT_BUDGET as u64 + 1)
@@ -18,10 +34,6 @@ pub fn load(path: &Path) -> Result<Vec<u8>> {
         .collect::<String>();
     if path.file_stem().and_then(|v| v.to_str()) != Some(&hash) {
         return Err("Texture hash filename mismatch".into());
-    }
-    let texture = AssetTexture::decode(&data, None, DEFAULT_BUDGET)?;
-    if texture.provenance.is_none() {
-        return Err("Texture requires cooked provenance".into());
     }
     Ok(data)
 }
@@ -142,6 +154,8 @@ pub struct Upload {
     image: Option<Image>,
     extent: vk::Extent2D,
     texel_bytes: usize,
+    mip_levels: u32,
+    view_level: u32,
 }
 impl Upload {
     /// Submit one owned transfer without waiting for its dedicated fence.
@@ -153,23 +167,85 @@ impl Upload {
         queue: vk::Queue,
         budget: u64,
     ) -> Result<Self> {
+        Self::begin_levels(
+            device,
+            memory,
+            &[theia_assets::texture_mips::MipLevel {
+                width: texture.width,
+                height: texture.height,
+                texels: texture.texels,
+            }],
+            0,
+            family,
+            queue,
+            budget,
+        )
+    }
+    fn begin_levels(
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        levels: &[theia_assets::texture_mips::MipLevel<'_>],
+        view_level: u32,
+        family: u32,
+        queue: vk::Queue,
+        budget: u64,
+    ) -> Result<Self> {
+        if levels.is_empty() || levels.len() > 11 || view_level as usize >= levels.len() {
+            return Err("Invalid texture upload mip/view count".into());
+        }
         let extent = vk::Extent2D {
-            width: texture.width,
-            height: texture.height,
+            width: levels[0].width,
+            height: levels[0].height,
         };
-        let image = Image::bounded(
+        if !(1..=theia_assets::texture::MAX_DIMENSION).contains(&extent.width)
+            || !(1..=theia_assets::texture::MAX_DIMENSION).contains(&extent.height)
+            || levels.len() > (u32::BITS - extent.width.max(extent.height).leading_zeros()) as usize
+        {
+            return Err("Texture upload dimensions/mip count exceed the bounded profile".into());
+        }
+        let mut texel_bytes = 0usize;
+        let mut regions = Vec::with_capacity(levels.len());
+        for (index, level) in levels.iter().enumerate() {
+            let width = (extent.width >> index).max(1);
+            let height = (extent.height >> index).max(1);
+            if (level.width, level.height) != (width, height)
+                || level.texels.len() as u64 != u64::from(width) * u64::from(height) * 4
+            {
+                return Err("Texture upload mip dimensions/texel bytes mismatch".into());
+            }
+            regions.push(
+                vk::BufferImageCopy::default()
+                    .buffer_offset(texel_bytes as u64)
+                    .image_subresource(
+                        vk::ImageSubresourceLayers::default()
+                            .aspect_mask(vk::ImageAspectFlags::COLOR)
+                            .mip_level(index as u32)
+                            .layer_count(1),
+                    )
+                    .image_extent(vk::Extent3D {
+                        width,
+                        height,
+                        depth: 1,
+                    }),
+            );
+            texel_bytes = texel_bytes
+                .checked_add(level.texels.len())
+                .filter(|&v| v <= DEFAULT_BUDGET)
+                .ok_or("Texture upload staging byte budget exceeded")?;
+        }
+        let image = Image::bounded_mips(
             device,
             memory,
             extent,
             vk::Format::R8G8B8A8_SRGB,
-            vk::ImageAspectFlags::COLOR,
             vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
             budget,
+            (levels.len() as u32, view_level),
         )?;
         let staging = Buffer::allocate(
             device,
             memory,
-            texture.texels.len() as u64,
+            texel_bytes as u64,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             DEFAULT_BUDGET as u64,
@@ -184,7 +260,9 @@ impl Upload {
             staging,
             image: Some(image),
             extent,
-            texel_bytes: texture.texels.len(),
+            texel_bytes,
+            mip_levels: levels.len() as u32,
+            view_level,
         };
         let image = pending.image.as_ref().unwrap();
         // SAFETY: Mapping/copy sizes are bounded. Pending owns submitted commands,
@@ -196,11 +274,15 @@ impl Upload {
                 pending.staging.bytes,
                 vk::MemoryMapFlags::empty(),
             )?;
-            std::ptr::copy_nonoverlapping(
-                texture.texels.as_ptr(),
-                pointer.cast::<u8>(),
-                texture.texels.len(),
-            );
+            let mut offset = 0;
+            for level in levels {
+                std::ptr::copy_nonoverlapping(
+                    level.texels.as_ptr(),
+                    pointer.cast::<u8>().add(offset),
+                    level.texels.len(),
+                );
+                offset += level.texels.len();
+            }
             device.unmap_memory(pending.staging.memory);
             pending.transfer.pool = device.create_command_pool(
                 &vk::CommandPoolCreateInfo::default().queue_family_index(family),
@@ -235,17 +317,7 @@ impl Upload {
                 pending.staging.handle,
                 image.handle,
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                &[vk::BufferImageCopy::default()
-                    .image_subresource(
-                        vk::ImageSubresourceLayers::default()
-                            .aspect_mask(vk::ImageAspectFlags::COLOR)
-                            .layer_count(1),
-                    )
-                    .image_extent(vk::Extent3D {
-                        width: texture.width,
-                        height: texture.height,
-                        depth: 1,
-                    })],
+                &regions,
             );
             let end = [vk::ImageMemoryBarrier2::default()
                 .src_stage_mask(vk::PipelineStageFlags2::TRANSFER)
@@ -327,10 +399,36 @@ impl Upload {
             resident.image.allocated_bytes,
             self.staging.allocated_bytes
         );
+        if self.mip_levels > 1 {
+            println!(
+                "Resident mip chain ready: {} uploaded levels; fixed view level {}; shader samples view-relative level zero",
+                self.mip_levels, self.view_level
+            );
+        }
         Ok(resident)
     }
 }
 impl ResidentTexture {
+    pub fn upload_mips(
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        texture: &theia_assets::texture_mips::TextureMipChain<'_>,
+        view_level: u32,
+        family: u32,
+        queue: vk::Queue,
+        budget: u64,
+    ) -> Result<Self> {
+        Upload::begin_levels(
+            device,
+            memory,
+            &texture.levels,
+            view_level,
+            family,
+            queue,
+            budget,
+        )?
+        .finish()
+    }
     pub fn upload(
         device: &ash::Device,
         memory: &vk::PhysicalDeviceMemoryProperties,
@@ -361,12 +459,26 @@ impl Drop for ResidentTexture {
 
 /// CPU oracle: explicit nearest repeat at level zero, sRGB RGB decode before factors.
 pub fn reference_sample(texture: &AssetTexture<'_>, uv: [f32; 2]) -> [f32; 3] {
+    reference_texels(texture.width, texture.height, texture.texels, uv)
+}
+pub fn reference_mip(
+    texture: &theia_assets::texture_mips::TextureMipChain<'_>,
+    level: u32,
+    uv: [f32; 2],
+) -> Result<[f32; 3]> {
+    let mip = texture
+        .levels
+        .get(level as usize)
+        .ok_or("CPU mip view is outside the chain")?;
+    Ok(reference_texels(mip.width, mip.height, mip.texels, uv))
+}
+fn reference_texels(width: u32, height: u32, texels: &[u8], uv: [f32; 2]) -> [f32; 3] {
     let coordinates = std::array::from_fn::<_, 2, _>(|axis| uv[axis] - uv[axis].floor());
-    let x = ((coordinates[0] * texture.width as f32).floor() as u32).min(texture.width - 1);
-    let y = ((coordinates[1] * texture.height as f32).floor() as u32).min(texture.height - 1);
-    let offset = ((y * texture.width + x) * 4) as usize;
+    let x = ((coordinates[0] * width as f32).floor() as u32).min(width - 1);
+    let y = ((coordinates[1] * height as f32).floor() as u32).min(height - 1);
+    let offset = ((y * width + x) * 4) as usize;
     std::array::from_fn(|axis| {
-        let v = texture.texels[offset + axis] as f32 / 255.;
+        let v = texels[offset + axis] as f32 / 255.;
         if v <= 0.04045 {
             v / 12.92
         } else {
@@ -377,6 +489,22 @@ pub fn reference_sample(texture: &AssetTexture<'_>, uv: [f32; 2]) -> [f32; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mip_reference_selects_authored_level_and_rejects_missing_levels() {
+        let chain = theia_assets::texture_mips::TextureMipChain::decode(
+            include_bytes!("../../../fixtures/textures/opaque_4x4_mips.ktx2"),
+            None,
+            DEFAULT_BUDGET,
+        )
+        .unwrap();
+        for (level, red) in [0.00303527, 0.08021982, 0.3049873].into_iter().enumerate() {
+            let sampled = reference_mip(&chain, level as u32, [-0.25, 1.75]).unwrap();
+            assert!((sampled[0] - red).abs() < 1e-6);
+            assert!((sampled[1] - 0.03189603).abs() < 1e-6);
+        }
+        assert!(reference_mip(&chain, 3, [0., 0.]).is_err());
+        assert!(reference_mip(&chain, u32::MAX, [0., 0.]).is_err());
+    }
     #[test]
     fn nearest_repeat_preserves_top_left_and_decodes_srgb_before_factors() {
         let tex = AssetTexture::decode(

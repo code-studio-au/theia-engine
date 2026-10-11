@@ -13,7 +13,7 @@ import tempfile
 import time
 
 
-def qualify(weston_root, output, network=False, capture=False, pixels=False, capacity_cook=None, lod_pair=None):
+def qualify(weston_root, output, network=False, capture=False, pixels=False, capacity_cook=None, lod_pair=None, mip_case=None):
     if os.name != 'posix' or not os.environ.get('DISPLAY'):
         raise RuntimeError('Nested qualification requires Linux/X11 DISPLAY')
     weston_root, output = weston_root.resolve(), output.resolve()
@@ -55,6 +55,14 @@ def qualify(weston_root, output, network=False, capture=False, pixels=False, cap
                     pair = ['--lod-test', *map(str, lod_pair)]
                     modes += [('lod-hysteresis', pair + ['--lod-hysteresis', '.2']),
                               ('lod-hysteresis-trajectory', pair + ['--lod-hysteresis-test'])]
+                if mip_case:
+                    reference = json.loads(mip_case[0].read_bytes())
+                    texture = json.loads(mip_case[1].read_bytes())
+                    count = len(texture['levels'])
+                    mip_views = list(range(count)) if count <= 3 else [0, count // 2, count - 1]
+                    fixed = ['--asset', reference['path'], '--materials', reference['materials']['path'],
+                             '--uv-test', reference['uv']['path'], '--texture-mip-test', texture['path']]
+                    modes += [('texture-mip-' + str(level), fixed + [str(level)]) for level in mip_views]
                 for name, mode in modes:
                     path = output/(name+'.log')
                     with path.open('w') as client_log:
@@ -166,6 +174,7 @@ def qualify(weston_root, output, network=False, capture=False, pixels=False, cap
                 (output/'report.json').write_text(json.dumps({'nested_compositor':'Weston 13.0.0 X11/GL',
                     'native_surface':'Wayland','standalone_modes':len(modes),'frames_per_mode':120,
                     'lod_full_trajectory_frames':180 if lod_pair else 0,
+                    'texture_mip_views':mip_views if mip_case else [],
                     'network_pair':network,'compositor_pixels':pixels,'capture_replay':capture,'programmatic_minimize_restore':False,
                     'texture_capacity':capacity_report,
                     'validation':'zero warnings/errors in checked standalone runs'},indent=2)+'\n')
@@ -188,5 +197,6 @@ if __name__ == '__main__':
     parser.add_argument('--pixels',action='store_true')
     parser.add_argument('--capacity-cook', type=Path, help='Optional 16-image fixture cook report')
     parser.add_argument('--lod-pair', nargs=2, type=Path, metavar=('FINE', 'COARSE'), help='Optional resident LOD hysteresis qualification')
+    parser.add_argument('--mip-case', nargs=2, type=Path, metavar=('REFERENCE', 'COOK'), help='Optional fixed texture mip-view qualification')
     args = parser.parse_args()
-    qualify(args.weston_root,args.output,args.network,args.capture,args.pixels,args.capacity_cook,args.lod_pair)
+    qualify(args.weston_root,args.output,args.network,args.capture,args.pixels,args.capacity_cook,args.lod_pair,args.mip_case)
