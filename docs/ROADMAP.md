@@ -263,3 +263,9 @@ complete cross-platform milestone claim.
 Nested Wayland now also has composited visible-pixel reference evidence for GPU
 indirect counts 0/1/2. This complements validation/execution; it does not close the
 Wayland debugger replay, native seat/restore, Windows or cross-vendor gates.
+
+The platform gate now includes Windows GNU normal/test/example cross-linking,
+denied-warning Clippy, 129 Wine compatibility tests and headless authority/script
+execution. Winsock oversized-UDP relay handling is corrected. Native Windows/MSVC/
+GPU/Quinn execution and the Wine encrypted-socket limitation remain explicit gates.
+Remaining M4/M7/M8 implementation slices can proceed independently.

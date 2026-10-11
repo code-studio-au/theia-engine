@@ -4,6 +4,21 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## Windows GNU build/compatibility qualification — independently executed (2026-10-11)
+
+All 11 Rust CI packages cross-link normal/test/example targets and pass denied-
+warning Clippy for x86_64-pc-windows-gnu. Wine 9 executes 129 CPU/library tests,
+plus normal authority movement/combat/request and readonly script executables.
+This is GNU cross-build/compatibility evidence, not native Windows/MSVC/GPU evidence.
+
+The relay's oversize test exposed Winsock WSAEMSGSIZE: truncated UDP receive returns
+error 10040 instead of a truncated length. That packet now drops and the relay
+continues; targeted Wine test logs the actual recovered error, Linux 11 shared tests
+and encrypted fault/replication regressions pass. Available Wine's encrypted Quinn
+startup rejects an IPv6-only query on an IPv4 socket (10045), so that compatibility
+exchange remains unqualified; native Windows behavior is not inferred. No transport/
+crypto fallback or dependency patch. [Evidence](validation/WINDOWS_BUILD.md).
+
 ## Composited Wayland pixel reference — independently executed (2026-10-11)
 
 The owned nested compositor now captures its own output via Weston's screenshot

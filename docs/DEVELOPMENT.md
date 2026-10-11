@@ -780,3 +780,22 @@ triangles/background against an analytical RGB/sRGB oracle. It additionally runs
 three 300-frame indirect cases with Vulkan validation. It does not capture the main
 X11 desktop, edit the PNG content or qualify RenderDoc replay. Source screenshots
 and reports remain ignored artifacts. [Evidence](validation/WAYLAND_PIXELS.md).
+
+## Private Windows GNU build qualification
+
+Add Rust's target with `rustup target add x86_64-pc-windows-gnu`. Extract Ubuntu
+Noble MinGW compiler/runtime/binutils/common/x86-64 development packages below
+`build/qualification/windows-tool/root`; package names/hashes are in the report.
+No system MinGW install or global Cargo linker configuration is required.
+
+```sh
+python3 tools/qualify_windows.py --wine
+```
+
+The Linux/x86-64 helper reads the Rust CI package matrix, scopes compiler/archiver/
+linker/PATH and target output to its child commands, lints and cross-links normal/
+test/example targets, then optionally runs unit executables in its own Wine prefix.
+It closes only that prefix's wineserver, including failure paths. Wine CPU tests
+are compatibility evidence; native Windows/MSVC/GPU remains unqualified. The
+current Wine encrypted network executable fails its upstream IPv6-only socket
+query on an IPv4 socket; no fallback/patch is applied. [Evidence](validation/WINDOWS_BUILD.md).

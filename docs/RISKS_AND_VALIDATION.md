@@ -63,3 +63,10 @@ for indirect 0/1/2 work counts: actual pixel samples/300-frame validation pass.
 RenderDoc Wayland replay remains unqualified. Debug screenshot access is confined
 to the temporary owned runtime; screenshots are ignored local artifacts. No timing/
 performance or native-seat claim. [Evidence](validation/WAYLAND_PIXELS.md).
+
+Windows GNU cross-link/Clippy and 129 Wine CPU/library tests now pass, including
+recovery from actual WSAEMSGSIZE without killing the bounded relay. Headless Windows
+executables exercise authority/script fixtures through Wine. Encrypted Quinn setup
+is blocked in this Wine environment by a rejected IPV6_V6ONLY query on IPv4; native
+Windows and GPU remain unqualified. No weakened transport/crypto fallback or inferred
+native success. [Evidence](validation/WINDOWS_BUILD.md).

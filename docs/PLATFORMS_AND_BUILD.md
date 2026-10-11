@@ -23,3 +23,13 @@ CPU-first; Kira/CPAL candidates. GPU state should not require synchronous readba
 ## M0 build constraints
 
 Use pinned Cargo.lock. Prefer `cargo fmt`, `cargo clippy`, `spirv-val --target-env vulkan1.3`; validation for debugging, disabled for benchmarks. Build and test Linux first, Windows CI from the beginning, actual cross-vendor GPU tests as hardware becomes available. `target/` and `build/` generated files excluded from Git; Slang source tracked. Robust RAII and explicit unsafe only in reusable Vulkan infrastructure.
+
+## Actual Windows build evidence (2026-10-11)
+
+All 11 Rust matrix packages now cross-link normal/test/example targets for Windows
+GNU with Rust 1.99/private MinGW, denied-warning Clippy passing. Wine 9 executes 129
+CPU/library tests and headless authority/script fixtures. A Winsock truncated-UDP
+relay bug found there is fixed and checked on both platform paths. This is not
+native Windows 11/MSVC/GPU qualification. Wine's Quinn socket setup rejects an
+IPv6-only query on an IPv4 socket; native behavior still needs execution. Existing
+native Windows CI definitions remain unexecuted locally. [Evidence](validation/WINDOWS_BUILD.md).

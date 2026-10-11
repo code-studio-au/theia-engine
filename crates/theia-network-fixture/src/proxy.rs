@@ -95,7 +95,18 @@ async fn run(
         tokio::select! {
             _ = &mut stop => break,
             packet = socket.recv_from(&mut buffer) => {
-                let (length, source) = packet?;
+                let (length, source) = match packet {
+                    Ok(packet) => packet,
+                    // Winsock discards the excess UDP payload and reports WSAEMSGSIZE
+                    // (10040) rather than returning a truncated buffer length. Never
+                    // forward these bytes or terminate the relay for this malformed packet.
+                    Err(error) if cfg!(windows) && error.raw_os_error() == Some(10040) => {
+                        report.dropped += 1;
+                        eprintln!("Relay dropped truncated UDP receive: {error}");
+                        continue;
+                    }
+                    Err(error) => return Err(error.into()),
+                };
                 let (direction, destination) = if source == client { (0, server) } else if source == server { (1, client) } else { continue };
                 if length > MAX_PACKET { report.dropped += 1; continue; }
                 counts[direction] = counts[direction].checked_add(1).ok_or("packet count exhausted")?;
