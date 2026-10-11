@@ -4,6 +4,21 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 bounded replication envelope codec — independently executed (2026-10-11)
+
+Separate TDR1 codec encodes full sets, full-actor deltas, snapshot ACKs and repair
+requests with explicit little-endian fields, strict tags/order/values and a 128-byte
+limit. Counts are checked before allocation; at most two actors per list. Encoder
+rejects invalid caller values without asserting. Largest valid envelope is 88 bytes.
+
+Shared/protocol/renderer tests 9/23/22 and encrypted THN2 fault regression pass;
+formatting/Clippy pass. New codec tests cover every truncation/extension, explicit
+bytes, count/ID/range/order/overlap/version failures and 20000 arbitrary-byte inputs.
+The codec is not yet sent over Quinn; existing THN2 listener/viewer remain full-set
+only. Next qualify isolated certificate-verified encrypted replication exchange,
+then adopt the qualified contract in live viewers. Windows/hosted CI unexecuted.
+[Evidence](validation/M8_REPLICATION_CODEC.md).
+
 ## M8 acknowledged sender baselines — independently executed (2026-10-11)
 
 A transport-neutral per-recipient sender retains 2..16 complete prepared sets and

@@ -14,6 +14,12 @@ pub struct Snapshot {
     pub applied_move: Option<u64>,
     pub actors: Vec<ActorState>,
 }
+impl Snapshot {
+    /// Canonical actor values/count, independent of source/tick publication history.
+    pub fn validate(&self, max_actors: usize) -> Result<(), Error> {
+        validate_actors(&self.actors, max_actors)
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     InvalidLimit,

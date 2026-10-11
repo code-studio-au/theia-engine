@@ -54,7 +54,8 @@ impl Delta {
             removed,
         })
     }
-    pub(crate) fn validate(&self, max_actors: usize) -> Result<(), Error> {
+    /// Validate the bounded envelope; removal membership needs reconstruction.
+    pub fn validate(&self, max_actors: usize) -> Result<(), Error> {
         validate_actors(&self.upserts, max_actors)?;
         if self.removed.len() > max_actors {
             return Err(Error::ActorLimit);

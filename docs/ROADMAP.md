@@ -236,3 +236,8 @@ bounded prepared history, source reset, eviction/full fallback and repair fencin
 under synthetic state/ACK loss/reordering. Next qualify versioned bounded encrypted
 delta/ACK/full-repair exchange before live viewer adoption. THN2 still sends full
 snapshots; accounts/persistence and remaining milestone gates stay open.
+
+M8 separate bounded TDR1 full/delta/snapshot-ACK/repair codec now passes canonical
+binary and adversarial tests. Next qualify encrypted exchange in an isolated lab
+before changing live listener/viewer behavior. THN2 transport remains unchanged;
+this codec alone does not close the state-delta gate.

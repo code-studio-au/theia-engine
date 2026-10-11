@@ -363,3 +363,14 @@ Synthetic state/ACK loss/reordering qualification passes bounded history, comple
 readonly values and explicit repairs. No wire/QUIC ACK exchange or synchronized
 baseline retention lease yet; receiver's two-set eviction can still require repair.
 Next qualify versioned encrypted delta/ACK/repair messages. [Evidence](validation/M8_ACKNOWLEDGED_BASELINES.md).
+
+## M8 actual replication envelope codec
+
+Separate qualification `replication_wire` uses TDR1 magic, explicit little-endian
+full/delta/snapshot-ACK/repair tags, a 128-byte cap and two actors/list. Full sets may
+be empty for lifecycle repair. Delta envelope checks sorted/disjoint IDs and tick
+ordering; baseline membership/watermark relationships still require reconstruction.
+Decoding bounds counts before allocation; encoding rejects invalid caller values.
+This is a codec-only prototype, not a locked component schema or negotiated network
+feature. THN2/its ALPN and listener/viewer behavior remain unchanged. Next qualify
+isolated certificate-verified encrypted TDR1 exchange. [Evidence](validation/M8_REPLICATION_CODEC.md).

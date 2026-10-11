@@ -709,3 +709,7 @@ cargo run --locked --manifest-path crates/theia-protocol/Cargo.toml --example ac
 Models bounded per-recipient prepared history, state/ACK loss/reordering, eviction
 and full repair. Neither baseline ACKs nor deltas are wired into THN2 yet.
 [Evidence](validation/M8_ACKNOWLEDGED_BASELINES.md).
+
+The separate bounded TDR1 replication codec runs with the shared fixture tests:
+`cargo test --locked --manifest-path crates/theia-network-fixture/Cargo.toml`.
+It is not yet used by the THN2 listener/viewers. [Evidence](validation/M8_REPLICATION_CODEC.md).
