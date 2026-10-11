@@ -64,7 +64,7 @@ fn rig_rows(
         [-z[0], -z[1], -z[2], dot(z, eye)],
     ])
 }
-fn project(rows: [[f32; 4]; 4], position: [f32; 3]) -> [f32; 4] {
+pub(crate) fn project(rows: [[f32; 4]; 4], position: [f32; 3]) -> [f32; 4] {
     rows.map(|row| row[0] * position[0] + row[1] * position[1] + row[2] * position[2] + row[3])
 }
 pub fn visible(mesh: &Mesh, rows: [[f32; 4]; 4]) -> Result<Vec<u32>> {

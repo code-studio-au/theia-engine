@@ -838,3 +838,8 @@ using existing mesh/material/UV inputs. `tools/qualify_texture_mips.py` checks G
 level bytes, CPU pixel references, WSI and measured budget limits. Owned Wayland
 checks accept `--mip-case <geometry-cook-report> <texture-cook-report>`.
 [GPU mip commands/evidence](validation/M4_GPU_TEXTURE_MIPS.md).
+
+`--texture-footprint-reference <mesh uv texture x y width height view>` reports the
+visible primitive's analytic UV gradients, base-texel footprint and CPU mip choice.
+Read its final JSON line after asset diagnostics. This reference does not create a
+Vulkan context. [UV footprint contract](validation/M4_UV_FOOTPRINT_CONTRACT.md).

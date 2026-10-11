@@ -4,6 +4,17 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 CPU UV gradients and texture footprint — independently executed (2026-10-11)
+
+A bounded analytic perspective UV-gradient model and explicit isotropic mip policy
+now qualify affine/scaling/winding cases, 1000 independent finite-difference cases,
+repeat seams, exact thresholds and guards. The cooked-scene CPU oracle checks 255
+framebuffer probes; covered small textures select mip 0, thin texture mips 4/5.
+GPU selection is not implemented in this unit. Assets/renderer tests 50/23, formatting/
+Clippy pass; Windows GNU 11 packages and 141 Wine CPU tests pass. Shader arithmetic,
+automatic GPU mip choice, filtering and tiled fallback remain next/open.
+[Evidence](validation/M4_UV_FOOTPRINT_CONTRACT.md).
+
 ## M4 GPU authored mip chains — independently executed (2026-10-11)
 
 Explicit fixed-mip viewing now uploads complete admitted chains into one Vulkan

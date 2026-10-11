@@ -301,3 +301,7 @@ M4 complete authored mip upload and fixed-view sampling now qualify on RADV with
 all-level byte proof, per-view raster/WSI and allocation-boundary cleanup. Next
 implement a bounded perspective-correct UV-gradient/texture-footprint contract,
 then qualify GPU automatic mip selection before filtering/tiled fallback.
+
+M4 CPU analytic UV-gradient/footprint contract now qualifies independent numeric,
+repeat-seam and cooked-scene checks. Next implement automatic GPU mip choice and
+compare analytic shader outputs/visible samples with this oracle.

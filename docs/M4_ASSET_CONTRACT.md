@@ -759,3 +759,15 @@ level zero with nearest repeat. No per-frame host mip choice or runtime readback
 `--texture-mip-reference` provides a readonly CPU sampling oracle. Existing single-
 mip/table/bundle paths stay separate. [GPU evidence](validation/M4_GPU_TEXTURE_MIPS.md).
 Automatic mip choice, gradients/filtering and tiled/partial residency remain open.
+
+### CPU perspective UV footprint
+
+`texture_footprint::differential` computes rational UV interpolation and analytic
+per-pixel gradients from represented f32 clip/UV data in f64. Bounds/near-far/W/
+area/denominator guards define a deliberately limited profile. Wrapping occurs
+after gradient evaluation. `choose_mip` uses maximum Jacobian-column length in
+base texels, exact power-of-two thresholds and complete-chain clamping; it is an
+isotropic prototype policy, not filtering quality. Render Lab's readonly
+`--texture-footprint-reference` connects this CPU model to admitted scene data.
+[Contract evidence](validation/M4_UV_FOOTPRINT_CONTRACT.md). GPU arithmetic/selection
+and tiled/partial residency remain unqualified at this checkpoint.
