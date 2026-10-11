@@ -634,7 +634,7 @@ impl Swapchain {
         shader_dir: Option<&std::path::Path>,
         mode: RenderMode,
         descriptor_layout: Option<vk::DescriptorSetLayout>,
-        material_info: Option<vk::DescriptorBufferInfo>,
+        resolve_buffers: crate::visibility::ResolveBuffers,
     ) -> Result<Option<Self>> {
         let device = ctx.device.as_ref().unwrap();
         let surface = ctx.surface_loader.as_ref().unwrap();
@@ -748,7 +748,7 @@ impl Swapchain {
                         shader_dir,
                         (
                             descriptor_layout.ok_or("Visibility mode needs GPU work layout")?,
-                            material_info,
+                            resolve_buffers,
                         ),
                         mode == RenderMode::AssetResolve,
                     )?);
@@ -850,6 +850,7 @@ pub struct Renderer {
     stream: Option<crate::streaming::Stream>,
     work: Option<IndirectWork>,
     materials: Option<crate::asset::Buffer>,
+    uvs: Option<crate::asset::Buffer>,
     pub recreate: bool,
     generations: u64,
     shader_dir: Option<std::path::PathBuf>,
@@ -877,6 +878,7 @@ impl Renderer {
             mode: options.render_mode(),
             work: None,
             materials: None,
+            uvs: None,
             work_items: options.work_items.unwrap_or(2),
             cycle_work: options.smoke,
             presented: 0,
@@ -999,6 +1001,34 @@ impl Renderer {
                     None,
                 )?);
             }
+            if let Some(path) = &options.uvs {
+                let bytes = asset.as_ref().ok_or("Authored UVs need fixed geometry")?;
+                let mesh = theia_assets::Mesh::decode(bytes, None, theia_assets::DEFAULT_BUDGET)?;
+                let uvs = crate::asset::load_uv(path, &mesh)?;
+                // SAFETY: Selected physical device belongs to the retained live instance.
+                let limit = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits
+                        .max_storage_buffer_range
+                };
+                if uvs.len() > limit as usize {
+                    return Err("UV page exceeds device storage range".into());
+                }
+                renderer.uvs = Some(crate::asset::Buffer::upload(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    &uvs,
+                    renderer.ctx.graphics_family,
+                    renderer.ctx.graphics,
+                    theia_assets::uv::DEFAULT_BUDGET as u64,
+                    None,
+                )?);
+            }
             renderer.work = Some(IndirectWork::new(
                 renderer.ctx.device.as_ref().unwrap(),
                 &memory,
@@ -1045,12 +1075,20 @@ impl Renderer {
             self.shader_dir.as_deref(),
             self.mode,
             self.work.as_ref().map(|work| work.descriptor_layout),
-            self.materials.as_ref().map(|buffer| {
-                vk::DescriptorBufferInfo::default()
-                    .buffer(buffer.handle)
-                    .offset(buffer.offset)
-                    .range(buffer.bytes)
-            }),
+            crate::visibility::ResolveBuffers {
+                materials: self.materials.as_ref().map(|buffer| {
+                    vk::DescriptorBufferInfo::default()
+                        .buffer(buffer.handle)
+                        .offset(buffer.offset)
+                        .range(buffer.bytes)
+                }),
+                uvs: self.uvs.as_ref().map(|buffer| {
+                    vk::DescriptorBufferInfo::default()
+                        .buffer(buffer.handle)
+                        .offset(buffer.offset)
+                        .range(buffer.bytes)
+                }),
+            },
         )? {
             self.chain = Some(chain);
             self.recreate = false;
@@ -1428,6 +1466,7 @@ impl Drop for Renderer {
         drop(self.stream.take());
         drop(self.work.take());
         drop(self.materials.take());
+        drop(self.uvs.take());
         println!(
             "Render Lab teardown: {} swapchain generations",
             self.generations

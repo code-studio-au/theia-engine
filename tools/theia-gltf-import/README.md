@@ -37,9 +37,10 @@ hash. Outputs vary with compiler/binary/configuration by design; repeatability i
 qualified for the same binary/input. File names/absolute source paths are not
 persistent logical identities. Cooked THEIAMES v1 stays unchanged.
 
-Six unit tests cover analytic nested TRS/reflection, independent instances,
+Eight unit tests cover analytic nested TRS/reflection, independent instances,
 invalid bounds/URIs/tree/features, external/embedded/GLB geometry parity, and
-unlit primitive/instance assignment with unsupported-material rejection.
+unlit primitive/instance assignment with unsupported-material rejection, and
+float2 UV count/type/finite/seam/reflection checks.
 Rust fmt, denied-warning Clippy and tests run locally; Windows execution and
 arbitrary third-party authoring exports remain unqualified.
 
@@ -77,3 +78,20 @@ quads with distinct authored red/green materials, including a reflected node.
 Repeated normalization/cooking with the same binary/input is byte-identical.
 Old position-only mode remains supported; raw grid/quad/triangle fixture hashes
 are unchanged. General source-material dependency streaming is still open.
+
+## Optional authored float2 UVs
+
+Use `--unlit-uv` instead of `--unlit-factors` with
+`fixtures/gltf/transformed_scene_uv.gltf`. Normalized schema 3 adds one float2
+TEXCOORD_0 per dense global vertex. Selected primitives require FLOAT VEC2 UVs
+with POSITION-matching count; other sets/attributes and normalized/integer UVs
+fail. Node transforms/reflections change world positions/winding while leaving
+UV values unchanged. Coincident positions with different UVs retain distinct
+vertex rows. Existing unlit factor restrictions still apply; textures remain
+unsupported by this mode.
+
+The native cooker emits geometry, material and UV file paths in
+`imported-report.json`. Validate with Rust `theia-assets --example uv <mesh> <uv>`
+and run Render Lab `--asset <mesh> --uv-test <uv>`. That mode displays reconstructed
+UVs as diagnostic color and qualifies perspective interpolation; it does not
+sample authored textures or implement material/UV dependency residency.

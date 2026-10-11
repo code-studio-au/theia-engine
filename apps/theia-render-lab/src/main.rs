@@ -57,6 +57,7 @@ struct Options {
     frustum: bool,
     material: bool,
     materials: Option<std::path::PathBuf>,
+    uvs: Option<std::path::PathBuf>,
 }
 impl Options {
     fn render_mode(&self) -> RenderMode {
@@ -78,6 +79,14 @@ impl Options {
                 "--camera-test" => result.camera = true,
                 "--frustum-test" => result.frustum = true,
                 "--material-test" => result.material = true,
+                "--uv-test" => {
+                    result.material = true;
+                    result.uvs = Some(
+                        args.next()
+                            .ok_or("--uv-test needs a content-addressed UV page")?
+                            .into(),
+                    );
+                }
                 "--materials" => {
                     result.material = true;
                     result.materials = Some(
@@ -89,7 +98,8 @@ impl Options {
                 "--camera-reference"
                 | "--frustum-reference"
                 | "--material-reference"
-                | "--authored-reference" => {
+                | "--authored-reference"
+                | "--uv-reference" => {
                     use std::io::Read;
                     let path = args.next().ok_or(
                         "--camera-reference needs mesh path and x y width height scenario",
@@ -102,6 +112,14 @@ impl Options {
                         } else {
                             None
                         };
+                    let uv_path = if arg == "--uv-reference" {
+                        Some(
+                            args.next()
+                                .ok_or("--uv-reference needs UV page after mesh path")?,
+                        )
+                    } else {
+                        None
+                    };
                     let mut values = [0u32; 5];
                     for value in &mut values {
                         *value = args
@@ -138,6 +156,32 @@ impl Options {
                             pixel.color.copy_from_slice(&color[..3]);
                         }
                     }
+                    let mut uv_value = None;
+                    if let Some(path) = uv_path {
+                        let data = asset::load_uv(std::path::Path::new(&path), &mesh)?;
+                        let page = theia_assets::uv::UvPage::decode(
+                            &data,
+                            None,
+                            &mesh,
+                            theia_assets::uv::DEFAULT_BUDGET,
+                        )?;
+                        if pixel.covered {
+                            let uv: [f32; 2] = std::array::from_fn(|axis| {
+                                (0..3)
+                                    .map(|i| {
+                                        page.texcoords[pixel.vertices[i] as usize][axis]
+                                            * pixel.weights[i]
+                                    })
+                                    .sum()
+                            });
+                            pixel.color = [
+                                (uv[0] * 0.4 + 0.1).clamp(0., 1.),
+                                (uv[1] * 0.4 + 0.1).clamp(0., 1.),
+                                0.5,
+                            ];
+                            uv_value = Some(uv);
+                        }
+                    }
                     let ids = if frustum {
                         camera::visible(&mesh, camera::view_rows(width, height, scenario)?)?
                     } else {
@@ -145,7 +189,7 @@ impl Options {
                     };
                     println!(
                         "{}",
-                        serde_json::json!({"color":pixel.color,"depth":pixel.depth,"covered":pixel.covered,"identity":pixel.identity,"ids":ids})
+                        serde_json::json!({"color":pixel.color,"depth":pixel.depth,"covered":pixel.covered,"identity":pixel.identity,"ids":ids,"uv":uv_value})
                     );
                     std::process::exit(0);
                 }
@@ -262,7 +306,7 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -274,6 +318,16 @@ impl Options {
         {
             return Err(
                 "--camera-test/--frustum-test/--material-test require --asset or --cell".into(),
+            );
+        }
+        if result.uvs.is_some()
+            && (result.asset.is_none()
+                || result.cell.is_some()
+                || result.fallback.is_some()
+                || result.materials.is_some())
+        {
+            return Err(
+                "--uv-test requires a fixed --asset without --cell/--fallback/--materials".into(),
             );
         }
         if result.materials.is_some()

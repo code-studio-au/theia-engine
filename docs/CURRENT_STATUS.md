@@ -1,8 +1,35 @@
-# Theia — Actual Implementation Status (2026-10-10)
+# Theia — Actual Implementation Status (2026-10-11)
 
 **This file separates observed evidence from planned systems.** The original handoff
-records user-supplied terminal evidence. The following update was independently
-executed in the local checkout on 2026-10-10.
+records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
+update is 2026-10-11.
+
+## M4 authored UV reconstruction — independently executed (2026-10-11)
+
+Opt-in `--unlit-uv` imports float2 TEXCOORD_0 into normalized schema 3. Source UVs
+stay unchanged through node transforms/reflections; coincident positions with
+UV seams retain distinct dense rows. The cooker emits an exact-geometry-bound
+THEIAUVS v1 page. Three reader tests cover finite values, byte/count/hash/binding
+checks and invalid padding/UTF-8; 18 asset tests and eight normalizer tests pass.
+
+Render Lab `--asset <mesh> --uv-test <page>` uploads one immutable UV buffer and
+reconstructs selected-triangle UVs using perspective-correct weights in Slang
+fragment resolve. Upload/frame-fence/descriptor ownership remains explicit;
+fixed geometry only. An analytic center-ray reference verifies UV weights.
+Default/shared builds compile/SPIR-V validate all 25 shaders; 13 renderer tests,
+formatting and denied-warning Clippy pass.
+
+RX 7900 XTX UV/terrain/shared WSI and 11 prior paths pass 120-frame/ten-generation
+regression with zero diagnostics. Six separate captures match uploaded geometry/
+UV bytes, work, identities, depth and UV-encoded color: imported full/empty/narrow,
+imported shared, terrain full/shared. Full terrain checks all 512 visible triangles
+plus 81 grid samples. Missing UV fragment and wrong geometry clean up safely.
+Repeated cooking is identical; old grid/quad/triangle hashes remain unchanged.
+
+This is diagnostic UV reconstruction, not sampled authored textures, mip/gradient
+qualification, material dependency streaming or a completed M4. The next gate is
+bounded texture data/import and sampling. Work resumed at user request; nothing
+was pushed. [Contract](M4_ASSET_CONTRACT.md), [evidence](validation/M4_COOKED_MESHLETS.md).
 
 ## M4 bounded glTF unlit import — independently executed
 

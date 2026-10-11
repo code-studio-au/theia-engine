@@ -94,6 +94,11 @@ impl Drop for Image {
         }
     }
 }
+#[derive(Clone, Copy, Default)]
+pub struct ResolveBuffers {
+    pub materials: Option<vk::DescriptorBufferInfo>,
+    pub uvs: Option<vk::DescriptorBufferInfo>,
+}
 pub struct Target {
     visibility: Option<Pipeline>,
     resolve: Option<Pipeline>,
@@ -108,6 +113,7 @@ pub struct Target {
     device: ash::Device,
     cooked: bool,
     authored: bool,
+    uv: bool,
     geometry: Option<(vk::Buffer, u64, u64)>,
 }
 impl Target {
@@ -117,10 +123,12 @@ impl Target {
         extent: vk::Extent2D,
         color_format: vk::Format,
         shaders: &Path,
-        work_info: (vk::DescriptorSetLayout, Option<vk::DescriptorBufferInfo>),
+        work_info: (vk::DescriptorSetLayout, ResolveBuffers),
         cooked: bool,
     ) -> Result<Self> {
-        let (work_layout, material_info) = work_info;
+        let (work_layout, buffers) = work_info;
+        let material_info = buffers.materials;
+        let uv = buffers.uvs.is_some();
         let authored = material_info.is_some();
         let identity = Image::new(
             device,
@@ -166,6 +174,7 @@ impl Target {
             device: device.clone(),
             cooked,
             authored,
+            uv,
             geometry: None,
         };
         // SAFETY: Images/layouts are live, arrays are retained through calls and handles gain RAII immediately.
@@ -212,6 +221,15 @@ impl Target {
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
+            if uv {
+                bindings.push(
+                    vk::DescriptorSetLayoutBinding::default()
+                        .binding(6)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .descriptor_count(1)
+                        .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+                );
+            }
             let mut flags = vec![
                 vk::DescriptorBindingFlags::empty(),
                 vk::DescriptorBindingFlags::empty(),
@@ -222,6 +240,9 @@ impl Target {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
             if authored {
+                flags.push(vk::DescriptorBindingFlags::empty());
+            }
+            if uv {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
             let mut binding_flags =
@@ -244,7 +265,7 @@ impl Target {
                 sizes.push(
                     vk::DescriptorPoolSize::default()
                         .ty(vk::DescriptorType::STORAGE_BUFFER)
-                        .descriptor_count(if authored { 2 } else { 1 }),
+                        .descriptor_count(1 + u32::from(authored) + u32::from(uv)),
                 );
             }
             target.pool = device.create_descriptor_pool(
@@ -312,6 +333,16 @@ impl Target {
                         .buffer_info(info),
                 );
             }
+            let uv_buffers = buffers.uvs.map(|info| [info]);
+            if let Some(info) = &uv_buffers {
+                writes.push(
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(target.set)
+                        .dst_binding(6)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .buffer_info(info),
+                );
+            }
             device.update_descriptor_sets(&writes, &[]);
         }
         target.visibility = Some(Pipeline::visibility(device, shaders, work_layout, cooked)?);
@@ -322,6 +353,7 @@ impl Target {
             target.layout,
             cooked,
             authored,
+            uv,
         )?);
         println!(
             "Visibility targets ready: R32G32_UINT {}/primitive + D32_SFLOAT depth; mesh material resolve",
@@ -558,7 +590,7 @@ impl Target {
                 &[self.set],
                 &[],
             );
-            if self.cooked && !self.authored {
+            if self.cooked && (!self.authored || self.uv) {
                 self.push_rows(
                     command,
                     pipeline.layout,

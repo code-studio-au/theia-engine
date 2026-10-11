@@ -97,6 +97,8 @@ pub struct Pixel {
     pub depth: f32,
     pub covered: bool,
     pub identity: [u32; 2],
+    pub vertices: [u32; 3],
+    pub weights: [f32; 3],
 }
 pub fn pixel(
     mesh: &Mesh,
@@ -134,18 +136,21 @@ pub fn pixel(
         depth: 1.,
         covered: false,
         identity: [0, 0],
+        vertices: [0; 3],
+        weights: [0.; 3],
     };
     for id in ids {
         let meshlet = &mesh.meshlets[id as usize];
         for triangle in 0..meshlet.triangle_count as usize {
+            let mut vertices = [0u32; 3];
             let mut positions = [[0.; 3]; 3];
             let mut clip = [[0.; 4]; 3];
             let mut screen = [[0.; 2]; 3];
             for i in 0..3 {
                 let local =
                     mesh.triangles[meshlet.triangle_offset as usize + triangle * 3 + i] as usize;
-                positions[i] = mesh.positions
-                    [mesh.vertex_refs[meshlet.vertex_offset as usize + local] as usize];
+                vertices[i] = mesh.vertex_refs[meshlet.vertex_offset as usize + local];
+                positions[i] = mesh.positions[vertices[i] as usize];
                 clip[i] = project(rows, positions[i]);
                 // This oracle is deliberately bounded to wholly unclipped positive-w triangles.
                 if clip[i][3] <= 0. || clip[i][2] < 0. || clip[i][2] > clip[i][3] {
@@ -186,6 +191,8 @@ pub fn pixel(
                 depth,
                 covered: true,
                 identity: [id + 1, triangle as u32],
+                vertices,
+                weights: std::array::from_fn(|i| weights[i] / clip[i][3] / reciprocal),
             };
         }
     }
@@ -293,6 +300,16 @@ mod tests {
         let distance = 3.89f64.sqrt() * 0.85;
         let expected_depth = 10. / 9.9 - 1. / (9.9 * distance);
         assert!(pixel.covered);
+        // Independent center-ray UV on [-.6,.6]^2: (.5, .2875), despite unequal clip W.
+        let uv: [f32; 2] = std::array::from_fn(|axis| {
+            (0..3)
+                .map(|i| {
+                    (mesh.positions[pixel.vertices[i] as usize][axis] + 0.6) / 1.2
+                        * pixel.weights[i]
+                })
+                .sum()
+        });
+        assert!((uv[0] - 0.5).abs() < 1e-6 && (uv[1] - 0.2875).abs() < 1e-6);
         assert!((pixel.color[0] - 0.5).abs() < 1e-6);
         assert!((pixel.color[1] - 0.3725).abs() < 1e-6);
         assert!((pixel.depth as f64 - expected_depth).abs() < 2e-6);

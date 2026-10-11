@@ -309,3 +309,52 @@ source hashes. The material sidecar binds the exact resulting geometry hash.
 Source material edits consequently affect geometry provenance/content identity;
 independent geometry/material deduplication is not implied by this prototype.
 [Exact limits and workflow](../tools/theia-gltf-import/README.md).
+
+### THEIAUVS v1 dense TEXCOORD_0 page
+
+Independent content-addressed `.theia-uv` file, unchanged binary geometry/material/
+cell formats. All fields little-endian:
+
+| Offset | Type | Meaning |
+|---:|---|---|
+| 0 | bytes[8] | THEIAUVS magic |
+| 8 | u32 | schema 1 |
+| 12 | u32 | provenance UTF-8 byte length |
+| 16 | u32 | vertex count, exactly bound geometry positions, 1..65536 |
+| 20 | u32 | payload length |
+| 24 | bytes[32] | exact full THEIAMES hash |
+| 56 | bytes[32] | payload SHA-256 |
+
+Payload is provenance/zero padding to four bytes, then dense finite float2 UVs in
+unchanged global vertex order. Default byte budget 4 MiB; metadata limit 1 MiB.
+Reader checks counts, checked lengths, version, UTF-8/padding, digests, binding
+and finite coordinates. Negative/repeated coordinates are valid data; this is
+not a normalized [0,1] promise or a sampler wrapping policy.
+
+Normalizer `--unlit-uv` requires explicit supported unlit factors and float2
+TEXCOORD_0 with POSITION-matching count on every selected primitive. Normalized
+schema 3 adds `texcoords` alongside schema 2 factors/triangle assignments. Source
+UVs are not transformed/flipped with world axes or reflected nodes; coincident
+positions with distinct UVs remain separate rows. Integer/normalized UVs, extra
+sets/attributes, base-color textures and other extensions remain unsupported.
+Native coverage checks preserve global index identity before publishing the UV
+page; the sidecar binds the full resulting geometry hash. No position welding or
+LOD UV/seam correctness is implied. Source convention follows the
+[glTF attribute contract](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#meshes-overview).
+
+`--uv-test <page>` on a fixed `--asset` uses immutable fragment binding 6 plus
+binding 4 geometry and 64-byte camera push constants. It resolves identity to
+three global vertices, reconstructs UVs with screen barycentrics divided by clip
+W, checks interpolated depth, and displays diagnostic
+`(clamp(.4*u+.1), clamp(.4*v+.1), .5)`. The diagnostic loader limits magnitudes to
+64; finite UVs outside that lab range remain valid reader data. Geometry+UV
+binding, upload fence, Transfer->Fragment storage publication, physical 4 MiB
+allocation cap and swapchain-before-buffer retirement are checked. Cell/fallback/
+material combinations fail explicitly for this diagnostic mode. No authored
+texture sampling, derivatives, mip LOD, sampler policy or dependency streaming.
+
+`--uv-reference <mesh uv x y width height view>` independently returns CPU UV,
+identity/depth/color JSON. Capture `THEIA_CAPTURE_UV_PAGE` verifies actual GPU
+UV bytes and the same grid/all-visible-triangle probes as authored factors.
+Color checks quantify encoded UV agreement (two sRGB byte levels), not a direct
+floating-point UV target accuracy measurement.

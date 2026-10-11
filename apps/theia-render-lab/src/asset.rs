@@ -110,6 +110,29 @@ pub fn load_material(path: &Path, mesh: &Mesh) -> Result<Vec<u8>> {
     theia_assets::material::MaterialPage::decode(&bytes, None, mesh, budget)?;
     Ok(bytes)
 }
+pub fn load_uv(path: &Path, mesh: &Mesh) -> Result<Vec<u8>> {
+    let budget = theia_assets::uv::DEFAULT_BUDGET;
+    let mut bytes = Vec::new();
+    fs::File::open(path)?
+        .take(budget as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    let name = path
+        .file_stem()
+        .and_then(|v| v.to_str())
+        .ok_or("UV needs a content-address filename")?;
+    let actual = theia_assets::content_id(&bytes)
+        .iter()
+        .map(|v| format!("{v:02x}"))
+        .collect::<String>();
+    if name != actual {
+        return Err("UV content-address filename mismatch".into());
+    }
+    let page = theia_assets::uv::UvPage::decode(&bytes, None, mesh, budget)?;
+    if page.texcoords.iter().flatten().any(|v| v.abs() > 64.) {
+        return Err("UV diagnostic qualification bounds coordinates to +/-64".into());
+    }
+    Ok(bytes)
+}
 pub struct Buffer {
     _allocation: Arc<Allocation>,
     _lease: Option<theia_assets::arena::Lease>,

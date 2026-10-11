@@ -42,7 +42,9 @@ bounded static position-only subset. It bakes node transforms/reflections into
 Z-up geometry and supplies the existing meshlet cooker, preserving tool/source
 provenance. Optional `--unlit-factors` now imports bounded opaque double-sided
 KHR_materials_unlit factors with material assignments preserved through native
-triangle reordering. Other material/UV/normal/animation/extension/camera inputs fail;
+triangle reordering. Optional `--unlit-uv` adds authored float2 TEXCOORD_0 with
+exact-geometry binding and qualified perspective reconstruction. Other material/
+UV/normal/animation/extension/camera inputs fail;
 this is not a general glTF scene importer or GPU instancing implementation.
 [Workflow/limits](../tools/theia-gltf-import/README.md).
 

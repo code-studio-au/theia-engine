@@ -15,6 +15,7 @@ import subprocess
 from qualify_height_lod import qualify
 from remap_materials import canonical, remap
 from cook_material_page import cook as cook_material
+from cook_uv_page import cook as cook_uv
 
 
 class Meshlet(c.Structure):
@@ -76,7 +77,7 @@ def main():
         if len(normalized)>64*1024*1024:
             parser.error('Normalized JSON exceeds 64 MiB')
         imported = json.loads(normalized)
-        if type(imported.get('schema')) is not int or imported['schema'] not in (1,2) or not isinstance(imported.get('provenance'),dict):
+        if type(imported.get('schema')) is not int or imported['schema'] not in (1,2,3) or not isinstance(imported.get('provenance'),dict):
             parser.error('Unsupported normalized geometry schema/provenance')
         positions = imported.get('positions',[])
         indices = imported.get('indices',[])
@@ -157,7 +158,7 @@ def main():
         metadata['recipe'] = 'normalized-static-gltf-v1'
         metadata['normalization'] = imported['provenance']
         metadata['normalized_json_sha256'] = hashlib.sha256(normalized).hexdigest()
-        if imported['schema'] == 2:
+        if imported['schema'] in (2,3):
             metadata['recipe'] = 'normalized-static-gltf-unlit-v1'
             metadata['material_mapping'] = {'policy':'winding-preserving cyclic index triangle identity; reject conflicting duplicates',
                 'meshlet_cooker_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -179,7 +180,7 @@ def main():
     args.output_dir.mkdir(parents=True,exist_ok=True)
     material_report = None
     material_blob = None
-    if imported is not None and imported['schema'] == 2:
+    if imported is not None and imported['schema'] in (2,3):
         colors = imported.get('base_colors')
         assignments = imported.get('triangle_materials')
         if not isinstance(assignments,list):
@@ -192,12 +193,24 @@ def main():
         material_report = {'path':str(material_path),'content_id':material_id,'bytes':len(material_blob),
                            'geometry_id':identifier,'materials':len(colors),'triangle_materials':mapped,
                            'mapping':'winding-preserving cyclic index triangle identity; reject conflicting duplicate assignments'}
+    uv_report = None
+    uv_blob = None
+    if imported is not None and imported['schema'] == 3:
+        uv_source = json.dumps({'schema':1,'geometry_sha256':identifier,'texcoords':imported.get('texcoords')},sort_keys=True,separators=(',',':')).encode()
+        uv_blob = cook_uv(blob,uv_source)
+        uv_id = hashlib.sha256(uv_blob).hexdigest()
+        uv_path = args.output_dir/(uv_id+'.theia-uv')
+        uv_report = {'path':str(uv_path),'content_id':uv_id,'bytes':len(uv_blob),'geometry_id':identifier,'vertices':len(positions)}
     destination = args.output_dir / (identifier+'.theia-mesh')
     destination.write_bytes(blob)
     if material_blob is not None:
         material_path.write_bytes(material_blob)
+    if uv_blob is not None:
+        uv_path.write_bytes(uv_blob)
     report = {'path': str(destination), 'content_id': identifier, 'bytes': len(blob), 'vertices': len(positions),
               'meshlets': count, 'triangles': len(reconstructed), 'coverage_and_winding_verified': True, 'metadata': metadata}
+    if uv_report is not None:
+        report['uv'] = uv_report
     if material_report is not None:
         report['materials'] = material_report
     if lod is not None:

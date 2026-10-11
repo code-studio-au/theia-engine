@@ -110,3 +110,12 @@ jobs:
           subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'inspect', '--', report['path']], check=True)
           subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'material', '--', report['path'], report['materials']['path']], check=True)
           PY
+      - name: Qualify authored float2 UV import and exact geometry binding
+        run: |
+          cargo run --locked --manifest-path tools/theia-gltf-import/Cargo.toml -- fixtures/gltf/transformed_scene_uv.gltf build/assets/imported-uv-scene.json --unlit-uv
+          python3 tools/cook_meshlet_fixture.py --geometry build/assets/imported-uv-scene.json --library "$RUNNER_TEMP/meshopt-build/libmeshoptimizer.so" --source-archive "$RUNNER_TEMP/meshoptimizer.tar.gz"
+          python3 - <<'PY'
+          import json, subprocess
+          report = json.load(open('build/assets/imported-report.json'))
+          subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'uv', '--', report['path'], report['uv']['path']], check=True)
+          PY

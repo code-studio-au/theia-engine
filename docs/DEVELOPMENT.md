@@ -313,3 +313,19 @@ new assignments for a different cooked file. `THEIA_CAPTURE_MATERIAL_PAGE`
 selects authored factor replay and checks every visible triangle plus the grid.
 Optional `THEIA_CAPTURE_SHADER_DIR=build/shaders-shared` checks the alternate
 shared primitive interface. These tests do not implement glTF material import.
+
+### Authored UV reconstruction qualification
+
+```sh
+cargo run --manifest-path tools/theia-gltf-import/Cargo.toml -- \
+  fixtures/gltf/transformed_scene_uv.gltf build/assets/imported-uv-scene.json --unlit-uv
+python3 tools/cook_meshlet_fixture.py --geometry build/assets/imported-uv-scene.json \
+  --library <qualified-meshoptimizer-library> --source-archive <qualified-archive>
+apps/theia-render-lab/target/debug/theia-render-lab --asset <mesh-path-from-report> \
+  --uv-test <uv-path-from-report> --wsi-smoke-test
+```
+
+`THEIA_CAPTURE_UV_PAGE` selects identity/depth/UV-color replay; optional
+`THEIA_CAPTURE_SHADER_DIR=build/shaders-shared` uses the qualified shared identity
+pair. This diagnostic does not sample authored textures. Use only fixed geometry;
+UV/cell/fallback/material combinations are not implemented by this mode.

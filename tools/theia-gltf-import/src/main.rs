@@ -51,6 +51,8 @@ struct Scene {
     nodes: Vec<Value>,
     visited: BTreeSet<usize>,
     unlit: bool,
+    uv: bool,
+    texcoords: Vec<[f32; 2]>,
     base_colors: Vec<[f32; 4]>,
     material_indices: BTreeMap<usize, u32>,
     triangle_materials: Vec<u32>,
@@ -131,9 +133,10 @@ impl Scene {
                     || primitive.morph_targets().next().is_some()
                     || (!self.unlit && primitive.material().index().is_some())
                     || primitive.extensions().is_some_and(|v| !v.is_empty())
-                    || primitive
-                        .attributes()
-                        .any(|(kind, _)| kind != gltf::Semantic::Positions)
+                    || primitive.attributes().any(|(kind, _)| {
+                        kind != gltf::Semantic::Positions
+                            && !(self.uv && kind == gltf::Semantic::TexCoords(0))
+                    })
                 {
                     return Err(
                         "Only position-only triangle geometry in the selected material mode is supported".into(),
@@ -163,6 +166,30 @@ impl Scene {
                     .collect();
                 if positions.is_empty() || self.positions.len() + positions.len() > MAX_VERTICES {
                     return Err("Imported vertex limit exceeded".into());
+                }
+                if self.uv {
+                    let accessor = primitive
+                        .get(&gltf::Semantic::TexCoords(0))
+                        .ok_or("UV mode requires TEXCOORD_0 on every primitive")?;
+                    if accessor.data_type() != gltf::accessor::DataType::F32
+                        || accessor.dimensions() != gltf::accessor::Dimensions::Vec2
+                        || accessor.count() != positions.len()
+                    {
+                        return Err(
+                            "UV mode requires float2 TEXCOORD_0 matching POSITION count".into()
+                        );
+                    }
+                    let values: Vec<_> = reader
+                        .read_tex_coords(0)
+                        .ok_or("Missing TEXCOORD_0 data")?
+                        .into_f32()
+                        .collect();
+                    if values.len() != positions.len()
+                        || values.iter().flatten().any(|v| !v.is_finite())
+                    {
+                        return Err("Invalid finite UV stream".into());
+                    }
+                    self.texcoords.extend(values);
                 }
                 let mut indices: Vec<u32> = reader
                     .read_indices()
@@ -220,6 +247,9 @@ fn normalize(path: &Path) -> Result<Value> {
     normalize_mode(path, false)
 }
 fn normalize_mode(path: &Path, unlit: bool) -> Result<Value> {
+    normalize_attributes(path, unlit, false)
+}
+fn normalize_attributes(path: &Path, unlit: bool, uv: bool) -> Result<Value> {
     let source = read(path)?;
     let gltf = gltf::Gltf::from_slice(&source)?;
     if gltf
@@ -345,6 +375,8 @@ fn normalize_mode(path: &Path, unlit: bool) -> Result<Value> {
         nodes: Vec::new(),
         visited: BTreeSet::new(),
         unlit,
+        uv,
+        texcoords: Vec::new(),
         base_colors: Vec::new(),
         material_indices: BTreeMap::new(),
         triangle_materials: Vec::new(),
@@ -382,23 +414,35 @@ fn normalize_mode(path: &Path, unlit: bool) -> Result<Value> {
         result["provenance"]["shading"] =
             json!("opaque double-sided KHR_materials_unlit factors; no textures/vertex attributes");
     }
+    if uv {
+        result["schema"] = json!(3);
+        result["provenance"]["shading"] = json!(
+            "opaque double-sided KHR_materials_unlit factors; no textures; authored TEXCOORD_0"
+        );
+        result["texcoords"] = json!(normalized.texcoords);
+        result["provenance"]["attributes"] =
+            json!("float2 TEXCOORD_0; source UV unchanged through node transforms/reflections");
+    }
     Ok(result)
 }
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
-    let input = args
-        .next()
-        .ok_or("usage: theia-gltf-import <source.gltf/glb> <normalized.json> [--unlit-factors]")?;
+    let input = args.next().ok_or(
+        "usage: theia-gltf-import <source.gltf/glb> <normalized.json> [--unlit-factors|--unlit-uv]",
+    )?;
     let output = args.next().ok_or("normalized output path required")?;
-    let unlit = match args.next().as_deref() {
-        None => false,
-        Some("--unlit-factors") => true,
-        _ => return Err("Only optional --unlit-factors is supported".into()),
+    let (unlit, uv) = match args.next().as_deref() {
+        None => (false, false),
+        Some("--unlit-factors") => (true, false),
+        Some("--unlit-uv") => (true, true),
+        _ => return Err("Only optional --unlit-factors or --unlit-uv is supported".into()),
     };
     if args.next().is_some() {
         return Err("Too many arguments".into());
     }
-    let normalized = if unlit {
+    let normalized = if uv {
+        normalize_attributes(Path::new(&input), true, true)?
+    } else if unlit {
         normalize_mode(Path::new(&input), true)?
     } else {
         normalize(Path::new(&input))?
@@ -597,6 +641,81 @@ mod tests {
         for (i, case) in cases.iter().enumerate() {
             std::fs::write(&path, serde_json::to_vec(case).unwrap()).unwrap();
             assert!(normalize_mode(&path, true).is_err(), "case {i}");
+        }
+    }
+    #[test]
+    fn uv_stream_stays_in_dense_vertex_order_across_seams_and_reflections() {
+        let document: Value = serde_json::from_slice(include_bytes!(
+            "../../../fixtures/gltf/transformed_scene_uv.gltf"
+        ))
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("scene.gltf");
+        std::fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+        assert!(normalize_mode(&path, true).is_err());
+        let result = normalize_attributes(&path, true, true).unwrap();
+        assert_eq!(result["schema"], json!(3));
+        assert_eq!(result["texcoords"].as_array().unwrap().len(), 8);
+        assert_eq!(result["texcoords"][0], json!([0., 0.]));
+        assert_eq!(result["texcoords"][2], json!([1., 1.]));
+        assert!((result["texcoords"][4][0].as_f64().unwrap() - 0.2).abs() < 1e-6);
+        assert!((result["texcoords"][6][1].as_f64().unwrap() - 1.4).abs() < 1e-6);
+        assert_eq!(
+            result["indices"],
+            json!([0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6])
+        );
+        assert_eq!(result["triangle_materials"], json!([0, 0, 1, 1]));
+        // Coincident world positions with different UVs must retain distinct dense rows.
+        let mut seam = document.clone();
+        seam["nodes"][2] = seam["nodes"][1].clone();
+        seam["nodes"][2]["mesh"] = json!(1);
+        std::fs::write(&path, serde_json::to_vec(&seam).unwrap()).unwrap();
+        let seam = normalize_attributes(&path, true, true).unwrap();
+        assert_eq!(
+            &seam["positions"].as_array().unwrap()[..4],
+            &seam["positions"].as_array().unwrap()[4..]
+        );
+        assert_ne!(seam["texcoords"][0], seam["texcoords"][4]);
+        assert_eq!(seam["indices"], json!([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]));
+    }
+    #[test]
+    fn uv_mode_rejects_missing_count_type_extra_sets_and_nonfinite_values() {
+        let source: Value = serde_json::from_slice(include_bytes!(
+            "../../../fixtures/gltf/transformed_scene_uv.gltf"
+        ))
+        .unwrap();
+        let mut cases = Vec::new();
+        let mut v = source.clone();
+        v["meshes"][1]["primitives"][0]["attributes"]
+            .as_object_mut()
+            .unwrap()
+            .remove("TEXCOORD_0");
+        cases.push(v);
+        let mut v = source.clone();
+        v["accessors"][2]["count"] = json!(3);
+        cases.push(v);
+        let mut v = source.clone();
+        v["accessors"][2]["componentType"] = json!(5123);
+        cases.push(v);
+        let mut v = source.clone();
+        v["meshes"][0]["primitives"][0]["attributes"]["TEXCOORD_1"] = json!(2);
+        cases.push(v);
+        let mut v = source.clone();
+        let uri = v["buffers"][0]["uri"].as_str().unwrap();
+        let mut bytes = base64::engine::general_purpose::STANDARD
+            .decode(uri.split_once(',').unwrap().1)
+            .unwrap();
+        bytes[60..64].copy_from_slice(&f32::NAN.to_le_bytes());
+        v["buffers"][0]["uri"] = json!(format!(
+            "data:application/octet-stream;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        ));
+        cases.push(v);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("scene.gltf");
+        for (i, case) in cases.iter().enumerate() {
+            std::fs::write(&path, serde_json::to_vec(case).unwrap()).unwrap();
+            assert!(normalize_attributes(&path, true, true).is_err(), "case {i}");
         }
     }
     #[test]

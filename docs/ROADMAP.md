@@ -86,10 +86,11 @@ Position-only static glTF node transforms/reflections now feed the cooker/viewer
 with qualified source/tool provenance. Conservative GPU meshlet frustum selection
 now feeds indirect task/mesh work and passes CPU/replay checks. Cooked identity,
 depth and deferred diagnostic material resolve now connect those slices. Next
-qualify bounded authored UV/texture data and material dependency contracts.
+qualify bounded authored texture data/import and sampling, then dependency contracts.
 The opaque material sidecar reader/cooker, GPU lookup/resolve and opt-in glTF
-unlit factor import/remapping now pass independent checks. This next unit has
-not started; work stopped at user request after unlit import qualification. The optional shared-
+unlit factor import/remapping now pass independent checks. Authored float2 UV
+import, exact geometry binding and perspective-correct GPU reconstruction are
+now qualified; texture/mip/dependency work remains open. The optional shared-
 vertex Slang mesh / GLSL fragment interface passes replay alongside the default
 expanded-vertex Slang test. General
 LOD/hierarchy errors, broader page dependencies/readers and virtual texture

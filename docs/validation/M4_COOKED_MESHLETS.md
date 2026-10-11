@@ -615,3 +615,77 @@ reader/remapping checks locally; no hosted execution, push or benchmark claim.
 General UV/texture/normal/vertex-color/PBR/alpha import, material dependency
 streaming and complete static scene integration remain open. M4 stays incomplete.
 User requested stopping after this current unit; subsequent work was not started.
+
+## Bounded authored UV import and reconstruction (2026-10-11)
+
+Work resumed locally. The opt-in glTF `--unlit-uv` profile produces normalized
+schema 3 with finite float2 TEXCOORD_0 and the existing unlit factors. Dense
+vertex rows remain distinct at UV seams, including coincident positions;
+reflection changes triangle winding without changing source UV values. Missing,
+non-float2, mismatched, nonfinite or additional UV sets fail explicitly.
+No texture is imported or sampled by this profile.
+
+THEIAUVS v1 is an 88-byte header plus bounded provenance and dense float2 rows.
+It binds to the full geometry SHA-256 and exact vertex count. Independent Rust
+decoding checks lengths, budgets, hashes, UTF-8, canonical padding and finite
+coordinates. Three new tests bring the asset suite to 18; the normalizer has
+eight tests, including reflected UVs and coincident-position seams. All eight
+Python LOD/material-remapping tests and 13 renderer tests pass. Formatting and
+denied-warning Clippy pass for the affected Rust packages. Repeated import and
+native cooking are byte-identical for the same tools/input; five invalid UV
+cooker cases fail. Native meshlet coverage/winding remains checked, including
+the coincident-position seam fixture. Original grid/quad/triangle hashes remain
+unchanged. Both shader variants compile and SPIR-V-validate all 25 outputs.
+
+Final transformed/reflected fixture: geometry 2,752 bytes, eight vertices,
+four triangles, one meshlet, SHA-256
+`c793a4d412bb969761eb4d64b144e12136e96928368fc770d5417de26384ce12`;
+UV page 416 bytes, SHA-256
+`0e5630cdf0caf5a0c286649800a1f59ef405bd423f0e61befb9e524fd4732a59`.
+Terrain UV page has 289 rows, 2,664 bytes, SHA-256
+`728417268003a4c3eeb57613a12ac82fd701c0d035b6ba5fb2e0a7c04330196f`,
+bound to the existing `ec117b...` terrain geometry. The independent Rust UV
+example accepts the final imported pair.
+
+The fixed-asset `--uv-test` resolve reads a separately uploaded binding-6 UV
+buffer and reconstructs perspective-correct UVs from visibility identity and
+camera projection. Dedicated upload fence, storage-read barrier, descriptor
+recreation and teardown ownership follow the existing geometry/material path.
+The CPU reference uses reciprocal-W interpolation and has an independent
+analytic ray/UV assertion. Diagnostic colour encodes clamped `(0.4u+0.1,
+0.4v+0.1,0.5)`; the diagnostic profile caps coordinate magnitude at 64.
+
+RX 7900 XTX/RADV standalone synchronization-validation regression passes all
+14 paths, each 120 presented frames/ten swapchain generations with zero
+diagnostics through teardown: UV import/terrain/shared identity, indirect,
+clear, mesh, task, spatial, visibility, asset, camera, frustum, diagnostic
+material cell and authored factors. Missing UV shader and wrong geometry
+binding exit unsuccessfully with zero validation diagnostics. The preserved
+headless compute test independently verifies all 256 GPU values.
+
+Separate RenderDoc 1.46 captures disable capture validation; standalone
+validation above supplies that evidence. Every capture presents 180 frames,
+verifies actual geometry/UV GPU bytes, GPU-selected indirect work and visible
+triangle identities, and matches CPU depth/diagnostic RGB at the existing
+2e-6 depth/two RGB-byte tolerances:
+
+| Case | Samples | Visible triangle probes |
+| --- | ---: | ---: |
+| Imported full | 85 | 4 |
+| Imported empty | 81 | 0 |
+| Imported narrow | 83 | 2 |
+| Imported shared identity | 85 | 4 |
+| Terrain | 593 | 512 |
+| Terrain shared identity | 593 | 512 |
+
+Artifacts: `build/qualification/m4-uv-{cook.json,terrain-cook.json,reader.log,
+repeat-negative.json,headless.log,shaders.log,shared-shaders.log}`;
+`m4-uv-regression-*.log`, failure-path logs and
+`m4-uv-{full,empty,narrow,shared,terrain,terrain-shared}/report.json` with
+captures/images. Reports retain expected UVs and sampled identities. These are
+encoded-colour checks, not direct floating-point UV error measurements.
+
+CI configuration adds the import/native-cook/Rust-reader sequence; hosted CI
+has not run. No push, performance, Windows GPU or full asset-system claim.
+Texture import/sampling, mip/derivative handling and dependency streaming remain
+open. M4 is incomplete; the next unit is bounded authored texture qualification.
