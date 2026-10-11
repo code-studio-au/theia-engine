@@ -881,7 +881,11 @@ impl Renderer {
         let ctx = Context::new(window, options, validation)?;
         let mut renderer = Self {
             authority: if options.render_mode() == RenderMode::Authority {
-                Some(crate::authority::fixture(options.authority_alpha.unwrap_or(0.5))?.bytes)
+                Some(if options.authority_demo {
+                    [0; 64]
+                } else {
+                    crate::authority::fixture(options.authority_alpha.unwrap_or(0.5))?.bytes
+                })
             } else {
                 None
             },
@@ -1416,6 +1420,13 @@ impl Renderer {
             self.generations += 1;
             println!("Swapchain generation {} ready", self.generations);
         }
+        Ok(())
+    }
+    pub fn authority_push(&mut self, bytes: [u8; 64]) -> Result<()> {
+        if self.mode != RenderMode::Authority {
+            return Err("Authority push requires the separate authority mode".into());
+        }
+        self.authority = Some(bytes);
         Ok(())
     }
     pub fn draw(&mut self, size: PhysicalSize<u32>) -> Result<bool> {

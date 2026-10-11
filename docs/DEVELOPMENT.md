@@ -596,3 +596,33 @@ THEIA_AUTHORITY_ALPHA=.5 THEIA_CAPTURE_OUTPUT="$PWD/build/qualification/authorit
 Use the preceding local RenderDoc layer/XDG setup. Captures explicitly disable
 validation; standalone runs separately qualify Vulkan synchronization/lifetime.
 See [evidence](validation/M7_GPU_AUTHORITY_PRESENTATION.md).
+
+## M7 interactive local demo
+
+```sh
+cargo run --locked --manifest-path apps/theia-render-lab/Cargo.toml -- --gpu 7900 --authority-demo
+cargo run --locked --manifest-path apps/theia-render-lab/Cargo.toml -- --authority-demo --authority-script --frames 600 --gpu 7900
+cargo run --locked --manifest-path apps/theia-render-lab/Cargo.toml -- --authority-script-reference
+```
+
+Physical WASD/arrows move, Space press requests an attack on the second actor,
+Escape quits. Focus loss clears held controls. Gameplay is the local authority
+fixture in this process; no live server connection or account service exists.
+`--authority-script` generates bounded directional/attack intents and requires
+26 fixed ticks to qualify death and static collision. Choose enough frames for
+the display refresh rate; an insufficient explicit limit fails qualification.
+`--authority-alpha` remains fixed-test-only because the demo owns its clock.
+
+Native X11/XTest qualification (offline Python/third-party Xlib/Xtst only):
+
+```sh
+python3 tools/qualify_authority_input.py
+THEIA_AUTHORITY_SCRIPT=1 THEIA_CAPTURE_OUTPUT="$PWD/build/qualification/local-demo-capture" qrenderdoc --python tools/renderdoc_authority_qualify.py
+```
+
+The input harness identifies only its spawned PID/window, temporarily focuses it,
+checks focus before each key-down, releases keys and restores focus when still
+owned. Run it in the qualified X11 desktop session. Replay captures the stable
+script result at frame 300 of 600; the selected display must allow at least 26
+fixed ticks before capture. Windows/Wayland input runtime remain unqualified.
+See [evidence and scheduler limits](validation/M7_INTERACTIVE_AUTHORITY.md).

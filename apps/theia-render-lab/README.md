@@ -218,3 +218,13 @@ and a static obstacle from completed Rust authority ticks; current health change
 colour. One push/mesh draw, no vertex buffer. This is fixed qualification state,
 not interactive or a live network client. `--authority-reference .5` prints the
 CPU oracle without Vulkan. See [evidence](../../docs/validation/M7_GPU_AUTHORITY_PRESENTATION.md).
+
+## Interactive local authority demo
+
+`--authority-demo`: physical WASD/arrows move, Space attacks the second actor,
+Escape quits. Gameplay lives in a local server-owned CPU fixture; focus loss clears
+controls and GPU presentation consumes readonly snapshots. No live network yet.
+`--authority-script --frames 600` runs directional/attack requests through death
+and static collision; at least 26 fixed ticks are required. Frame limits remain
+exact, so choose enough frames for your refresh rate. See
+[qualification](../../docs/validation/M7_INTERACTIVE_AUTHORITY.md).

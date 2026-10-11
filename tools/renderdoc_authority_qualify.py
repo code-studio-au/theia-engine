@@ -28,12 +28,14 @@ def qualify(report, output):
     if os.name == 'nt':
         executable = executable.with_suffix('.exe')
     alpha = float(os.environ.get('THEIA_AUTHORITY_ALPHA', '.5'))
-    reference = json.loads(subprocess.check_output([str(executable), '--authority-reference', str(alpha)], text=True))
+    scripted = os.environ.get('THEIA_AUTHORITY_SCRIPT') == '1'
+    reference_args = ['--authority-script-reference'] if scripted else ['--authority-reference', str(alpha)]
+    reference = json.loads(subprocess.check_output([str(executable), *reference_args], text=True).splitlines()[-1])
     options = rd.CaptureOptions()
     options.apiValidation = False
     options.debugOutputMute = False
-    result = rd.ExecuteAndInject(str(executable), str(root),
-        f'--gpu 7900 --authority-test --authority-alpha {alpha} --frames 180 --no-validation',
+    arguments = '--gpu 7900 --authority-demo --authority-script --frames 600 --no-validation' if scripted else f'--gpu 7900 --authority-test --authority-alpha {alpha} --frames 180 --no-validation'
+    result = rd.ExecuteAndInject(str(executable), str(root), arguments,
         [], str(output / 'authority'), options, False)
     require(result.result)
     target = rd.CreateTargetControl('', result.ident, 'Theia authority qualification', True)
@@ -41,7 +43,7 @@ def qualify(report, output):
         raise RuntimeError('Cannot connect to capture target')
     capture = None
     try:
-        target.QueueCapture(10, 1)
+        target.QueueCapture(300 if scripted else 10, 1)
         deadline = time.monotonic() + 30
         while target.Connected() and time.monotonic() < deadline:
             message = target.ReceiveMessage(None)
@@ -107,7 +109,7 @@ def qualify(report, output):
         save.resourceId = color.resourceId
         save.destType = rd.FileType.PNG
         require(controller.SaveTexture(save, str(output/'replay.png')))
-        report.update(capture=capture, alpha=alpha, mesh_groups=[3,1,1], sampled_pixels=checked,
+        report.update(capture=capture, alpha=None if scripted else alpha, scripted=scripted, mesh_groups=[3,1,1], sampled_pixels=checked,
             actor_obstacle_background_counts=counts, reference=reference, replay_verified=True)
     finally:
         if controller is not None:

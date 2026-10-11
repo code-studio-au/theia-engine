@@ -4,6 +4,25 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M7 interactive local authority demo — independently executed (2026-10-11)
+
+`--authority-demo` accepts physical WASD/arrows movement and Space attack requests;
+server-owned `World` decides position, collision, cooldown/health/death. Focus loss
+clears held input and attacks; aliases track independently. A separate 50 ms
+Winit timer advances at most four fixed steps per wake, visibly skipping excess
+wall intervals. Readonly snapshots feed the existing 64-byte GPU interpolation
+profile; no client/GPU gameplay authority or network connection is introduced.
+
+The 600-frame scripted target-GPU run completes 100 ticks/four hits/death/four
+static blocks with zero diagnostics. Native XTest D/Space input runs complete
+four hits/death over 600 frames with zero diagnostics. Separate 120-frame/ten-
+generation WSI qualification passes; replay matches 32372 sampled pixels including
+dead-target gray and the blocked actor pose. Twenty renderer tests and formatting/
+Clippy pass; four legacy WSI modes and malformed options pass. Initial 120-frame
+script was too short for its 26-tick collision phase; frame limits were preserved
+and longer gameplay qualification was run. M7 remains open. Next connect the live
+encrypted authority feed to presentation. [Evidence](validation/M7_INTERACTIVE_AUTHORITY.md).
+
 ## M7 fixed GPU authority presentation — independently executed (2026-10-11)
 
 Separate Render Lab `--authority-test` consumes a fixed two-tick movement/combat

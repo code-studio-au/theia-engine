@@ -246,3 +246,22 @@ actor/obstacle squares in three mesh groups with one draw. IDs are split low/hig
 Health is current server state, not interpolated or client-owned. This fixed
 profile is neither a general GPU actor store nor animation/character system.
 The fixture does not consume live Quinn snapshots or interactive input yet.
+
+## M7 actual interactive local authority fixture
+
+Render Lab's separate demo now routes WASD/arrows directional intent and Space
+attack edges into the private authority model. Source session/target/rules stay
+server-owned; no client destination/speed/damage or mutable snapshot input.
+Opposing keys cancel, aliases retain independent held state, focus loss clears
+all controls, and pending attack edges coalesce to one per tick; native key repeat
+cannot generate repeated Space attacks. GPU consumes whole readonly completed
+states and owns interpolation/quad generation only.
+
+This local development fixture runs authority in the same process/event loop as
+the viewer; it is not a trusted network client authority. A Winit 50 ms deadline
+advances fixed steps even when redraw is deferred. Host/driver waits can still
+delay that event loop; there is no separate simulation thread or production
+latency guarantee. Catchup caps at four steps/wake, logs skipped wall intervals
+and snaps presentation after a long stall. Source clocks remain explicit, rather
+than taking render-frame count as gameplay time. The independently qualified
+Quinn server lab remains separate; live network presentation is the next gate.

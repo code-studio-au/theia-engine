@@ -50,6 +50,8 @@ jobs:
         run: cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml -- --faults
       - name: Qualify readonly authority presentation CPU fixture
         run: cargo run --locked --manifest-path apps/theia-render-lab/Cargo.toml -- --authority-reference 0.5
+      - name: Qualify completed local authority intent script without Vulkan
+        run: cargo run --locked --manifest-path apps/theia-render-lab/Cargo.toml -- --authority-script-reference
   shaders:
     runs-on: ubuntu-latest
     steps:

@@ -199,3 +199,10 @@ A fixed server-owned two-tick actor fixture now passes GPU interpolation/health/
 interactive local-authority controls using that presentation contract, then
 connect a live encrypted network feed. This does not close M6 characters, M7
 navigation/gameplay or M8 live client/persistence gates.
+
+Interactive local direction/attack controls now pass native X11 input, server-owned
+combat/death/static collision, bounded fixed-step timer, GPU interpolation and
+replay. This remains a same-process development authority fixture. Next connect
+separate encrypted Quinn authority to the renderer's readonly presentation data;
+accounts/persistence, navigation/mesh collision and general client features remain
+open. No milestone completion or scale claim is implied.

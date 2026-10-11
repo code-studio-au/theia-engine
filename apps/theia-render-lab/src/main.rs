@@ -1,5 +1,6 @@
 mod asset;
 mod authority;
+mod authority_demo;
 mod bundle_streaming;
 mod camera;
 mod gpu;
@@ -21,9 +22,9 @@ use std::{
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::WindowEvent,
+    event::{ElementState, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    keyboard::{Key, NamedKey},
+    keyboard::{Key, KeyCode, NamedKey, PhysicalKey},
     window::{Window, WindowId},
 };
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -47,6 +48,8 @@ enum RenderMode {
 #[derive(Default)]
 struct Options {
     authority_alpha: Option<f32>,
+    authority_demo: bool,
+    authority_script: bool,
     no_validation: bool,
     gpu: Option<String>,
     frames: Option<u64>,
@@ -95,6 +98,14 @@ impl Options {
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
+                "--authority-script-reference" => {
+                    if args.next().is_some() {
+                        return Err("Unexpected script reference argument".into());
+                    }
+                    println!("{}", authority_demo::script_reference()?);
+                    std::process::exit(0);
+                }
+                "--authority-script" => result.authority_script = true,
                 "--authority-alpha" => {
                     result.authority_alpha = Some(
                         args.next()
@@ -390,8 +401,12 @@ impl Options {
                     result.frames = Some(count);
                 }
                 "--mesh-only" | "--clear-only" | "--direct-task" | "--spatial-test"
-                | "--visibility-test" | "--authority-test" => {
+                | "--visibility-test" | "--authority-test" | "--authority-demo" => {
                     let mode = match arg.as_str() {
+                        "--authority-demo" => {
+                            result.authority_demo = true;
+                            RenderMode::Authority
+                        }
                         "--authority-test" => RenderMode::Authority,
                         "--mesh-only" => RenderMode::MeshOnly,
                         "--clear-only" => RenderMode::Clear,
@@ -491,7 +506,7 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU task/mesh qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU task/mesh qualification\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -642,6 +657,15 @@ impl Options {
                     .into(),
             );
         }
+        if result.authority_script && !result.authority_demo {
+            return Err("--authority-script requires --authority-demo".into());
+        }
+        if result.authority_demo && result.authority_alpha.is_some() {
+            return Err(
+                "--authority-demo owns its presentation clock; alpha is only for --authority-test"
+                    .into(),
+            );
+        }
         if result.render_mode() == RenderMode::Authority {
             authority::fixture(result.authority_alpha.unwrap_or(0.5))?;
         } else if result.authority_alpha.is_some() {
@@ -667,6 +691,8 @@ struct App {
     restore: Option<Instant>,
     failure: Option<String>,
     occluded: bool,
+    authority_demo: Option<authority_demo::Demo>,
+    authority_started: Instant,
 }
 impl App {
     fn fail(&mut self, event_loop: &ActiveEventLoop, error: impl ToString) {
@@ -687,7 +713,9 @@ impl ApplicationHandler for App {
             let window = Arc::new(
                 event_loop.create_window(
                     Window::default_attributes()
-                        .with_title(if self.options.render_mode() == RenderMode::Authority {
+                        .with_title(if self.options.authority_demo {
+                            "Theia — local authority demo (WASD/arrows, Space attack)"
+                        } else if self.options.render_mode() == RenderMode::Authority {
                             "Theia Render Lab — authoritative snapshot fixture"
                         } else {
                             "Theia Render Lab — M0-D mesh triangle"
@@ -695,8 +723,11 @@ impl ApplicationHandler for App {
                         .with_inner_size(PhysicalSize::new(960, 540)),
                 )?,
             );
-            let renderer =
+            let mut renderer =
                 gpu::Renderer::new(window.clone(), &self.options, self.validation.clone())?;
+            if let Some(demo) = &self.authority_demo {
+                renderer.authority_push(demo.push()?)?;
+            }
             Ok((window, renderer))
         })();
         match result {
@@ -720,6 +751,30 @@ impl ApplicationHandler for App {
                 if event.logical_key == Key::Named(NamedKey::Escape) =>
             {
                 event_loop.exit()
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                if let Some(demo) = &mut self.authority_demo {
+                    let pressed = event.state == ElementState::Pressed;
+                    match event.physical_key {
+                        PhysicalKey::Code(KeyCode::KeyA) => demo.direction(0, pressed),
+                        PhysicalKey::Code(KeyCode::ArrowLeft) => demo.direction(4, pressed),
+                        PhysicalKey::Code(KeyCode::KeyD) => demo.direction(1, pressed),
+                        PhysicalKey::Code(KeyCode::ArrowRight) => demo.direction(5, pressed),
+                        PhysicalKey::Code(KeyCode::KeyW) => demo.direction(2, pressed),
+                        PhysicalKey::Code(KeyCode::ArrowUp) => demo.direction(6, pressed),
+                        PhysicalKey::Code(KeyCode::KeyS) => demo.direction(3, pressed),
+                        PhysicalKey::Code(KeyCode::ArrowDown) => demo.direction(7, pressed),
+                        PhysicalKey::Code(KeyCode::Space) if pressed && !event.repeat => {
+                            demo.attack()
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            WindowEvent::Focused(false) => {
+                if let Some(demo) = &mut self.authority_demo {
+                    demo.release_input();
+                }
             }
             WindowEvent::Resized(size) => {
                 println!("Window resized: {}x{}", size.width, size.height);
@@ -781,6 +836,12 @@ impl ApplicationHandler for App {
                         self.fail(event_loop, error);
                         return;
                     }
+                    if let Some(demo) = &self.authority_demo
+                        && let Err(error) = demo.verify()
+                    {
+                        self.fail(event_loop, error);
+                        return;
+                    }
                     println!("Presented {} frames", self.frames);
                     event_loop.exit();
                 }
@@ -789,9 +850,34 @@ impl ApplicationHandler for App {
         }
     }
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(demo) = &mut self.authority_demo {
+            let result = demo
+                .advance(self.authority_started.elapsed())
+                .and_then(|()| demo.push());
+            match result {
+                Ok(bytes) => {
+                    if let Some(renderer) = &mut self.renderer
+                        && let Err(error) = renderer.authority_push(bytes)
+                    {
+                        self.fail(event_loop, error);
+                        return;
+                    }
+                }
+                Err(error) => {
+                    self.fail(event_loop, error);
+                    return;
+                }
+            }
+        }
+        let authority_deadline = self
+            .authority_demo
+            .as_ref()
+            .and_then(|demo| self.authority_started.checked_add(demo.next_tick()));
         if let Some(deadline) = self.restore {
             if Instant::now() < deadline {
-                event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
+                event_loop.set_control_flow(ControlFlow::WaitUntil(
+                    authority_deadline.map_or(deadline, |tick| tick.min(deadline)),
+                ));
                 return;
             }
             self.restore = None;
@@ -805,7 +891,8 @@ impl ApplicationHandler for App {
                 renderer.recreate = true;
             }
         }
-        event_loop.set_control_flow(ControlFlow::Wait);
+        event_loop
+            .set_control_flow(authority_deadline.map_or(ControlFlow::Wait, ControlFlow::WaitUntil));
         if !self.occluded
             && let Some(window) = &self.window
         {
@@ -822,6 +909,10 @@ impl ApplicationHandler for App {
 fn main() -> Result<()> {
     let options = Options::parse()?;
     let validation = Arc::new(gpu::Validation::default());
+    let authority_demo = options
+        .authority_demo
+        .then(|| authority_demo::Demo::new(options.authority_script))
+        .transpose()?;
     let mut app = App {
         options,
         validation: validation.clone(),
@@ -831,6 +922,8 @@ fn main() -> Result<()> {
         restore: None,
         failure: None,
         occluded: false,
+        authority_demo,
+        authority_started: Instant::now(),
     };
     let result = EventLoop::new()?.run_app(&mut app);
     app.shutdown();

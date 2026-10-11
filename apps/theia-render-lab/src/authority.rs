@@ -84,24 +84,7 @@ pub fn fixture(alpha: f32) -> Result<Fixture> {
     let frame = replica
         .present(time, 4)?
         .ok_or("No authority presentation")?;
-    let mut bytes = [0u8; 64];
-    for (base, states) in [(0, &previous), (16, &current)] {
-        for (i, state) in states.iter().enumerate() {
-            for (axis, value) in state.position_mm.iter().enumerate() {
-                let offset = base + i * 8 + axis * 4;
-                bytes[offset..offset + 4].copy_from_slice(&(*value as f32).to_ne_bytes());
-            }
-        }
-    }
-    for (i, id) in ids.iter().enumerate() {
-        let offset = 32 + i * 8;
-        let value = id.value();
-        bytes[offset..offset + 4].copy_from_slice(&(value as u32).to_ne_bytes());
-        bytes[offset + 4..offset + 8].copy_from_slice(&((value >> 32) as u32).to_ne_bytes());
-        bytes[48 + i * 4..52 + i * 4].copy_from_slice(&current[i].health.to_ne_bytes());
-    }
-    bytes[56..60].copy_from_slice(&alpha.to_ne_bytes());
-    bytes[60..64].copy_from_slice(&3u32.to_ne_bytes());
+    let bytes = pack(&previous, &current, alpha)?;
     let actors: Vec<_> = frame.actors.iter().map(|v| {
         let folded = (v.id.value() as u32) ^ ((v.id.value() >> 32) as u32);
         let base = if folded & 2 != 0 { [0.1, 0.8, 0.2] } else { [0.8, 0.2, 0.1] };
@@ -115,9 +98,88 @@ pub fn fixture(alpha: f32) -> Result<Fixture> {
         "background":[0.025,0.07,0.12],"push_bytes":bytes.to_vec(),"source":"server-owned fixed movement/combat ticks; readonly presentation oracle"}),
     })
 }
+/// Fixed two-actor mesh push profile. Match previous positions by logical ID;
+/// missing actors/observed respawns snap instead of blending unrelated rows.
+pub fn pack(
+    previous: &[theia_sim::ActorState],
+    current: &[theia_sim::ActorState],
+    alpha: f32,
+) -> Result<[u8; 64]> {
+    if !alpha.is_finite()
+        || !(0.0..=1.0).contains(&alpha)
+        || current.len() != 2
+        || previous.len() > 2
+    {
+        return Err("Invalid fixed authority push profile".into());
+    }
+    for states in [previous, current] {
+        if states.windows(2).any(|v| v[0].id >= v[1].id)
+            || states.iter().any(|v| {
+                v.position_mm
+                    .iter()
+                    .any(|p| !(-1_000_000..=1_000_000).contains(p))
+                    || v.health > 1_000_000
+            })
+        {
+            return Err("Invalid canonical authority push state".into());
+        }
+    }
+    let mut bytes = [0u8; 64];
+    let mut mask = 0u32;
+    for (i, state) in current.iter().enumerate() {
+        let old = previous
+            .binary_search_by_key(&state.id, |v| v.id)
+            .ok()
+            .map(|index| previous[index]);
+        let blend = old.is_some_and(|v| v.health != 0 || state.health == 0);
+        if blend {
+            mask |= 1 << i;
+        }
+        let previous_position = old.map_or(state.position_mm, |v| v.position_mm);
+        for (base, position) in [(0, previous_position), (16, state.position_mm)] {
+            for (axis, value) in position.iter().enumerate() {
+                let offset = base + i * 8 + axis * 4;
+                bytes[offset..offset + 4].copy_from_slice(&(*value as f32).to_ne_bytes());
+            }
+        }
+        let value = state.id.value();
+        let offset = 32 + i * 8;
+        bytes[offset..offset + 4].copy_from_slice(&(value as u32).to_ne_bytes());
+        bytes[offset + 4..offset + 8].copy_from_slice(&((value >> 32) as u32).to_ne_bytes());
+        bytes[48 + i * 4..52 + i * 4].copy_from_slice(&state.health.to_ne_bytes());
+    }
+    bytes[56..60].copy_from_slice(&alpha.to_ne_bytes());
+    bytes[60..64].copy_from_slice(&mask.to_ne_bytes());
+    Ok(bytes)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn previous_rows_match_logical_ids_and_observed_respawns_snap() {
+        use theia_sim::ActorState;
+        let state = |id, x, health| ActorState {
+            id: WorldId::new(id).unwrap(),
+            position_mm: [x, 0],
+            health,
+        };
+        let old = [state(1, 10, 0), state(3, 30, 100)];
+        let current = [state(1, 100, 100), state(2, 200, 100)];
+        let bytes = pack(&old, &current, 0.5).unwrap();
+        assert_eq!(u32::from_ne_bytes(bytes[60..64].try_into().unwrap()), 0);
+        assert_eq!(f32::from_ne_bytes(bytes[8..12].try_into().unwrap()), 200.0);
+        let old = [state(1, 10, 100), state(3, 30, 100)];
+        assert_eq!(
+            u32::from_ne_bytes(
+                pack(&old, &current, 0.5).unwrap()[60..64]
+                    .try_into()
+                    .unwrap()
+            ),
+            1
+        );
+        assert!(pack(&old, &[current[0]; 2], 0.5).is_err());
+        assert!(pack(&old, &current, f32::NAN).is_err());
+    }
     #[test]
     fn server_fixture_packing_preserves_large_ids_health_and_interpolation() {
         for (alpha, x) in [(0.0, -850.0), (0.5, -775.0), (1.0, -700.0)] {
