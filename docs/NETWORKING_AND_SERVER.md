@@ -299,3 +299,22 @@ uses the local demo's central static rectangle and actor spawns at Y=-1000 mm.
 Both use the existing 50 ms/100 health/250 mm actor footprint/4000 mm half-world
 prototype rules. No configurable production scene, account authorization,
 persistence or graphics connection is implemented by this listener unit.
+
+## M8 actual separate encrypted GPU viewer
+
+Render Lab accepts explicit loopback address/public certificate, verifies TLS and
+server-owned THN2 actor/target/profile bootstrap, then retains readonly full
+snapshots from that exact connection. Its live mode creates no local `World`.
+A separate single-thread Tokio worker sends movement at the prototype 50 ms
+cadence and coalesces one pending attack behind one in-flight reliable request.
+Retries reuse the same request ID until completion; acknowledged outcomes are
+checked against bootstrap identity. A failed/deadline-expired exchange closes
+this development connection rather than claiming cross-reconnect delivery.
+
+Two retained snapshots feed the existing 64-byte GPU push profile. Matching
+positions blend using bounded time since arrival; gaps above four ticks snap,
+latest health stays exact and there is no extrapolation/prediction or network
+clock estimator. Local-demo profile shows its known static rectangle; laboratory
+profile hides it. Unknown/disconnected identity clears actor geometry. This fixed
+two-actor/profile fixture is not a general streamed world/scene protocol.
+See [target-GPU evidence](validation/M8_NETWORK_VIEWER.md).

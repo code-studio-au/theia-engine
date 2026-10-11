@@ -92,7 +92,7 @@ impl Replica {
     pub fn latest(&self) -> Option<&Snapshot> {
         self.latest.as_ref()
     }
-    pub(crate) fn previous(&self) -> Option<&Snapshot> {
+    pub fn previous(&self) -> Option<&Snapshot> {
         self.previous.as_ref()
     }
     /// Full-set publication is atomic after validation. Empty full sets remove every actor.

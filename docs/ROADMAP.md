@@ -212,3 +212,10 @@ public-certificate verification, server-owned actor/profile assignment, connecti
 bound readonly snapshots, sequenced movement and delayed pairing. Next feed that
 live encrypted state to GPU presentation. General lifecycle/reconnect, account
 identity/persistence and scalable replication remain open.
+
+The parallel M8 separate encrypted GPU viewer now qualifies two independent
+clients, physical input/server-owned combat, bounded readonly presentation,
+profile geometry, disconnect clearing and Vulkan/RenderDoc evidence. Next apply
+the bounded post-handshake packet-fault relay to the live viewer before expanding
+replication. Accounts, deltas/baseline repair, reconnect/persistence and scale
+remain open; this does not close M7/M8 or deferred M4/M5 work.

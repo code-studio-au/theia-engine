@@ -15,7 +15,7 @@ import subprocess
 import time
 
 
-def qualify(output):
+def qualify(output, network=False):
     if os.name != 'posix' or not os.environ.get('DISPLAY'):
         raise RuntimeError('This qualification requires a Linux X11 DISPLAY')
     x = c.CDLL(ctypes.util.find_library('X11'))
@@ -48,6 +48,9 @@ def qualify(output):
     get_focus(display, c.byref(previous_focus), c.byref(previous_revert))
     held = set()
     process = None
+    companion = None
+    server = None
+    extra_logs = []
     window = None
     output.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -67,8 +70,26 @@ def qualify(output):
                     free(data)
         executable = Path('apps/theia-render-lab/target/debug/theia-render-lab').resolve()
         with output.open('w') as log:
-            process = subprocess.Popen([str(executable), '--gpu', '7900', '--authority-demo', '--frames', '600'],
-                stdout=log, stderr=subprocess.STDOUT)
+            arguments = [str(executable), '--gpu', '7900', '--authority-demo', '--frames', '600']
+            if network:
+                server_log = output.with_name(output.stem+'-server.log')
+                extra_logs.append(server_log.open('w'))
+                server = subprocess.Popen(['apps/theia-network-lab/target/debug/theia-network-lab','--serve'],stdout=extra_logs[-1],stderr=subprocess.STDOUT)
+                deadline = time.monotonic()+10
+                ready = None
+                while time.monotonic()<deadline and server.poll() is None:
+                    lines = server_log.read_text().splitlines()
+                    if lines:
+                        try:
+                            ready = __import__('json').loads(lines[0])
+                            break
+                        except ValueError:
+                            pass
+                    time.sleep(.02)
+                if ready is None:
+                    raise RuntimeError('Listener did not publish readiness')
+                arguments = [str(executable),'--gpu','7900','--network-client',ready['address'],'--network-certificate',ready['certificate'],'--frames','600']
+            process = subprocess.Popen(arguments,stdout=log,stderr=subprocess.STDOUT)
             deadline = time.monotonic() + 10
             window = None
             while time.monotonic() < deadline and process.poll() is None:
@@ -80,6 +101,15 @@ def qualify(output):
                 time.sleep(.02)
             if window is None:
                 raise RuntimeError('Cannot identify exactly one window belonging to our demo PID')
+            if network:
+                companion_log = output.with_name(output.stem+'-companion.log')
+                extra_logs.append(companion_log.open('w'))
+                companion = subprocess.Popen([str(executable),'--gpu','7900','--network-client',ready['address'],'--network-certificate',ready['certificate'],'--frames','660'],stdout=extra_logs[-1],stderr=subprocess.STDOUT)
+                deadline = time.monotonic()+5
+                while 'Verified server assigned actor 10' not in output.read_text() and time.monotonic()<deadline:
+                    time.sleep(.02)
+                if 'Verified server assigned actor 10' not in output.read_text():
+                    raise RuntimeError('Input target did not receive expected server actor assignment')
             focus(display, window, 2, 0)
             sync(display, False)
             time.sleep(.05)
@@ -107,9 +137,17 @@ def qualify(output):
             if process.wait(timeout=20) != 0:
                 raise RuntimeError('Demo failed; see '+str(output))
         text = output.read_text()
-        if '4 hits' not in text or 'target health 0' not in text or '0 warnings, 0 errors' not in text:
+        gameplay_ok = ('4 hits' in text and 'target health 0' in text)
+        if network:
+            if companion.wait(timeout=20)!=0 or server.wait(timeout=10)!=0:
+                raise RuntimeError('Companion viewer or independent listener failed')
+            server_text = server_log.read_text()
+            gameplay_ok = '4 acknowledged outcomes' in text and 'hits: 4' in server_text and 'health: [100, 0]' in server_text
+            if '0 warnings, 0 errors' not in companion_log.read_text():
+                raise RuntimeError('Companion Vulkan diagnostics')
+        if not gameplay_ok or '0 warnings, 0 errors' not in text:
             raise RuntimeError('Native key events did not produce four authoritative hits/death: '+text)
-        print('XTest X11 D/Space press/release events reached the Rust input/authority path; four hits/death and zero Vulkan diagnostics. Log:', output)
+        print('XTest D/Space qualified', 'separate encrypted authority and two GPU viewers' if network else 'local Rust authority', '; four hits/death and zero Vulkan diagnostics. Log:', output)
     finally:
         for code in held:
             fake(display, code, False, 0)
@@ -126,10 +164,22 @@ def qualify(output):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait()
+        for other in [companion, server]:
+            if other is not None and other.poll() is None:
+                other.terminate()
+                try:
+                    other.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    other.kill()
+                    other.wait()
+        for handle in extra_logs:
+            handle.close()
         close(display)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=Path('build/qualification/m7-interactive-native-input.log'))
-    qualify(parser.parse_args().output)
+    parser.add_argument('--network',action='store_true',help='spawn separate encrypted authority plus a second GPU viewer')
+    args=parser.parse_args()
+    qualify(args.output,args.network)

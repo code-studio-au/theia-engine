@@ -6,6 +6,7 @@ mod camera;
 mod gpu;
 mod indirect;
 mod lod_reference;
+mod network;
 mod pipeline;
 mod spatial;
 mod streaming;
@@ -47,6 +48,8 @@ enum RenderMode {
 
 #[derive(Default)]
 struct Options {
+    network_address: Option<std::net::SocketAddr>,
+    network_certificate: Option<std::path::PathBuf>,
     authority_alpha: Option<f32>,
     authority_demo: bool,
     authority_script: bool,
@@ -98,6 +101,23 @@ impl Options {
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
+                "--network-client" => {
+                    result.network_address = Some(
+                        args.next()
+                            .ok_or("--network-client needs loopback address")?
+                            .parse()?,
+                    );
+                    if result.mode.replace(RenderMode::Authority).is_some() {
+                        return Err("Network client is a separate render mode".into());
+                    }
+                }
+                "--network-certificate" => {
+                    result.network_certificate = Some(
+                        args.next()
+                            .ok_or("--network-certificate needs public DER file")?
+                            .into(),
+                    )
+                }
                 "--authority-script-reference" => {
                     if args.next().is_some() {
                         return Err("Unexpected script reference argument".into());
@@ -506,7 +526,7 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU task/mesh qualification\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU task/mesh qualification\n  --network-client <loopback address> --network-certificate <public DER>  live readonly GPU viewer\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -657,6 +677,20 @@ impl Options {
                     .into(),
             );
         }
+        if let Some(network_address) = result.network_address {
+            if result.network_certificate.is_none()
+                || result.authority_alpha.is_some()
+                || result.authority_demo
+                || result.authority_script
+            {
+                return Err("Network client needs its public certificate and owns input/time; do not combine local authority flags".into());
+            }
+            if !network_address.ip().is_loopback() {
+                return Err("Network client fixture must target loopback".into());
+            }
+        } else if result.network_certificate.is_some() {
+            return Err("--network-certificate requires --network-client".into());
+        }
         if result.authority_script && !result.authority_demo {
             return Err("--authority-script requires --authority-demo".into());
         }
@@ -666,7 +700,7 @@ impl Options {
                     .into(),
             );
         }
-        if result.render_mode() == RenderMode::Authority {
+        if result.render_mode() == RenderMode::Authority && result.network_address.is_none() {
             authority::fixture(result.authority_alpha.unwrap_or(0.5))?;
         } else if result.authority_alpha.is_some() {
             return Err("--authority-alpha requires --authority-test".into());
@@ -693,6 +727,8 @@ struct App {
     occluded: bool,
     authority_demo: Option<authority_demo::Demo>,
     authority_started: Instant,
+    network: Option<network::Viewer>,
+    network_title: Option<String>,
 }
 impl App {
     fn fail(&mut self, event_loop: &ActiveEventLoop, error: impl ToString) {
@@ -713,7 +749,9 @@ impl ApplicationHandler for App {
             let window = Arc::new(
                 event_loop.create_window(
                     Window::default_attributes()
-                        .with_title(if self.options.authority_demo {
+                        .with_title(if self.options.network_address.is_some() {
+                            "Theia network viewer — Connecting"
+                        } else if self.options.authority_demo {
                             "Theia — local authority demo (WASD/arrows, Space attack)"
                         } else if self.options.render_mode() == RenderMode::Authority {
                             "Theia Render Lab — authoritative snapshot fixture"
@@ -727,6 +765,9 @@ impl ApplicationHandler for App {
                 gpu::Renderer::new(window.clone(), &self.options, self.validation.clone())?;
             if let Some(demo) = &self.authority_demo {
                 renderer.authority_push(demo.push()?)?;
+            }
+            if let Some(network) = &self.network {
+                renderer.authority_push(network.push()?.0)?;
             }
             Ok((window, renderer))
         })();
@@ -753,27 +794,43 @@ impl ApplicationHandler for App {
                 event_loop.exit()
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                if let Some(demo) = &mut self.authority_demo {
-                    let pressed = event.state == ElementState::Pressed;
-                    match event.physical_key {
-                        PhysicalKey::Code(KeyCode::KeyA) => demo.direction(0, pressed),
-                        PhysicalKey::Code(KeyCode::ArrowLeft) => demo.direction(4, pressed),
-                        PhysicalKey::Code(KeyCode::KeyD) => demo.direction(1, pressed),
-                        PhysicalKey::Code(KeyCode::ArrowRight) => demo.direction(5, pressed),
-                        PhysicalKey::Code(KeyCode::KeyW) => demo.direction(2, pressed),
-                        PhysicalKey::Code(KeyCode::ArrowUp) => demo.direction(6, pressed),
-                        PhysicalKey::Code(KeyCode::KeyS) => demo.direction(3, pressed),
-                        PhysicalKey::Code(KeyCode::ArrowDown) => demo.direction(7, pressed),
-                        PhysicalKey::Code(KeyCode::Space) if pressed && !event.repeat => {
-                            demo.attack()
-                        }
-                        _ => {}
+                let pressed = event.state == ElementState::Pressed;
+                let binding = match event.physical_key {
+                    PhysicalKey::Code(KeyCode::KeyA) => Some(0),
+                    PhysicalKey::Code(KeyCode::KeyD) => Some(1),
+                    PhysicalKey::Code(KeyCode::KeyW) => Some(2),
+                    PhysicalKey::Code(KeyCode::KeyS) => Some(3),
+                    PhysicalKey::Code(KeyCode::ArrowLeft) => Some(4),
+                    PhysicalKey::Code(KeyCode::ArrowRight) => Some(5),
+                    PhysicalKey::Code(KeyCode::ArrowUp) => Some(6),
+                    PhysicalKey::Code(KeyCode::ArrowDown) => Some(7),
+                    _ => None,
+                };
+                if let Some(binding) = binding {
+                    if let Some(demo) = &mut self.authority_demo {
+                        demo.direction(binding, pressed);
+                    }
+                    if let Some(network) = &self.network {
+                        network.direction(binding, pressed);
+                    }
+                } else if event.physical_key == PhysicalKey::Code(KeyCode::Space)
+                    && pressed
+                    && !event.repeat
+                {
+                    if let Some(demo) = &mut self.authority_demo {
+                        demo.attack();
+                    }
+                    if let Some(network) = &self.network {
+                        network.attack();
                     }
                 }
             }
             WindowEvent::Focused(false) => {
                 if let Some(demo) = &mut self.authority_demo {
                     demo.release_input();
+                }
+                if let Some(network) = &self.network {
+                    network.release_input();
                 }
             }
             WindowEvent::Resized(size) => {
@@ -842,6 +899,12 @@ impl ApplicationHandler for App {
                         self.fail(event_loop, error);
                         return;
                     }
+                    if let Some(network) = &self.network
+                        && let Err(error) = network.verify()
+                    {
+                        self.fail(event_loop, error);
+                        return;
+                    }
                     println!("Presented {} frames", self.frames);
                     event_loop.exit();
                 }
@@ -861,6 +924,28 @@ impl ApplicationHandler for App {
                     {
                         self.fail(event_loop, error);
                         return;
+                    }
+                }
+                Err(error) => {
+                    self.fail(event_loop, error);
+                    return;
+                }
+            }
+        }
+        if let Some(network) = &self.network {
+            match network.push() {
+                Ok((bytes, title)) => {
+                    if let Some(renderer) = &mut self.renderer
+                        && let Err(error) = renderer.authority_push(bytes)
+                    {
+                        self.fail(event_loop, error);
+                        return;
+                    }
+                    if self.network_title.as_ref() != Some(&title) {
+                        if let Some(window) = &self.window {
+                            window.set_title(&format!("Theia network viewer — {title}"));
+                        }
+                        self.network_title = Some(title);
                     }
                 }
                 Err(error) => {
@@ -913,6 +998,12 @@ fn main() -> Result<()> {
         .authority_demo
         .then(|| authority_demo::Demo::new(options.authority_script))
         .transpose()?;
+    let network = options
+        .network_address
+        .map(|address| {
+            network::Viewer::new(address, options.network_certificate.as_deref().unwrap())
+        })
+        .transpose()?;
     let mut app = App {
         options,
         validation: validation.clone(),
@@ -924,6 +1015,8 @@ fn main() -> Result<()> {
         occluded: false,
         authority_demo,
         authority_started: Instant::now(),
+        network,
+        network_title: None,
     };
     let result = EventLoop::new()?.run_app(&mut app);
     app.shutdown();

@@ -6,8 +6,12 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shlex
 import time
 import traceback
+
+children = []
+child_logs = []
 import renderdoc as rd
 
 
@@ -29,12 +33,47 @@ def qualify(report, output):
         executable = executable.with_suffix('.exe')
     alpha = float(os.environ.get('THEIA_AUTHORITY_ALPHA', '.5'))
     scripted = os.environ.get('THEIA_AUTHORITY_SCRIPT') == '1'
+    network = os.environ.get('THEIA_AUTHORITY_NETWORK') == '1'
+    unpaired = os.environ.get('THEIA_AUTHORITY_UNPAIRED') == '1'
+    laboratory = os.environ.get('THEIA_AUTHORITY_LABORATORY') == '1'
+    closed = os.environ.get('THEIA_AUTHORITY_CLOSED') == '1'
+    if scripted and network:
+        raise RuntimeError('Select local script or network capture')
     reference_args = ['--authority-script-reference'] if scripted else ['--authority-reference', str(alpha)]
     reference = json.loads(subprocess.check_output([str(executable), *reference_args], text=True).splitlines()[-1])
+    ready = None
+    if network:
+        server_log = output/'server.log'
+        child_logs.append(server_log.open('w'))
+        server_args = [str(root/'apps/theia-network-lab/target/debug/theia-network-lab'), '--serve', '--certificate', str(output/'localhost.der')]
+        if os.name == 'nt': server_args[0] += '.exe'
+        if laboratory: server_args.append('--laboratory-profile')
+        children.append(subprocess.Popen(server_args, stdout=child_logs[-1], stderr=subprocess.STDOUT))
+        deadline = time.monotonic()+10
+        while time.monotonic()<deadline and children[-1].poll() is None:
+            lines=server_log.read_text().splitlines()
+            if lines:
+                try: ready=json.loads(lines[0]);break
+                except ValueError: pass
+            time.sleep(.02)
+        if ready is None: raise RuntimeError('Network listener did not publish readiness')
+        network_args = ['--network-client',ready['address'],'--network-certificate',ready['certificate']]
+        if not unpaired:
+            child_logs.append((output/'companion.log').open('w'))
+            children.append(subprocess.Popen([str(executable),'--gpu','7900',*network_args,'--frames','30' if closed else '240'],stdout=child_logs[-1],stderr=subprocess.STDOUT))
+        y=0 if laboratory else -1000
+        reference={'actors':[] if unpaired or closed else [
+            {'id':10,'position_mm':[-1000,y],'health':100,'color':[.1,.8,.2],'half_extent_mm':250},
+            {'id':20,'position_mm':[1000,y],'health':100,'color':[.8,.2,.1],'half_extent_mm':250}],
+            'obstacle':None if laboratory or unpaired or closed else {'position_mm':[0,0],'half_extent_mm':100,'color':[.3,.3,.3]},
+            'background':[.025,.07,.12],'source':'server-selected fixed initial profile; zero movement controls'}
     options = rd.CaptureOptions()
     options.apiValidation = False
     options.debugOutputMute = False
     arguments = '--gpu 7900 --authority-demo --authority-script --frames 600 --no-validation' if scripted else f'--gpu 7900 --authority-test --authority-alpha {alpha} --frames 180 --no-validation'
+    if network:
+        arguments_list=['--gpu','7900',*network_args,'--frames','180','--no-validation']
+        arguments=subprocess.list2cmdline(arguments_list) if os.name=='nt' else ' '.join(shlex.quote(value) for value in arguments_list)
     result = rd.ExecuteAndInject(str(executable), str(root), arguments,
         [], str(output / 'authority'), options, False)
     require(result.result)
@@ -43,7 +82,7 @@ def qualify(report, output):
         raise RuntimeError('Cannot connect to capture target')
     capture = None
     try:
-        target.QueueCapture(300 if scripted else 10, 1)
+        target.QueueCapture(300 if scripted else 120 if closed else 60 if network else 10, 1)
         deadline = time.monotonic() + 30
         while target.Connected() and time.monotonic() < deadline:
             message = target.ReceiveMessage(None)
@@ -73,7 +112,7 @@ def qualify(report, output):
             raise RuntimeError('Unexpected four-byte swapchain pixel layout')
         def srgb(value):
             return round((value * 12.92 if value <= .0031308 else 1.055 * value ** (1/2.4) - .055) * 255)
-        rectangles = reference['actors'] + [reference['obstacle']]
+        rectangles = reference['actors'] + ([reference['obstacle']] if reference['obstacle'] is not None else [])
         counts = [0, 0, 0, 0]
         checked = 0
         # Dense sampled interior/exterior coverage. Omit a one-pixel boundary band;
@@ -103,13 +142,14 @@ def qualify(report, output):
                     raise RuntimeError(f'Authority raster mismatch at {(x,y)}: {actual}, expected {expected}')
                 counts[chosen] += 1
                 checked += 1
-        if min(counts) < 10:
-            raise RuntimeError(f'Insufficient actor/obstacle/background coverage: {counts}')
+        required = [counts[i] for i in range(len(rectangles))]+[counts[3]]
+        if min(required) < 10:
+            raise RuntimeError(f'Insufficient expected geometry/background coverage: {counts}')
         save = rd.TextureSave()
         save.resourceId = color.resourceId
         save.destType = rd.FileType.PNG
         require(controller.SaveTexture(save, str(output/'replay.png')))
-        report.update(capture=capture, alpha=None if scripted else alpha, scripted=scripted, mesh_groups=[3,1,1], sampled_pixels=checked,
+        report.update(capture=capture, alpha=None if scripted else alpha, scripted=scripted, network=network, unpaired=unpaired, laboratory=laboratory, closed=closed, mesh_groups=[3,1,1], sampled_pixels=checked,
             actor_obstacle_background_counts=counts, reference=reference, replay_verified=True)
     finally:
         if controller is not None:
@@ -126,5 +166,11 @@ except Exception:
     report['error'] = traceback.format_exc()
     code = 1
 finally:
+    for child in children:
+        if child.poll() is None:
+            child.terminate()
+            try: child.wait(timeout=3)
+            except subprocess.TimeoutExpired: child.kill();child.wait()
+    for log in child_logs: log.close()
     (output/'report.json').write_text(json.dumps(report,indent=2)+'\n')
 os._exit(code)

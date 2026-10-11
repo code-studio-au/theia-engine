@@ -18,9 +18,15 @@ struct Vertex {
 [outputtopology("triangle")]
 void authorityMesh(uint lane : SV_GroupIndex, uint3 group : SV_GroupID,
                    out vertices Vertex vertices[4], out indices uint3 triangles[2]) {
+    uint index = group.x;
+    uint2 id = index == 0 ? presentation.logicalIds.xy : presentation.logicalIds.zw;
+    // Zero identity denotes no received actor; profile 0 has no static obstacle.
+    if ((index < 2 && all(id == uint2(0,0))) || (index == 2 && (presentation.blendMask & 0x80000000u) != 0)) {
+        SetMeshOutputCounts(0,0); return;
+    }
     SetMeshOutputCounts(4,2);
     if (lane == 0) {
-        uint index = group.x;
+
         float2 center = float2(0,0);
         float halfExtent = 100.0;
         float3 color = float3(0.3,0.3,0.3);
@@ -30,7 +36,7 @@ void authorityMesh(uint lane : SV_GroupIndex, uint3 group : SV_GroupID,
             float alpha = (presentation.blendMask & (1u << index)) != 0 ? presentation.alpha : 1.0;
             center = lerp(previous,current,alpha);
             halfExtent = 250.0;
-            uint2 id = index == 0 ? presentation.logicalIds.xy : presentation.logicalIds.zw;
+
             uint health = presentation.health[index];
             float3 base = ((id.x ^ id.y) & 2u) != 0 ? float3(0.1,0.8,0.2) : float3(0.8,0.2,0.1);
             color = health == 0 ? float3(0.15,0.15,0.15) : base * min(float(health)/100.0,1.0);

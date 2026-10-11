@@ -650,3 +650,28 @@ output only. No private key is written. Two successful peers are required; one
 closing ends the pair. Probe commands validate assigned actor movement/readonly
 state, then exit. This unit does not yet start a graphics client.
 [Bootstrap evidence](validation/M8_NETWORK_LISTENER.md).
+
+## Separate encrypted GPU viewers
+
+Build both labs and shaders first, start `theia-network-lab --serve`, then use its
+printed address/public certificate in **two** Render Lab processes:
+
+```sh
+cargo run --locked --manifest-path apps/theia-render-lab/Cargo.toml -- --network-client 127.0.0.1:PORT --network-certificate /path/to/localhost.der
+# Repeatable desktop/GPU qualification after building both labs:
+python3 tools/qualify_network_viewer.py --wsi
+python3 tools/qualify_network_viewer.py --laboratory --output build/qualification/network-viewer-lab
+python3 tools/qualify_authority_input.py --network --output build/qualification/network-input.log
+THEIA_AUTHORITY_NETWORK=1 THEIA_CAPTURE_OUTPUT="$PWD/build/qualification/network-capture" qrenderdoc --python tools/renderdoc_authority_qualify.py
+```
+
+WASD/arrows and Space send intents to the separate authority. The listener waits
+for two peers; closing either ends the pair. Certificates contain only the public
+DER trust anchor; no signing key is saved. Live mode owns its input/arrival clock
+and cannot combine local authority modes/alpha. Before bootstrap or after closure
+it displays no actors. Replay variants use `THEIA_AUTHORITY_LABORATORY=1`,
+`THEIA_AUTHORITY_UNPAIRED=1` or `THEIA_AUTHORITY_CLOSED=1` alongside NETWORK.
+Unpaired replay checks empty geometry; the application's no-snapshot completion
+check deliberately fails. These helpers require a qualified GPU/desktop; CI only
+builds/lints/tests and executes CPU/network fixtures. Native input is X11-only.
+[Evidence and limits](validation/M8_NETWORK_VIEWER.md).

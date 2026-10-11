@@ -4,6 +4,26 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 separate encrypted GPU viewers — independently executed (2026-10-11)
+
+Render Lab `--network-client` now connects to the separate Quinn listener using
+its verified public certificate. Server-owned bootstrap selects actor/target and
+scene profile; readonly snapshots feed one 64-byte push/three-group mesh draw.
+A bounded network thread sends directional intents and one reliable request at
+a time. The live path creates no local gameplay `World`. Unknown/closed actor
+identities and absent scene geometry produce no mesh output.
+
+Two RX 7900 XTX viewers pass 180 frames and separate 120-frame/ten-generation WSI
+runs with zero diagnostics. Native keyboard input produces four acknowledged
+server hits/death over 600 frames. Five RenderDoc replays verify fixed/live demo/
+laboratory/unpaired/closed pixels, including empty state and profile geometry.
+Renderer/protocol tests pass 22/16; formatting/Clippy and both 31-output shader
+variants pass. Fixed/indirect WSI and preserved 256-value compute regressions pass.
+Seven invalid startup cases reject before surface creation. Windows/Wayland/hosted
+CI unexecuted. No WAN/load, account authentication, deltas, reconnect, persistence
+or performance claim. M7/M8 remain open. Next qualify the live viewer under bounded
+post-handshake packet faults. [Evidence](validation/M8_NETWORK_VIEWER.md).
+
 ## M8 separate listener and actor bootstrap — independently executed (2026-10-11)
 
 `theia-network-lab --serve` binds localhost and writes only its public DER

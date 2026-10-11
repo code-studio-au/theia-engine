@@ -881,11 +881,13 @@ impl Renderer {
         let ctx = Context::new(window, options, validation)?;
         let mut renderer = Self {
             authority: if options.render_mode() == RenderMode::Authority {
-                Some(if options.authority_demo {
-                    [0; 64]
-                } else {
-                    crate::authority::fixture(options.authority_alpha.unwrap_or(0.5))?.bytes
-                })
+                Some(
+                    if options.authority_demo || options.network_address.is_some() {
+                        [0; 64]
+                    } else {
+                        crate::authority::fixture(options.authority_alpha.unwrap_or(0.5))?.bytes
+                    },
+                )
             } else {
                 None
             },

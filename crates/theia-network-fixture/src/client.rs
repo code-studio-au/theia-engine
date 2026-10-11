@@ -85,6 +85,9 @@ impl Client {
     pub fn samples(&self) -> u64 {
         self.samples
     }
+    pub fn previous(&self) -> Option<&Snapshot> {
+        self.replica.previous()
+    }
     pub fn latest(&self) -> Option<&Snapshot> {
         self.replica.latest()
     }
