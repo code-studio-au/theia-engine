@@ -608,11 +608,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "theia-network-fixture"
+version = "0.1.0"
+dependencies = [
+ "quinn",
+ "rcgen",
+ "theia-protocol",
+ "theia-sim",
+ "tokio",
+]
+
+[[package]]
 name = "theia-network-lab"
 version = "0.1.0"
 dependencies = [
  "quinn",
  "rcgen",
+ "theia-network-fixture",
  "theia-protocol",
  "theia-sim",
  "tokio",

@@ -1,11 +1,8 @@
 //! Encrypted two-client loopback qualification, not a production server/account service.
-mod client;
 mod proxy;
-mod server;
-mod tls;
-mod wire;
 use quinn::{Connection, Endpoint};
 use std::{error::Error, net::SocketAddr, time::Duration};
+use theia_network_fixture::{client, server, tls, wire};
 use theia_protocol::{Outcome, Reply};
 use theia_sim::{AttackInput, AttackReject, AttackResult, MoveInput, WorldId};
 use tokio::{sync::oneshot, time::timeout};

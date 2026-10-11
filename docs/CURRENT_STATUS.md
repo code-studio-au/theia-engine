@@ -4,6 +4,19 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 shared encrypted transport fixture — independently executed (2026-10-11)
+
+The already qualified strict wire, TLS configuration, two-actor authority loop
+and readonly client receiver now live in `crates/theia-network-fixture`; the
+network lab imports them. The bounded UDP fault proxy stays in the qualification
+app. This is explicitly a shared prototype fixture, not a production network API.
+
+Three shared codec tests and one app relay test pass; formatting/Clippy pass.
+Both direct/faulted encrypted runs preserve exactly two hits/health [75,75],
+certificate/ALPN rejection, request/ACK repair and readonly interpolation samples.
+No wire/security/gameplay behavior changed. Next add a separate listener/client
+bootstrap before connecting the viewer; live network presentation remains open.
+
 ## M7 interactive local authority demo — independently executed (2026-10-11)
 
 `--authority-demo` accepts physical WASD/arrows movement and Space attack requests;

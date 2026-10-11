@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        package: [apps/theia-gpu-test, apps/theia-render-lab, crates/theia-ecs, apps/theia-ecs-lab, crates/theia-assets, tools/theia-gltf-import, crates/theia-sim, crates/theia-protocol, apps/theia-server-lab, apps/theia-network-lab]
+        package: [apps/theia-gpu-test, apps/theia-render-lab, crates/theia-ecs, apps/theia-ecs-lab, crates/theia-assets, tools/theia-gltf-import, crates/theia-sim, crates/theia-protocol, crates/theia-network-fixture, apps/theia-server-lab, apps/theia-network-lab]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

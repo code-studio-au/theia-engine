@@ -626,3 +626,8 @@ owned. Run it in the qualified X11 desktop session. Replay captures the stable
 script result at frame 300 of 600; the selected display must allow at least 26
 fixed ticks before capture. Windows/Wayland input runtime remain unqualified.
 See [evidence and scheduler limits](validation/M7_INTERACTIVE_AUTHORITY.md).
+
+The shared encrypted fixture's strict codec tests now run with
+`cargo test --locked --manifest-path crates/theia-network-fixture/Cargo.toml`;
+the network executable retains its app-local relay test and direct/faulted runs.
+These are still bounded qualification APIs, not a production networking SDK.

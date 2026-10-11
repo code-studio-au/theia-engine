@@ -265,3 +265,12 @@ latency guarantee. Catchup caps at four steps/wake, logs skipped wall intervals
 and snaps presentation after a long stall. Source clocks remain explicit, rather
 than taking render-frame count as gameplay time. The independently qualified
 Quinn server lab remains separate; live network presentation is the next gate.
+
+## M8 shared qualification fixture ownership
+
+Existing strict wire, verified TLS configuration, two-actor authority loop and
+readonly client receiver are now shared through `crates/theia-network-fixture`.
+The executable imports those modules; the opaque fault relay stays app-local.
+This extraction preserves protocol/limits/gameplay behavior and is preparation
+for a separate listener and renderer client. It does not implement accounts,
+a production server API or a live graphics connection by itself.
