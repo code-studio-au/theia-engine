@@ -215,3 +215,23 @@ credential, server partition authority epoch, authentication or durable reconnec
 protocol. Both network-lab clients feed every consumed snapshot through the store
 and clear it at shutdown. Screen interpolation/extrapolation, clock synchronization,
 prediction, delta baseline/repair and renderer integration remain unimplemented.
+
+## M8 actual bounded presentation oracle
+
+Replica retention now moves the last accepted full set into a previous slot,
+keeping at most two sets (each capped at configured actor count and normalized
+allocation capacity). Rejected/stale/duplicate updates cannot change either
+endpoint; connection reset/disconnect clears both. `presentation::Time` keeps
+integer tick and finite [0,1) fraction separate. `Replica::present` consumes that
+explicit screen time without advancing simulation or assuming receive time equals
+server time. This is a bounded CPU reference for later GPU presentation.
+
+Positions for matching IDs interpolate between retained sets. Earlier/later
+screen times hold endpoints; no extrapolation. A caller-chosen 1..120 tick maximum
+gap guards long missing intervals by snapping to latest. Latest full-set membership
+and health remain current; new IDs snap, removed IDs disappear. An observed
+health-zero→positive transition snaps to latest to avoid blending a known respawn.
+A death/respawn wholly hidden by lost snapshots cannot be detected without future
+incarnation/version metadata. Teleport flags, collision-aware visual paths,
+network clock estimation, prediction and GPU renderer integration remain open.
+Interpolation may cut between legal positions and is never movement legality.

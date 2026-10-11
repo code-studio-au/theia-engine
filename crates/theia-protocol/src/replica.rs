@@ -42,6 +42,7 @@ pub struct Replica {
     source: Option<Source>,
     max_actors: usize,
     latest: Option<Snapshot>,
+    previous: Option<Snapshot>,
 }
 impl Replica {
     /// Prototype profile: sorted logical IDs, integer mm within +/-1M, health <=1M.
@@ -59,6 +60,7 @@ impl Replica {
             source: None,
             max_actors,
             latest: None,
+            previous: None,
         })
     }
     /// Bind a new locally owned transport connection and clear its predecessor's state.
@@ -74,6 +76,7 @@ impl Replica {
         self.next_connection = next;
         self.source = Some(source);
         self.latest = None;
+        self.previous = None;
         Ok(source)
     }
     pub fn disconnect(&mut self, source: Source) -> Result<(), Error> {
@@ -82,11 +85,15 @@ impl Replica {
         }
         self.source = None;
         self.latest = None;
+        self.previous = None;
         Ok(())
     }
     /// Borrowed immutable presentation input. Changing a copied value never changes authority.
     pub fn latest(&self) -> Option<&Snapshot> {
         self.latest.as_ref()
+    }
+    pub(crate) fn previous(&self) -> Option<&Snapshot> {
+        self.previous.as_ref()
     }
     /// Full-set publication is atomic after validation. Empty full sets remove every actor.
     /// Missing intermediate ticks need no baseline; no delta messages are accepted here.
@@ -131,7 +138,7 @@ impl Replica {
         // Discard caller spare capacity before retaining a complete set. The input
         // allocation is caller-owned; retained columns have exactly their live count.
         snapshot.actors = snapshot.actors.into_boxed_slice().into_vec();
-        self.latest = Some(snapshot);
+        self.previous = self.latest.replace(snapshot);
         Ok(Publication::New)
     }
 }

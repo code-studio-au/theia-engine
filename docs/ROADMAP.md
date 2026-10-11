@@ -187,3 +187,9 @@ bounded retention and local connection reset. Both encrypted modes use it. Next
 qualify bounded interpolation for presentation with explicit simulation/screen
 clock inputs; prediction, general deltas, lifecycle/account repair and renderer
 integration remain open.
+
+Bounded two-snapshot CPU presentation interpolation now passes explicit clock,
+logical-ID/lifecycle, health, gap/clamp and large-counter checks, and both encrypted
+lab modes sample received state. Next inspect renderer integration for a small
+verifiable presentation slice. Production GPU smoothing, network clock estimation,
+prediction, delta baselines and account/persistence remain open.

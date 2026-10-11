@@ -4,6 +4,22 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 bounded presentation interpolation — independently executed (2026-10-11)
+
+The readonly replica now retains two complete sets and provides a separate CPU
+presentation oracle. Explicit integer tick/fraction avoids large-clock precision
+loss. Matching logical-ID positions blend within retained endpoints; latest
+health/membership stay exact. New actors and observed dead-to-alive transitions
+snap to latest. Large gaps snap; outside-history times hold endpoints. No
+extrapolation, prediction, clock estimator or authority mutation is introduced.
+
+Four new tests bring the protocol suite to 16, including 3000 independent convex-
+weight comparisons, lifecycle/gap/reset checks and near-u64-max clock samples.
+Both encrypted modes pass sampled presentation from received state: direct
+88/16 samples and faulted 92/16, with two hits/health [75,75]. App tests (four),
+formatting/Clippy pass. This bounded CPU oracle is not a production GPU renderer.
+Next inspect and qualify a small renderer integration. [Evidence](validation/M8_PRESENTATION_INTERPOLATION.md).
+
 ## M8 readonly client snapshot publication — independently executed (2026-10-11)
 
 The transport-neutral `theia-protocol::replica` now publishes complete readonly

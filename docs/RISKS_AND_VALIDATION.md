@@ -34,3 +34,13 @@ This is an experimental GPU-first engine. **Consensus on an architecture is not 
 ## Correctness principles
 
 Use Vulkan validation and GPU-assisted validation in diagnostic builds (not perf baselines), diff GPU kernels vs CPU reference, test worst-case allocation pressure and stale handles, and maintain benchmark artifacts labelled with GPU driver/compiler versions. No phantom successes; only mark tests passed from observed logs.
+
+## Early authority/network reference evidence (2026-10-11)
+
+Bounded Rust movement/combat, independent request sequences, encrypted two-client
+Quinn IPv4 loopback, controlled post-handshake packet faults and readonly snapshot/
+CPU interpolation oracles now have local qualification logs. No WAN/load, accounts,
+persistence, general baseline repair, client prediction or renderer integration is
+qualified. Prototype units/tick/gap profiles are test settings, not locked network
+precision or cadence choices. IPv6 is disabled on the local host; Windows/hosted
+CI remain unexecuted. See CURRENT_STATUS and M7/M8 validation reports.

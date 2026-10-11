@@ -570,3 +570,9 @@ The network lab now routes consumed snapshots through the readonly replica in
 `theia-protocol::replica`. Its five tests run with the protocol suite. Connection
 reset clears previous state; older/conflicting snapshots cannot overwrite newer
 presentation data. See [client snapshot evidence](validation/M8_CLIENT_SNAPSHOTS.md).
+
+`theia-protocol::presentation` now provides explicit-clock bounded interpolation
+against the last two accepted complete snapshots. The protocol tests include
+3000 independent numeric samples; both network modes check finite readonly
+presentation samples. These sample times are test inputs, not a synchronized
+screen clock. See [evidence](validation/M8_PRESENTATION_INTERPOLATION.md).

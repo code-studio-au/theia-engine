@@ -354,6 +354,11 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
         report.rejected_moves,
         report.health
     );
+    println!(
+        "Readonly bounded interpolation: {} / {} explicit screen-time samples; latest logical IDs/health retained, no authority mutation or extrapolation.",
+        first_client.samples(),
+        second_client.samples()
+    );
     first_client.disconnect()?;
     second_client.disconnect()?;
     assert!(first_client.latest().is_none() && second_client.latest().is_none());
