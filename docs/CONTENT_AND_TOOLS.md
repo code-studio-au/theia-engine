@@ -80,3 +80,9 @@ changes qualify locally. Publication currently retires/rebuilds a graphics
 generation with device idle; general world streaming and allocation reuse remain
 open. Next qualify a bounded LOD error/selection contract alongside existing
 immutable bundle ownership, keeping advanced GI deferred.
+
+The bounded terrain LOD cooker now checks continuous vertical error using an
+exact rational triangle overlay after native simplification. It admits continuous
+rectangular XY heightfields, verifies coverage/shared-boundary continuity and
+records the exact fraction plus a conservative floating upper bound. General
+3D error/seams and projected-error selection remain open.

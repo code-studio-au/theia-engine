@@ -619,3 +619,33 @@ local RX 7900 XTX validation/replay. Existing geometry-only streaming and fixed
 render modes remain separate. General GPU allocation reuse, geometry arenas for
 whole bundles, multi-frame retirement, fallback scheduling, derivative/mip/tile
 residency and a streamed world database remain open.
+
+### Continuous rectangular heightfield error gate
+
+Offline `continuous_height_error.py` admits at most 2048 vertices/2048 triangles
+per surface, finite represented positions and positive XY winding. Both surfaces
+share the source position table. Each triangle lies in the common bounding
+rectangle. Exact projected area must equal rectangle area; pairwise exact
+intersection checks reject interior overlap and mismatched heights on shared
+boundaries. Finite closed triangles with full area and no overlaps cover the
+rectangle. This profile excludes caves, folds and arbitrary nonrectangular meshes.
+
+Fractions represent the actual canonical f32 coordinates exactly. Convex triangle
+clipping constructs the fine/coarse planar overlay. Height difference is affine
+on every overlap polygon; the extrema of its absolute value occur at polygon
+vertices. The maximum exact fraction is checked against the represented error
+limit without an epsilon. Metadata retains numerator/denominator strings, an
+upward-rounded finite float upper bound, overlay counts, profile and checker
+source digest. An exact equality may produce a reported float bound one ULP
+above the configured limit; admission uses the exact fraction. This is a
+continuous vertical bound between encoded surfaces, not a 3D Hausdorff, normal,
+silhouette, material or shader-arithmetic bound. It is producer qualification,
+not authentication of arbitrary metadata or a runtime proof certificate.
+
+`cook_meshlet_fixture.py --simplify-ratio` retains native LockBorder|ErrorAbsolute
+and the existing independent sampled/boundary checks, and adds this gate before
+output publication. The mesh binary schema is unchanged; LOD metadata changes
+its content identity. Unsimplified position-only fixture hashes are preserved.
+Authored material imports also hash their cooker source, so recooking them after
+any cooker edit deliberately changes provenance-bound identities. Existing
+immutable assets remain valid. Projected-error selection is still outstanding.

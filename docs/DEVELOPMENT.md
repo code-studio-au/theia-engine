@@ -455,3 +455,13 @@ initial at frame 10, alias at 30, restored initial at 50. Every capture independ
 checks actual GPU bytes and table/sampled colours, so late publication cannot
 silently pass as the expected set. This mode rebuilds graphics generations and
 waits device idle at publication; it is not a performance test.
+
+## Continuous heightfield LOD error
+
+The existing terrain cooker with `--simplify-ratio .5` or `.25` and qualified
+meshoptimizer arguments now emits exact continuous vertical-error metadata in
+addition to sampled/native error evidence. `--max-height-error` gates both
+checks. Run `python3 -m unittest discover -s tools -p test_continuous_height_error.py`
+for analytic diagonal extrema, continuity/coverage failures and malformed
+profiles. This offline check covers represented rectangular XY heightfields;
+it does not select runtime LOD or qualify arbitrary 3D geometry.

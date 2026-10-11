@@ -127,3 +127,8 @@ publication. One/two-image count changes, budget deferrals and initial/replaced/
 restored replay pass. Publication uses conservative device-idle generation
 retirement. General LOD hierarchy/error selection, streamed terrain integration
 and texture mips/tiles remain open; next qualify a bounded LOD error contract.
+
+A continuous vertical-error gate now qualifies bounded rectangular terrain LODs
+with exact triangle overlays and producer provenance, supplementing sampled
+checks. General 3D errors/hierarchies remain open. Next implement a bounded
+projected-error CPU selection contract before GPU LOD selection.

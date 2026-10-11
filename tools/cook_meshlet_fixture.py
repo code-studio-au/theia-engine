@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 from qualify_height_lod import qualify
+from continuous_height_error import continuous_error
 from remap_materials import canonical, remap
 from cook_material_page import cook as cook_material
 from cook_uv_page import cook as cook_uv
@@ -34,7 +35,7 @@ def main():
     parser.add_argument('--geometry', type=Path, help='Position/index JSON from the bounded static glTF normalizer')
     parser.add_argument('--simplify-ratio', type=float, help='Bounded heightfield LOD target triangle ratio')
     parser.add_argument('--simplify-error', type=float, default=.02, help='Native absolute position error limit')
-    parser.add_argument('--max-height-error', type=float, default=.03, help='Independent sampled vertical error limit')
+    parser.add_argument('--max-height-error', type=float, default=.03, help='Independent sampled and continuous vertical error limit')
     parser.add_argument('--output-dir', type=Path, default=Path('build/assets'))
     parser.add_argument('--ktx',type=Path)
     parser.add_argument('--ktx-build',type=Path)
@@ -113,6 +114,8 @@ def main():
         canonical_positions = [tuple(vertices[i*3+axis] for axis in range(3)) for i in range(len(positions))]
         simplified = list(destination[:result])
         lod = qualify(canonical_positions,indices,simplified,args.max_height_error)
+        lod.update(continuous_error(canonical_positions,indices,simplified,args.max_height_error))
+        lod['continuous_checker_sha256'] = hashlib.sha256(Path(__file__).with_name('continuous_height_error.py').read_bytes()).hexdigest()
         lod.update(target_ratio=args.simplify_ratio,target_triangles=target//3,native_absolute_error_limit=args.simplify_error,native_reported_absolute_error=reported_error.value,options='LockBorder|ErrorAbsolute')
         indices = simplified
         source = struct.pack(f'<{len(positions)*3}f', *vertices)+struct.pack(f'<{len(indices)}I', *indices)

@@ -4,6 +4,26 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 continuous heightfield LOD error — independently executed (2026-10-11)
+
+The offline terrain simplification gate now supplements sampled checks with
+exact rational triangle-overlay evaluation. For bounded continuous rectangular
+XY heightfields it validates full coverage, no interior overlaps and matching
+shared-edge heights, then finds the maximum vertical difference over every
+overlay polygon vertex. Input represented f32 positions are exact rational values;
+the report includes the exact error fraction and an upward-rounded float bound.
+This is not a general 3D Hausdorff/silhouette/material error or runtime proof.
+
+Terrain reductions 512->256 and 512->128 triangles qualify bounds approximately
+0.00497735 and 0.01225427 position units; flat reduction has zero error. Each
+passes Rust admission and 120-frame/ten-generation GPU validation without
+diagnostics. Two captures pass 81 depth/material samples. Eighteen Python tests
+pass, including 100 analytic diagonal-change comparisons. Repeated cooking is
+identical; a sampled-permitted tighter limit fails the continuous gate. Original
+base fixture hashes remain unchanged. Next define bounded projected-error LOD
+selection; general hierarchies and virtual textures remain open. Details:
+[continuous-error evidence](validation/M4_CONTINUOUS_HEIGHT_ERROR.md).
+
 ## M4 complete indexed-bundle streaming — independently executed (2026-10-11)
 
 `--bundle <v2> --stream-bundle <v2>` alternates two complete fixed graphs.
