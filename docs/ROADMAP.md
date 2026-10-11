@@ -305,3 +305,9 @@ then qualify GPU automatic mip selection before filtering/tiled fallback.
 M4 CPU analytic UV-gradient/footprint contract now qualifies independent numeric,
 repeat-seam and cooked-scene checks. Next implement automatic GPU mip choice and
 compare analytic shader outputs/visible samples with this oracle.
+
+M4 bounded GPU automatic mip choice now qualifies analytic gradients, complete-chain
+sampling and explicit unsupported-profile mip-zero fallback. Default/shared replay,
+allocation limits/cleanup, preserved modes, Wayland WSI and Windows GNU/Wine checks
+pass. Filtering quality, tiled/partial residency, full-chain replacement, general
+hierarchy/LOD and native Windows GPU remain open.

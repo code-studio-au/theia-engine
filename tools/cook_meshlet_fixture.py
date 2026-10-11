@@ -31,7 +31,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--library', type=Path, required=True)
     parser.add_argument('--source-archive', type=Path, required=True)
-    parser.add_argument('--fixture', choices=['grid16','triangle','quad','terrain16','occlusion'], default='grid16')
+    parser.add_argument('--fixture', choices=['grid16','triangle','quad','terrain16','occlusion','footprint-wide'], default='grid16')
     parser.add_argument('--geometry', type=Path, help='Position/index JSON from the bounded static glTF normalizer')
     parser.add_argument('--simplify-ratio', type=float, help='Bounded heightfield LOD target triangle ratio')
     parser.add_argument('--simplify-error', type=float, default=.02, help='Native absolute position error limit')
@@ -68,6 +68,11 @@ def main():
     grid_source = struct.pack(f'<{len(positions)*3}f', *(v for p in positions for v in p)) + struct.pack(f'<{len(indices)}I', *indices)
     if args.fixture == 'quad':
         positions = [(-.8,-.8,.5),(.8,-.8,.5),(.8,.8,.5),(-.8,.8,.5)]
+        indices = [0,1,2,0,2,3]
+    if args.fixture == 'footprint-wide':
+        # Visible, near/far-unclipped geometry exceeding the UV-gradient numeric
+        # profile in clip X. Qualifies explicit mip-zero fallback, not LOD error.
+        positions = [(-100.,-.8,.5),(100.,-.8,.5),(100.,.8,.5),(-100.,.8,.5)]
         indices = [0,1,2,0,2,3]
     if args.fixture == 'triangle':
         positions = [(-.7,.6,.5),(.7,.6,.5),(0,-.6,.5)]

@@ -39,6 +39,7 @@ pub struct ResolveMode {
     pub uv: bool,
     pub texture: bool,
     pub texture_table: bool,
+    pub automatic_mips: bool,
 }
 pub struct Pipeline {
     device: ash::Device,
@@ -184,6 +185,7 @@ impl Pipeline {
             uv,
             texture,
             texture_table,
+            automatic_mips,
         } = mode;
         Self::configured(
             device,
@@ -193,7 +195,9 @@ impl Pipeline {
             ShaderStages {
                 mesh: "resolve.mesh.spv",
                 task: None,
-                fragment: if texture_table {
+                fragment: if automatic_mips {
+                    "asset.texture.auto.resolve.frag.spv"
+                } else if texture_table {
                     "asset.texture.table.resolve.frag.spv"
                 } else if texture {
                     "asset.texture.resolve.frag.spv"

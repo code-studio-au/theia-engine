@@ -155,7 +155,7 @@ pub struct Upload {
     extent: vk::Extent2D,
     texel_bytes: usize,
     mip_levels: u32,
-    view_level: u32,
+    view_level: Option<u32>,
 }
 impl Upload {
     /// Submit one owned transfer without waiting for its dedicated fence.
@@ -175,7 +175,7 @@ impl Upload {
                 height: texture.height,
                 texels: texture.texels,
             }],
-            0,
+            Some(0),
             family,
             queue,
             budget,
@@ -185,12 +185,15 @@ impl Upload {
         device: &ash::Device,
         memory: &vk::PhysicalDeviceMemoryProperties,
         levels: &[theia_assets::texture_mips::MipLevel<'_>],
-        view_level: u32,
+        view_level: Option<u32>,
         family: u32,
         queue: vk::Queue,
         budget: u64,
     ) -> Result<Self> {
-        if levels.is_empty() || levels.len() > 11 || view_level as usize >= levels.len() {
+        if levels.is_empty()
+            || levels.len() > 11
+            || view_level.is_some_and(|level| level as usize >= levels.len())
+        {
             return Err("Invalid texture upload mip/view count".into());
         }
         let extent = vk::Extent2D {
@@ -387,7 +390,11 @@ impl Upload {
                     .address_mode_v(vk::SamplerAddressMode::REPEAT)
                     .address_mode_w(vk::SamplerAddressMode::REPEAT)
                     .min_lod(0.)
-                    .max_lod(0.),
+                    .max_lod(if self.view_level.is_none() {
+                        (self.mip_levels - 1) as f32
+                    } else {
+                        0.
+                    }),
                 None,
             )?
         };
@@ -399,16 +406,33 @@ impl Upload {
             resident.image.allocated_bytes,
             self.staging.allocated_bytes
         );
-        if self.mip_levels > 1 {
+        if let Some(level) = self.view_level {
+            if self.mip_levels > 1 {
+                println!(
+                    "Resident mip chain ready: {} uploaded levels; fixed view level {level}; shader samples view-relative level zero",
+                    self.mip_levels
+                );
+            }
+        } else {
             println!(
-                "Resident mip chain ready: {} uploaded levels; fixed view level {}; shader samples view-relative level zero",
-                self.mip_levels, self.view_level
+                "Resident mip chain ready: {} uploaded levels; complete view; GPU footprint selects mip",
+                self.mip_levels
             );
         }
         Ok(resident)
     }
 }
 impl ResidentTexture {
+    pub fn upload_auto_mips(
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        texture: &theia_assets::texture_mips::TextureMipChain<'_>,
+        family: u32,
+        queue: vk::Queue,
+        budget: u64,
+    ) -> Result<Self> {
+        Upload::begin_levels(device, memory, &texture.levels, None, family, queue, budget)?.finish()
+    }
     pub fn upload_mips(
         device: &ash::Device,
         memory: &vk::PhysicalDeviceMemoryProperties,
@@ -422,7 +446,7 @@ impl ResidentTexture {
             device,
             memory,
             &texture.levels,
-            view_level,
+            Some(view_level),
             family,
             queue,
             budget,

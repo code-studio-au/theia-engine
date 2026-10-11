@@ -843,3 +843,15 @@ checks accept `--mip-case <geometry-cook-report> <texture-cook-report>`.
 visible primitive's analytic UV gradients, base-texel footprint and CPU mip choice.
 Read its final JSON line after asset diagnostics. This reference does not create a
 Vulkan context. [UV footprint contract](validation/M4_UV_FOOTPRINT_CONTRACT.md).
+
+## GPU automatic mip qualification
+
+`--texture-auto-mips <file>` uses existing mesh/material/UV inputs and a complete
+resident mip chain. `--texture-auto-reference <mesh material uv texture x y width
+height view>` supplies a CPU sample/mip reference. The optional diagnostic profile
+requires fragment storage writes; normal runtime performs no readback.
+`tools/qualify_automatic_mips.py` checks GPU gradients, mip bytes, samples, WSI,
+image-budget boundaries and missing-shader cleanup. The native wide-quad helper
+`tools/cook_texture_footprint_fixture.py` exercises unsupported-gradient fallback.
+Owned Wayland checks accept `--auto-mip-case <geometry-cook-report>
+<texture-cook-report>`. [Commands/evidence](validation/M4_GPU_AUTOMATIC_MIPS.md).

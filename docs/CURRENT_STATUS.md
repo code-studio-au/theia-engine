@@ -4,6 +4,19 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 GPU automatic mip selection — independently executed (2026-10-11)
+
+Complete resident mip views now use Slang analytic perspective UV gradients and
+explicit footprint-based mip choice, with mip-zero fallback outside the supported
+numeric profile. Default/shared thin-chain and native wide-quad replay verify all
+levels, 81 GPU diagnostic records per capture and colour/depth references. Exact/
+one-byte-short image budgets and post-upload missing-shader cleanup pass zero
+Vulkan diagnostics. Preserved modes, seven nested-Wayland WSI modes, renderer 23
+and producer eight tests pass. Both shader variants validate 32 outputs; Windows
+GNU 11-package cross-build/Clippy and 141 Wine CPU tests pass. Filtering quality,
+tiled/partial residency, full-chain replacement and native Windows GPU remain open.
+[Evidence](validation/M4_GPU_AUTOMATIC_MIPS.md).
+
 ## M4 CPU UV gradients and texture footprint — independently executed (2026-10-11)
 
 A bounded analytic perspective UV-gradient model and explicit isotropic mip policy

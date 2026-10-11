@@ -38,7 +38,7 @@ impl Image {
             format,
             aspect,
             usage,
-            (budget, 1, 0),
+            (budget, 1, Some(0)),
         )
     }
     pub(super) fn bounded_mips(
@@ -48,7 +48,7 @@ impl Image {
         format: vk::Format,
         usage: vk::ImageUsageFlags,
         budget: u64,
-        levels: (u32, u32),
+        levels: (u32, Option<u32>),
     ) -> Result<Self> {
         Self::allocate(
             device,
@@ -67,10 +67,11 @@ impl Image {
         format: vk::Format,
         aspect: vk::ImageAspectFlags,
         usage: vk::ImageUsageFlags,
-        allocation: (u64, u32, u32),
+        allocation: (u64, u32, Option<u32>),
     ) -> Result<Self> {
         let (budget, mip_levels, view_level) = allocation;
-        if mip_levels == 0 || mip_levels > 11 || view_level >= mip_levels {
+        if mip_levels == 0 || mip_levels > 11 || view_level.is_some_and(|level| level >= mip_levels)
+        {
             return Err("Invalid image mip allocation/view range".into());
         }
         let mut image = Self {
@@ -126,7 +127,9 @@ impl Image {
                     .image(image.handle)
                     .view_type(vk::ImageViewType::TYPE_2D)
                     .format(format)
-                    .subresource_range(image.range().base_mip_level(view_level).level_count(1)),
+                    .subresource_range(view_level.map_or(image.range(), |level| {
+                        image.range().base_mip_level(level).level_count(1)
+                    })),
                 None,
             )?;
         }
@@ -161,6 +164,7 @@ pub struct ResolveBuffers {
     pub uvs: Option<vk::DescriptorBufferInfo>,
     pub texture: Option<vk::DescriptorImageInfo>,
     pub texture_table: Option<vk::DescriptorBufferInfo>,
+    pub footprint: Option<vk::DescriptorBufferInfo>,
     pub texture_images: [vk::DescriptorImageInfo; theia_assets::texture_table::MAX_TEXTURES],
     pub texture_count: u32,
 }
@@ -205,6 +209,12 @@ impl Target {
         let uv = buffers.uvs.is_some();
         let authored = material_info.is_some();
         let image_count = buffers.image_count();
+        if buffers.footprint.is_some()
+            && (buffers.texture_table.is_some() || buffers.texture.is_none() || !authored || !uv)
+        {
+            return Err("Automatic mip probes require fixed geometry/material/UV and one full-chain texture".into());
+        }
+        let extra_storage = buffers.texture_table.or(buffers.footprint);
         if buffers.texture_table.is_some()
             && !(1..=theia_assets::texture_table::MAX_TEXTURES as u32).contains(&image_count)
         {
@@ -324,7 +334,7 @@ impl Target {
                     );
                 }
             }
-            if buffers.texture_table.is_some() {
+            if extra_storage.is_some() {
                 bindings.push(
                     vk::DescriptorSetLayoutBinding::default()
                         .binding(9)
@@ -351,7 +361,7 @@ impl Target {
             if image_count > 0 {
                 flags.extend([vk::DescriptorBindingFlags::empty(); 2]);
             }
-            if buffers.texture_table.is_some() {
+            if extra_storage.is_some() {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
             let mut binding_flags =
@@ -377,7 +387,7 @@ impl Target {
                         .descriptor_count(
                             1 + u32::from(authored)
                                 + u32::from(uv)
-                                + u32::from(buffers.texture_table.is_some()),
+                                + u32::from(extra_storage.is_some()),
                         ),
                 );
             }
@@ -477,7 +487,7 @@ impl Target {
                         .image_info(&texture_images[..1]),
                 );
             }
-            let texture_tables = buffers.texture_table.map(|v| [v]);
+            let texture_tables = extra_storage.map(|v| [v]);
             if let Some(info) = &texture_tables {
                 writes.push(
                     vk::WriteDescriptorSet::default()
@@ -501,6 +511,7 @@ impl Target {
                 uv,
                 texture: image_count > 0,
                 texture_table: buffers.texture_table.is_some(),
+                automatic_mips: buffers.footprint.is_some(),
             },
         )?);
         println!(

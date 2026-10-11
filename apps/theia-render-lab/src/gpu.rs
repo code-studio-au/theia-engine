@@ -252,6 +252,7 @@ impl Context {
                 options.render_mode(),
                 RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
             ),
+            options.texture_auto_mips,
         )?;
         // SAFETY: Features were queried on the selected device; all queue indices support the intended
         // operations. Create-info backing storage remains live and handles immediately gain RAII ownership.
@@ -291,10 +292,13 @@ impl Context {
                 .mesh_shader(true);
             let mut maintenance = vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
                 .swapchain_maintenance1(true);
+            let core_features = vk::PhysicalDeviceFeatures::default()
+                .fragment_stores_and_atomics(options.texture_auto_mips);
             self.device = Some(
                 instance.create_device(
                     self.physical,
                     &vk::DeviceCreateInfo::default()
+                        .enabled_features(&core_features)
                         .queue_create_infos(&queues)
                         .enabled_extension_names(&extensions)
                         .push_next(&mut v12)
@@ -335,6 +339,7 @@ impl Context {
         visibility: bool,
         asset: bool,
         cull: bool,
+        footprint: bool,
     ) -> Result<()> {
         let instance = self.instance.as_ref().unwrap();
         let surface = self.surface_loader.as_ref().unwrap();
@@ -363,6 +368,7 @@ impl Context {
                     .push_next(&mut mesh)
                     .push_next(&mut maintenance);
                 instance.get_physical_device_features2(physical, &mut features);
+                let fragment_stores = features.features.fragment_stores_and_atomics == vk::TRUE;
                 let extensions = instance.enumerate_device_extension_properties(physical)?;
                 let visibility_formats = !visibility
                     || [
@@ -395,6 +401,14 @@ impl Context {
                     CStr::from_ptr(driver.driver_info.as_ptr()).to_string_lossy()
                 );
                 let checks = [
+                    (
+                        "optional footprint probe profile",
+                        !footprint
+                            || (fragment_stores
+                                && properties.limits.max_per_stage_descriptor_storage_buffers >= 4
+                                && properties.limits.max_descriptor_set_storage_buffers >= 4
+                                && properties.limits.max_storage_buffer_range >= 3888),
+                    ),
                     ("visibility identity/depth formats", visibility_formats),
                     ("Vulkan 1.3", properties.api_version >= vk::API_VERSION_1_3),
                     (
@@ -867,6 +881,7 @@ pub struct Renderer {
     texture: Option<crate::texture::ResidentTexture>,
     textures: Vec<crate::texture::ResidentTexture>,
     texture_table: Option<crate::asset::Buffer>,
+    footprint: Option<crate::asset::Buffer>,
     authority: Option<[u8; 64]>,
     pub recreate: bool,
     generations: u64,
@@ -912,6 +927,7 @@ impl Renderer {
             texture: None,
             textures: Vec::new(),
             texture_table: None,
+            footprint: None,
             work_items: options.work_items.unwrap_or(2),
             cycle_work: options.smoke,
             presented: 0,
@@ -1122,14 +1138,13 @@ impl Renderer {
                 )?);
             }
             if let Some(path) = &options.texture {
-                let bytes = if options.texture_mip_level.is_some() {
+                let bytes = if options.texture_mip_level.is_some() || options.texture_auto_mips {
                     crate::texture::load_mips(path)?
                 } else {
                     crate::texture::load(path)?
                 };
-                let mips = options
-                    .texture_mip_level
-                    .map(|_| {
+                let mips = (options.texture_mip_level.is_some() || options.texture_auto_mips)
+                    .then(|| {
                         theia_assets::texture_mips::TextureMipChain::decode(
                             &bytes,
                             None,
@@ -1177,7 +1192,16 @@ impl Renderer {
                 let budget = options
                     .texture_budget
                     .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64);
-                renderer.texture = Some(if let Some(chain) = &mips {
+                renderer.texture = Some(if options.texture_auto_mips {
+                    crate::texture::ResidentTexture::upload_auto_mips(
+                        renderer.ctx.device.as_ref().unwrap(),
+                        &memory,
+                        mips.as_ref().unwrap(),
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        budget,
+                    )?
+                } else if let Some(chain) = &mips {
                     crate::texture::ResidentTexture::upload_mips(
                         renderer.ctx.device.as_ref().unwrap(),
                         &memory,
@@ -1197,6 +1221,21 @@ impl Renderer {
                         budget,
                     )?
                 });
+            }
+            if options.texture_auto_mips {
+                let buffer = crate::asset::Buffer::allocate(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    3888,
+                    vk::BufferUsageFlags::STORAGE_BUFFER,
+                    vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                    1024 * 1024,
+                )?;
+                println!(
+                    "GPU footprint probe: 81 records, 3888 requested bytes, {} physical bytes; no runtime readback",
+                    buffer.allocated_bytes
+                );
+                renderer.footprint = Some(buffer);
             }
             if let Some(path) = &options.texture_table {
                 let mesh = theia_assets::Mesh::decode(
@@ -1455,6 +1494,12 @@ impl Renderer {
                         .get(i)
                         .map_or(vk::DescriptorImageInfo::default(), |v| v.descriptor())
                 }),
+                footprint: self.footprint.as_ref().map(|buffer| {
+                    vk::DescriptorBufferInfo::default()
+                        .buffer(buffer.handle)
+                        .offset(buffer.offset)
+                        .range(buffer.bytes)
+                }),
                 texture_table: self.texture_table.as_ref().map(|buffer| {
                     vk::DescriptorBufferInfo::default()
                         .buffer(buffer.handle)
@@ -1624,6 +1669,22 @@ impl Renderer {
                 &vk::CommandBufferBeginInfo::default()
                     .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?;
+            if let Some(buffer) = &self.footprint {
+                let reuse = [vk::BufferMemoryBarrier2::default()
+                    .src_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                    .dst_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .buffer(buffer.handle)
+                    .offset(buffer.offset)
+                    .size(buffer.bytes)];
+                device.cmd_pipeline_barrier2(
+                    ctx.command,
+                    &vk::DependencyInfo::default().buffer_memory_barriers(&reuse),
+                );
+            }
             if let Some(work) = &self.work {
                 work.generate(
                     ctx.command,
@@ -1904,6 +1965,7 @@ impl Drop for Renderer {
         drop(self.texture.take());
         self.textures.clear();
         drop(self.texture_table.take());
+        drop(self.footprint.take());
         println!(
             "Render Lab teardown: {} swapchain generations",
             self.generations

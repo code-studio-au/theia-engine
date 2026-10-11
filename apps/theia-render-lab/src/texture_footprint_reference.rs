@@ -38,16 +38,22 @@ pub fn run(args: &mut impl Iterator<Item = String>) -> Result<()> {
             uv,
             [f64::from(x) + 0.5, f64::from(y) + 0.5],
             [width, height],
-        )?;
-        let footprint = theia_assets::texture_footprint::choose_mip(
-            differential,
-            [chain.width, chain.height],
-            chain.levels.len() as u32,
-        )?;
-        Some(
-            serde_json::json!({"uv":differential.uv,"dx":differential.dx,"dy":differential.dy,
+        );
+        if let Ok(differential) = differential {
+            let footprint = theia_assets::texture_footprint::choose_mip(
+                differential,
+                [chain.width, chain.height],
+                chain.levels.len() as u32,
+            )?;
+            Some(
+                serde_json::json!({"supported":true,"uv":differential.uv,"dx":differential.dx,"dy":differential.dy,
             "texels_per_pixel":footprint.texels_per_pixel,"mip_level":footprint.mip_level}),
-        )
+            )
+        } else {
+            Some(
+                serde_json::json!({"supported":false,"mip_level":0,"reason":"unsupported differential profile"}),
+            )
+        }
     } else {
         None
     };

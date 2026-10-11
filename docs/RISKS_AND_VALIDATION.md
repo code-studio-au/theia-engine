@@ -70,3 +70,12 @@ executables exercise authority/script fixtures through Wine. Encrypted Quinn set
 is blocked in this Wine environment by a rejected IPV6_V6ONLY query on IPv4; native
 Windows and GPU remain unqualified. No weakened transport/crypto fallback or inferred
 native success. [Evidence](validation/WINDOWS_BUILD.md).
+
+## Automatic mip prototype limits (2026-10-11)
+
+Bounded GPU analytic UV gradients and explicit mip selection now have CPU/replay
+proof on RADV, including visible unsupported-profile mip-zero fallback. The sparse
+fragment-storage probe is optional lab instrumentation with queried capabilities,
+not an engine baseline requirement. Arbitrary clipping/degeneracy and cross-vendor
+numeric behavior, filtered quality, tiled/partial residency, full-chain replacement
+and performance remain unqualified. [Evidence](validation/M4_GPU_AUTOMATIC_MIPS.md).

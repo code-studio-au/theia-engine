@@ -54,11 +54,14 @@ def qualify(report):
     uv_page = os.environ.get('THEIA_CAPTURE_UV_PAGE')
     authored = os.environ.get('THEIA_CAPTURE_MATERIAL_PAGE')
     texture_page = os.environ.get('THEIA_CAPTURE_TEXTURE_PAGE')
+    texture_auto_mips = os.environ.get('THEIA_CAPTURE_TEXTURE_AUTO_MIPS')=='1'
     texture_mip_level = os.environ.get('THEIA_CAPTURE_TEXTURE_MIP_LEVEL')
     if texture_mip_level is not None:
         texture_mip_level=int(texture_mip_level)
         if texture_mip_level<0 or not texture_page or os.environ.get('THEIA_CAPTURE_BUNDLE'):
             raise RuntimeError('Fixed mip capture requires an explicit texture page without bundle')
+    if texture_auto_mips and (texture_mip_level is not None or not texture_page or os.environ.get('THEIA_CAPTURE_BUNDLE')):
+        raise RuntimeError('Automatic mip capture requires one explicit texture page without fixed view/bundle')
     texture_table = os.environ.get('THEIA_CAPTURE_TEXTURE_TABLE')
     if texture_page and texture_table: raise RuntimeError('Choose single texture or indexed table capture')
     if (texture_page or texture_table) and not (authored and uv_page): raise RuntimeError('Texture capture requires factor and UV pages')
@@ -94,7 +97,7 @@ def qualify(report):
             else: texture_page = selected_texture
             quoted_material = subprocess.list2cmdline([authored]) if os.name == 'nt' else shlex.quote(authored)
             quoted_texture = subprocess.list2cmdline([selected_texture]) if os.name == 'nt' else shlex.quote(selected_texture)
-            texture_option = '--texture-table' if texture_table else '--texture-mip-test' if texture_mip_level is not None else '--texture-test'
+            texture_option = '--texture-table' if texture_table else '--texture-auto-mips' if texture_auto_mips else '--texture-mip-test' if texture_mip_level is not None else '--texture-test'
             arguments += f' --materials {quoted_material} {texture_option} {quoted_texture}'
             if texture_mip_level is not None: arguments+=f' {texture_mip_level}'
     elif authored:
@@ -356,7 +359,7 @@ def qualify(report):
                 report['lod_framebuffer_verified']=False
                 report['lod_guard_only']=True
             elif camera:
-                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material, authored, uv_page, texture_page, texture_table, texture_mip_level)
+                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material, authored, uv_page, texture_page, texture_table, texture_mip_level, texture_auto_mips)
             else:
                 verify_asset(controller, present.copyDestination, source, count, report)
         save = rd.TextureSave()
@@ -479,7 +482,7 @@ def verify_asset(controller, color_id, source, count, report):
     report.update(asset_surface_samples=samples, asset_surface_verified=True, selected_triangles=len(geometry))
 
 
-def verify_camera(controller, executable, root, color_id, asset_path, scenario, report, cull=False, material=False, authored=None, uv_page=None, texture_page=None, texture_table=None, texture_mip_level=None):
+def verify_camera(controller, executable, root, color_id, asset_path, scenario, report, cull=False, material=False, authored=None, uv_page=None, texture_page=None, texture_table=None, texture_mip_level=None, texture_auto_mips=False):
     textures = controller.GetTextures()
     color = next(texture for texture in textures if texture.resourceId == color_id)
     depths = [texture for texture in textures if texture.format.compType == rd.CompType.Depth
@@ -522,10 +525,10 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
         offset,size,_=struct.unpack_from('<3Q',data,80)
         matches=[tex for tex in textures if tex.width==width and tex.height==height and controller.GetTextureData(tex.resourceId,rd.Subresource())==data[offset:offset+size]]
         if len(matches)!=1: raise RuntimeError('Expected exact resident texture GPU texels')
-        if texture_mip_level is not None:
+        if texture_mip_level is not None or texture_auto_mips:
             count=struct.unpack_from('<I',data,40)[0]
             texture=matches[0]
-            if texture.mips!=count or texture_mip_level>=count:
+            if texture.mips!=count or (texture_mip_level is not None and texture_mip_level>=count):
                 raise RuntimeError('GPU mip count/fixed view is outside the complete chain')
             for level in range(count):
                 start,length,_=struct.unpack_from('<3Q',data,80+level*24)
@@ -560,12 +563,43 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
         points += list(probes.values())
         report['visible_triangle_probes'] = [list(value) for value in sorted(probes)]
     samples = []
-    for pixel in points:
+    probe_data=None
+    if texture_auto_mips:
+        buffers=[buffer for buffer in controller.GetBuffers() if buffer.length==3888]
+        if len(buffers)!=1: raise RuntimeError('Expected one bounded 81-record footprint probe buffer')
+        probe_data=controller.GetBufferData(buffers[0].resourceId,0,3888)
+        report['texture_footprint_probes']=[]
+    for index,pixel in enumerate(points):
         reference = [str(executable), '--texture-table-reference', asset_path, authored, uv_page, texture_table] if texture_table else [str(executable), '--texture-reference', asset_path, authored, uv_page, texture_page] if texture_page else [str(executable), '--uv-reference', asset_path, uv_page] if uv_page else [str(executable), '--authored-reference', asset_path, authored] if authored else [str(executable), '--material-reference' if material else '--frustum-reference' if cull else '--camera-reference', asset_path]
         if texture_mip_level is not None:
             reference=[str(executable),'--texture-mip-reference',asset_path,authored,uv_page,texture_page,str(texture_mip_level)]
+        if texture_auto_mips:
+            reference=[str(executable),'--texture-auto-reference',asset_path,authored,uv_page,texture_page]
         expected = json.loads(subprocess.check_output(reference + [
                               str(pixel[0]), str(pixel[1]), str(color.width), str(color.height), str(scenario)], cwd=root))
+        if texture_auto_mips and index<81:
+            offset=index*48
+            dxdy=struct.unpack_from('<4f',probe_data,offset);uv=struct.unpack_from('<2f',probe_data,offset+16)
+            rho,mip=struct.unpack_from('<fI',probe_data,offset+24)
+            probe_identity=list(struct.unpack_from('<2I',probe_data,offset+32))
+            reason,reserved=struct.unpack_from('<2I',probe_data,offset+40)
+            if reserved!=0 or probe_identity!=expected['identity']: raise RuntimeError('Footprint record identity/reserved mismatch')
+            if not expected['covered']:
+                if reason!=1 or mip!=0 or rho!=0 or any(dxdy+uv): raise RuntimeError('Background footprint record not cleared')
+            else:
+                text=subprocess.check_output([str(executable),'--texture-footprint-reference',asset_path,uv_page,texture_page,
+                    str(pixel[0]),str(pixel[1]),str(color.width),str(color.height),str(scenario)],cwd=root)
+                gradient=json.loads(text.splitlines()[-1])['gradient']
+                if not gradient['supported']:
+                    if reason!=2 or mip!=0 or expected['mip_level']!=0 or rho!=0 or any(dxdy): raise RuntimeError('Unsupported gradient did not retain mip-zero fallback')
+                    if any(abs(got-want)>2e-4 for got,want in zip(uv,expected['uv'])): raise RuntimeError('Fallback UV differs from CPU interpolation')
+                else:
+                    if reason!=0 or mip!=gradient['mip_level'] or mip!=expected['mip_level']: raise RuntimeError('Automatic mip choice differs from CPU footprint')
+                    for got,want in zip(dxdy,gradient['dx']+gradient['dy']):
+                        if not math.isfinite(got) or abs(got-want)>1e-5+abs(want)*.001: raise RuntimeError('Analytic GPU UV gradient differs from CPU oracle')
+                    if any(abs(got-want)>2e-4 for got,want in zip(uv,gradient['uv'])) or not math.isfinite(rho) or abs(rho-gradient['texels_per_pixel'])>1e-3+gradient['texels_per_pixel']*.001:
+                        raise RuntimeError('GPU UV/texel footprint differs from CPU oracle')
+            report['texture_footprint_probes'].append({'pixel':pixel,'identity':probe_identity,'dxdy':dxdy,'uv':uv,'rho':rho,'mip':mip,'reason':reason})
         offset = pixel[1]*color.width+pixel[0]
         if material:
             actual_identity = list(struct.unpack_from('<2I', identity, offset*8))
@@ -579,6 +613,7 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
         sample = {'pixel':pixel,'covered':expected['covered'],'color':actual_color,'depth':actual_depth}
         if material: sample['identity'] = actual_identity
         if uv_page: sample['uv'] = expected['uv']
+        if texture_auto_mips: sample['mip_level']=expected['mip_level']
         if texture_table:
             sample['material_id']=expected['material_id'];sample['texture_index']=expected['texture_index']
         samples.append(sample)
@@ -587,6 +622,7 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
     if authored: report['authored_material_verified'] = True
     if uv_page: report['uv_verified'] = True
     if texture_page: report['texture_sampling_verified'] = True
+    if texture_auto_mips: report['texture_automatic_mips_verified']=True
     if texture_table: report['texture_table_sampling_verified'] = True
 
 report = {'renderdoc': rd.GetVersionString(), 'validation_enabled_in_capture': False}

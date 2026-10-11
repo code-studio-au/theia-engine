@@ -771,3 +771,15 @@ isotropic prototype policy, not filtering quality. Render Lab's readonly
 `--texture-footprint-reference` connects this CPU model to admitted scene data.
 [Contract evidence](validation/M4_UV_FOOTPRINT_CONTRACT.md). GPU arithmetic/selection
 and tiled/partial residency remain unqualified at this checkpoint.
+
+### GPU analytic automatic mip selection
+
+`--texture-auto-mips <file>` exposes the complete resident chain and selects an
+explicit level using analytic per-primitive perspective UV gradients before wrap.
+The bounded CPU footprint policy is implemented in Slang; unsupported gradients
+sample mip zero. An optional fragment-storage diagnostic buffer qualifies GPU
+outputs without runtime readback and has its own capability/budget checks.
+`--texture-auto-reference` provides the readonly colour/mip oracle; the footprint
+reference now reports supported gradients or explicit mip-zero fallback.
+[GPU qualification](validation/M4_GPU_AUTOMATIC_MIPS.md). Filtering quality,
+tiled/partial residency and full-chain streamed replacement remain open.

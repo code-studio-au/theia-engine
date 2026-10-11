@@ -77,6 +77,7 @@ struct Options {
     uvs: Option<std::path::PathBuf>,
     texture: Option<std::path::PathBuf>,
     texture_mip_level: Option<u32>,
+    texture_auto_mips: bool,
     texture_budget: Option<u64>,
     texture_table: Option<std::path::PathBuf>,
     bundle: Option<std::path::PathBuf>,
@@ -242,7 +243,7 @@ impl Options {
                     );
                 }
                 "--texture-test" => {
-                    if result.texture_mip_level.is_some() {
+                    if result.texture_mip_level.is_some() || result.texture_auto_mips {
                         return Err("Choose one texture profile".into());
                     }
                     result.material = true;
@@ -267,6 +268,18 @@ impl Options {
                             .ok_or("--texture-mip-test needs a fixed mip level")?
                             .parse()?,
                     );
+                }
+                "--texture-auto-mips" => {
+                    if result.texture.is_some() {
+                        return Err("Choose one texture profile".into());
+                    }
+                    result.material = true;
+                    result.texture = Some(
+                        args.next()
+                            .ok_or("--texture-auto-mips needs a cooked mip chain")?
+                            .into(),
+                    );
+                    result.texture_auto_mips = true;
                 }
                 "--texture-budget" => {
                     result.texture_budget =
@@ -295,17 +308,20 @@ impl Options {
                 | "--uv-reference"
                 | "--texture-reference"
                 | "--texture-mip-reference"
+                | "--texture-auto-reference"
                 | "--texture-table-reference" => {
                     use std::io::Read;
                     let path = args.next().ok_or(
                         "--camera-reference needs mesh path and x y width height scenario",
                     )?;
                     let mip_reference = arg == "--texture-mip-reference";
+                    let auto_reference = arg == "--texture-auto-reference";
                     let authored =
                         if arg == "--authored-reference"
                             || (arg == "--texture-reference"
                                 || arg == "--texture-table-reference"
-                                || mip_reference)
+                                || mip_reference
+                                || auto_reference)
                         {
                             Some(args.next().ok_or(
                                 "--authored-reference needs material sidecar after mesh path",
@@ -316,7 +332,8 @@ impl Options {
                     let uv_path = if arg == "--uv-reference"
                         || (arg == "--texture-reference"
                             || arg == "--texture-table-reference"
-                            || mip_reference)
+                            || mip_reference
+                            || auto_reference)
                     {
                         Some(
                             args.next()
@@ -329,6 +346,7 @@ impl Options {
                         if arg == "--texture-reference"
                             || arg == "--texture-table-reference"
                             || mip_reference
+                            || auto_reference
                         {
                             Some(args.next().ok_or(
                                 "--texture-reference needs KTX2 after mesh/material/UV paths",
@@ -357,6 +375,9 @@ impl Options {
                         if level as usize >= chain.levels.len() {
                             return Err("CPU mip view is outside the chain".into());
                         }
+                    }
+                    if auto_reference {
+                        texture::load_mips(std::path::Path::new(texture_path.as_ref().unwrap()))?;
                     }
                     let mut values = [0u32; 5];
                     for value in &mut values {
@@ -400,6 +421,7 @@ impl Options {
                     let mut uv_value = None;
                     let mut selected_material = None;
                     let mut selected_texture = None;
+                    let mut selected_mip = None;
                     if let Some(path) = uv_path {
                         let data = asset::load_uv(std::path::Path::new(&path), &mesh)?;
                         let page = theia_assets::uv::UvPage::decode(
@@ -454,7 +476,40 @@ impl Options {
                                     selected_material = Some(material);
                                     selected_texture = Some(index);
                                 } else {
-                                    let sampled = if let Some(level) = mip_level {
+                                    let sampled = if auto_reference {
+                                        let bytes = texture::load_mips(std::path::Path::new(path))?;
+                                        let tex =
+                                            theia_assets::texture_mips::TextureMipChain::decode(
+                                                &bytes,
+                                                None,
+                                                theia_assets::texture::DEFAULT_BUDGET,
+                                            )?;
+                                        let rows = camera::view_rows(width, height, scenario)?;
+                                        let clip = pixel.vertices.map(|v| {
+                                            camera::project(rows, mesh.positions[v as usize])
+                                        });
+                                        let coords =
+                                            pixel.vertices.map(|v| page.texcoords[v as usize]);
+                                        let level =
+                                            match theia_assets::texture_footprint::differential(
+                                                clip,
+                                                coords,
+                                                [f64::from(x) + 0.5, f64::from(y) + 0.5],
+                                                [width, height],
+                                            ) {
+                                                Ok(gradient) => {
+                                                    theia_assets::texture_footprint::choose_mip(
+                                                        gradient,
+                                                        [tex.width, tex.height],
+                                                        tex.levels.len() as u32,
+                                                    )?
+                                                    .mip_level
+                                                }
+                                                Err(_) => 0,
+                                            };
+                                        selected_mip = Some(level);
+                                        texture::reference_mip(&tex, level, uv)?
+                                    } else if let Some(level) = mip_level {
                                         let bytes = texture::load_mips(std::path::Path::new(path))?;
                                         let tex =
                                             theia_assets::texture_mips::TextureMipChain::decode(
@@ -486,7 +541,7 @@ impl Options {
                     };
                     println!(
                         "{}",
-                        serde_json::json!({"color":pixel.color,"depth":pixel.depth,"covered":pixel.covered,"identity":pixel.identity,"ids":ids,"uv":uv_value,"material_id":selected_material,"texture_index":selected_texture})
+                        serde_json::json!({"color":pixel.color,"depth":pixel.depth,"covered":pixel.covered,"identity":pixel.identity,"ids":ids,"uv":uv_value,"material_id":selected_material,"texture_index":selected_texture,"mip_level":selected_mip})
                     );
                     std::process::exit(0);
                 }
@@ -608,7 +663,7 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU task/mesh qualification\n  --network-client <loopback address> --network-certificate <public DER>  live readonly GPU viewer\n  --network-faults  bounded encrypted post-bootstrap packet faults\n  --network-repair-test  qualification ACK withholding until full repair\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-hysteresis <0..1>  stricter coarsening entry fraction (default 0)\n  --lod-hysteresis-test  explicit eight-phase budget trajectory\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-mip-test <file level>  upload complete chain with a fixed mip view\n  --texture-mip-reference <mesh material uv texture level x y width height view>  CPU mip sampling JSON\n  --texture-footprint-reference <mesh uv texture x y width height view>  CPU UV-gradient/mip oracle\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU task/mesh qualification\n  --network-client <loopback address> --network-certificate <public DER>  live readonly GPU viewer\n  --network-faults  bounded encrypted post-bootstrap packet faults\n  --network-repair-test  qualification ACK withholding until full repair\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-hysteresis <0..1>  stricter coarsening entry fraction (default 0)\n  --lod-hysteresis-test  explicit eight-phase budget trajectory\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-auto-mips <file>  GPU analytic-footprint mip choice\n  --texture-auto-reference <mesh material uv texture x y width height view>  CPU automatic sampling JSON\n  --texture-mip-test <file level>  upload complete chain with a fixed mip view\n  --texture-mip-reference <mesh material uv texture level x y width height view>  CPU mip sampling JSON\n  --texture-footprint-reference <mesh uv texture x y width height view>  CPU UV-gradient/mip oracle\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -760,6 +815,17 @@ impl Options {
             println!(
                 "Complete authored mip chain admitted before Vulkan initialization: {} levels; fixed view {level}",
                 texture.levels.len()
+            );
+        }
+        if result.texture_auto_mips {
+            texture::load_mips(
+                result
+                    .texture
+                    .as_deref()
+                    .ok_or("Automatic mip profile requires texture")?,
+            )?;
+            println!(
+                "Complete authored chain admitted before Vulkan initialization; GPU analytic footprint chooses mip"
             );
         }
         if result.texture_budget.is_some()
