@@ -279,3 +279,7 @@ M4 full-capacity replacement now qualifies 32 simultaneously allocated images,
 complete-set publication and independent exact/one-byte-short CPU/GPU/image budgets.
 Replay verifies the replacement at exact limits and retained materials under all
 three deferrals. Conservative retirement and broader M4 gates remain open.
+
+The same maximum-capacity resident/replacement/budget cases now pass native Wayland
+surface execution and validation in owned nested Weston. Capacity pixel replay stays
+X11-only; native-seat/restore, Windows and cross-vendor gates remain open.

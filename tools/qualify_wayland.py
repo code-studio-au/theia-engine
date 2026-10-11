@@ -7,12 +7,13 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import time
 
 
-def qualify(weston_root, output, network=False, capture=False, pixels=False):
+def qualify(weston_root, output, network=False, capture=False, pixels=False, capacity_cook=None):
     if os.name != 'posix' or not os.environ.get('DISPLAY'):
         raise RuntimeError('Nested qualification requires Linux/X11 DISPLAY')
     weston_root, output = weston_root.resolve(), output.resolve()
@@ -62,6 +63,56 @@ def qualify(weston_root, output, network=False, capture=False, pixels=False):
                         if required not in text:
                             raise RuntimeError('Missing '+required+': '+text)
                     print('Qualified nested Wayland:',name,flush=True)
+                capacity_report = None
+                if capacity_cook:
+                    fixture = json.loads(capacity_cook.read_bytes())
+
+                    def capacity_run(name, options):
+                        path = output / (name + '.log')
+                        with path.open('w') as client_log:
+                            subprocess.run([str(executable), '--gpu', '7900', '--wsi-smoke-test', *options],
+                                env=client_env, stdout=client_log, stderr=subprocess.STDOUT,
+                                check=True, timeout=30)
+                        text = path.read_text()
+                        for required in ['Native surface created (Wayland)', 'Presented 120 frames',
+                                'Validation totals (including teardown): 0 warnings, 0 errors',
+                                'Resident texture table ready: 16 hash-sorted images']:
+                            if required not in text:
+                                raise RuntimeError(name + ': missing ' + required)
+                        generations = re.search(r'Render Lab teardown: (\d+) swapchain generations', text)
+                        summary = re.search(r'Bundle qualification: (\d+) complete publications', text)
+                        expected = 7 + (int(summary[1]) if summary else 0)
+                        if not generations or int(generations[1]) != expected:
+                            raise RuntimeError(name + ': incorrect WSI/publication generation count')
+                        print('Qualified nested Wayland:', name, flush=True)
+                        return text
+
+                    for index, batch in enumerate(fixture['batches']):
+                        capacity_run('capacity-' + str(index), ['--bundle', batch['bundle']['path']])
+                    stream = ['--bundle', fixture['batches'][0]['bundle']['path'],
+                              '--stream-bundle', fixture['batches'][-1]['bundle']['path']]
+                    text = capacity_run('capacity-stream', stream)
+                    charge = re.search(r'active (\d+) \+ pending (\d+) physical bytes.*CPU unique encoded (\d+) bytes', text)
+                    images = re.search(r'16 hash-sorted images, (\d+) aggregate physical image bytes', text)
+                    if not charge or not images:
+                        raise RuntimeError('Missing Wayland capacity coexistence charges')
+                    active, pending, cpu = map(int, charge.groups())
+                    budgets = {'gpu': ('--bundle-gpu-budget', active + pending),
+                               'cpu': ('--bundle-byte-budget', cpu),
+                               'images': ('--texture-budget', int(images[1]) * 2)}
+                    capacity_report = {'resident_runs': 4, 'stream_runs': {},
+                                       'coexistence_budgets': {k: v[1] for k, v in budgets.items()}}
+                    for case in ['exact', 'gpu', 'cpu', 'images']:
+                        options = [value for key, (flag, cap) in budgets.items()
+                                   for value in [flag, str(cap - (case == key))]]
+                        text = capacity_run('capacity-stream-' + case, stream + options)
+                        summary = re.search(r'Bundle qualification: (\d+) complete publications, (\d+) budget deferrals', text)
+                        if not summary:
+                            raise RuntimeError('Missing capacity replacement summary')
+                        publications, deferrals = map(int, summary.groups())
+                        if (case == 'exact' and (publications < 2 or deferrals)) or (case != 'exact' and (publications or deferrals < 2)):
+                            raise RuntimeError('Incorrect Wayland capacity replacement: ' + case)
+                        capacity_report['stream_runs'][case] = {'publications': publications, 'deferrals': deferrals}
                 if pixels:
                     from qualify_wayland_pixels import qualify as qualify_pixels
                     qualify_pixels(weston_root,client_env,output)
@@ -100,6 +151,7 @@ def qualify(weston_root, output, network=False, capture=False, pixels=False):
                 (output/'report.json').write_text(json.dumps({'nested_compositor':'Weston 13.0.0 X11/GL',
                     'native_surface':'Wayland','standalone_modes':6,'frames_per_mode':120,
                     'network_pair':network,'compositor_pixels':pixels,'capture_replay':capture,'programmatic_minimize_restore':False,
+                    'texture_capacity':capacity_report,
                     'validation':'zero warnings/errors in checked standalone runs'},indent=2)+'\n')
             finally:
                 if compositor is not None and compositor.poll() is None:
@@ -118,5 +170,6 @@ if __name__ == '__main__':
     parser.add_argument('--network',action='store_true')
     parser.add_argument('--capture',action='store_true')
     parser.add_argument('--pixels',action='store_true')
+    parser.add_argument('--capacity-cook', type=Path, help='Optional 16-image fixture cook report')
     args = parser.parse_args()
-    qualify(args.weston_root,args.output,args.network,args.capture,args.pixels)
+    qualify(args.weston_root,args.output,args.network,args.capture,args.pixels,args.capacity_cook)

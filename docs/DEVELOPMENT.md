@@ -811,3 +811,8 @@ Commands and limits: [M4 texture capacity](validation/M4_TEXTURE_CAPACITY.md).
 replacement at exact coexistence budgets and independently one byte below CPU, GPU
 and image limits. [Capacity replacement evidence](validation/M4_TEXTURE_STREAMING_CAPACITY.md)
 records the commands, included resource charges and retained/replaced replay proof.
+
+To include maximum texture capacity in the owned Wayland suite, pass
+`--capacity-cook build/qualification/m4-capacity/assets/cook.json` to
+`tools/qualify_wayland.py`. [Wayland capacity evidence](validation/M4_WAYLAND_TEXTURE_CAPACITY.md)
+records measured budgets, generation accounting and platform limitations.

@@ -4,6 +4,18 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 maximum texture capacity on Wayland — independently executed (2026-10-11)
+
+Native Wayland surfaces in owned nested Weston execute all four 16-image bundles,
+complete-set replacements and exact/one-byte-short CPU/GPU/image budgets. Together
+with six preserved renderer modes, 15 runs pass 120 frames each with zero Vulkan
+diagnostics. Exact replacement publishes five times and adds five graphics generations;
+short limits defer five times and retain the initial set. The new harness's initial
+seven-generation assumption was corrected to include replacement generations.
+Capacity replay/pixel proof remains X11-only; programmatic Wayland restore, native
+seat/Windows/cross-vendor and performance gates remain open. Weston retains its
+own shutdown diagnostic. [Evidence](validation/M4_WAYLAND_TEXTURE_CAPACITY.md).
+
 ## M4 full-capacity texture replacement — independently executed (2026-10-11)
 
 Two 16-image complete sets now qualify asynchronous upload/publication and exact
