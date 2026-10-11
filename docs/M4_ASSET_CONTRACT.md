@@ -724,3 +724,16 @@ the original hard budget and clip guards. Both entry arithmetic steps round inwa
 Fraction zero preserves `select` exactly. The caller starts/resets to Fine when
 context changes. This is independent of GPU history and streamed page demand.
 [Contract qualification](validation/M4_LOD_HYSTERESIS_CONTRACT.md).
+
+### GPU resident LOD history
+
+The bounded two-page renderer now supports `--lod-hysteresis` (default zero) and
+retains prior level at work byte 44. First dispatch resets fine before any history
+load; resized views retain history with recomputed bounds. Compute reuse orders
+storage reads/writes. Viewport Z/W carry entry fraction/reset in the existing
+112-byte push block; mesh stays 64 bytes. Coarsening uses an inward-margin entry
+threshold and refinement preserves hard limits/clip/profile guards. Reason 4 denotes
+entry-threshold retention. Diagnostic prior/entry/hard/reset occupy bytes 16–28.
+`--lod-hysteresis-test` drives eight budget phases with an explicit reset probe.
+[GPU/history qualification](validation/M4_GPU_LOD_HYSTERESIS.md). General hierarchy,
+page demand, morphing and 3D/material/silhouette errors remain open.

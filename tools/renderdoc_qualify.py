@@ -48,6 +48,8 @@ def qualify(report):
     lod_fine=os.environ.get('THEIA_CAPTURE_LOD_FINE')
     lod_coarse=os.environ.get('THEIA_CAPTURE_LOD_COARSE')
     lod_pixels=os.environ.get('THEIA_CAPTURE_LOD_PIXELS','6')
+    lod_hysteresis=os.environ.get('THEIA_CAPTURE_LOD_HYSTERESIS','0')
+    lod_trajectory=os.environ.get('THEIA_CAPTURE_LOD_HYSTERESIS_TEST')=='1'
     if bool(lod_fine)!=bool(lod_coarse): raise RuntimeError('LOD capture needs both pages')
     uv_page = os.environ.get('THEIA_CAPTURE_UV_PAGE')
     authored = os.environ.get('THEIA_CAPTURE_MATERIAL_PAGE')
@@ -169,7 +171,9 @@ def qualify(report):
         lod_fine=str(Path(lod_fine).resolve());lod_coarse=str(Path(lod_coarse).resolve())
         if asset_path not in [lod_fine,lod_coarse]: raise RuntimeError('Expected LOD asset must be one of the two pages')
         quote=lambda path: subprocess.list2cmdline([path]) if os.name=='nt' else shlex.quote(path)
-        arguments=f'--frames 180 --gpu 7900 --no-validation --lod-test {quote(lod_fine)} {quote(lod_coarse)} --lod-pixels {float(lod_pixels)} --work-items {scenario}'
+        arguments=f'--frames 180 --gpu 7900 --no-validation --lod-test {quote(lod_fine)} {quote(lod_coarse)} --work-items {scenario}'
+        if lod_trajectory: arguments+=' --lod-hysteresis-test'
+        else: arguments+=f' --lod-pixels {float(lod_pixels)} --lod-hysteresis {float(lod_hysteresis)}'
         if shader_dir: arguments+=f' --shader-dir {quoted_dir}'
     result = rd.ExecuteAndInject(
         str(executable), str(root), arguments, [],
@@ -286,25 +290,42 @@ def qualify(report):
                 selected=struct.unpack_from('<I',data,44)[0]
                 gpu_pixels=struct.unpack_from('<2f',data,48)
                 reason=struct.unpack_from('<I',data,56)[0]
+                previous=struct.unpack_from('<I',data,16)[0]
+                entry_budget,hard_budget=struct.unpack_from('<2f',data,20)
+                reset=struct.unpack_from('<I',data,28)[0]
                 if selected not in (0,1) or [lod_fine,lod_coarse][selected]!=asset_path:
                     raise RuntimeError('GPU LOD selection differs from expected resident page')
                 if struct.unpack_from('<I',data,32)[0]!=meshlets:
                     raise RuntimeError('GPU selected page meshlet count differs from header')
                 oracle=json.loads(subprocess.check_output([str(executable),'--lod-reference',lod_fine,lod_coarse,
-                    str(color.width),str(color.height),str(scenario),str(float(lod_pixels))],cwd=root).splitlines()[-1])
+                    str(color.width),str(color.height),str(scenario),str(hard_budget)],cwd=root).splitlines()[-1])
                 if selected==1 and oracle['level']!='Coarse':
                     raise RuntimeError('GPU chose coarse while conservative CPU model requires fine')
-                if oracle['bound_pixels'] is not None and reason in (0,2):
+                if oracle['bound_pixels'] is not None and reason in (0,2,4):
                     if any(not math.isfinite(v) or v+1e-6<want for v,want in zip(gpu_pixels,oracle['bound_pixels'])):
                         raise RuntimeError('GPU projected bound falls below CPU model')
-                if (selected==1)!=(reason==0) or (selected==1 and any(v>float(lod_pixels) for v in gpu_pixels)):
+                if (selected==1)!=(reason==0) or (selected==1 and any(v>hard_budget for v in gpu_pixels)):
                     raise RuntimeError('GPU LOD reason/budget inconsistent')
+                fraction=.2 if lod_trajectory else float(lod_hysteresis)
+                if not all(math.isfinite(v) for v in [entry_budget,hard_budget]) or hard_budget<0 or not 0<=entry_budget<=hard_budget*(1-fraction):
+                    raise RuntimeError('GPU LOD entry threshold exceeds configured margin')
+                if reset not in (0,1) or previous not in (0,1) or (reset==1 and previous!=0):
+                    raise RuntimeError('GPU LOD history/reset is invalid')
+                if fraction>0 and reason in (0,2,4):
+                    eligible=all(v<=hard_budget for v in gpu_pixels)
+                    expected=eligible and (previous==1 or all(v<=entry_budget for v in gpu_pixels))
+                    if (selected==1)!=expected or (reason==4)!=(eligible and not expected):
+                        raise RuntimeError('GPU LOD hysteresis differs from independent threshold state machine')
+                if fraction==0 and reason==4:
+                    raise RuntimeError('Disabled hysteresis changed stateless policy')
                 for path in [lod_fine,lod_coarse]:
                     encoded=Path(path).read_bytes()
                     candidates=[b for b in controller.GetBuffers() if b.length==len(encoded)]
                     if not any(controller.GetBufferData(b.resourceId,0,len(encoded))==encoded for b in candidates):
                         raise RuntimeError('One resident LOD GPU page differs from encoded source')
                 report.update(lod_gpu_verified=True,lod_selected=selected,lod_reason=reason,
+                    lod_previous=previous,lod_reset=reset,lod_entry_budget=entry_budget,
+                    lod_hard_budget=hard_budget,lod_hysteresis_fraction=fraction,
                     lod_gpu_bound_pixels=gpu_pixels,lod_cpu=oracle,lod_both_pages_gpu_verified=True)
             report.update(scenario=scenario, meshlet_count=count, immutable_asset_bytes_verified=True)
             if cell_path:

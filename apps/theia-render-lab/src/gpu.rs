@@ -977,6 +977,13 @@ impl Renderer {
                     error: pair.error,
                     pixels: options.lod_pixels.unwrap_or(6.),
                     extent: [0; 2],
+                    entry_fraction: if options.lod_hysteresis_test {
+                        0.2
+                    } else {
+                        options.lod_hysteresis.unwrap_or(0.)
+                    },
+                    reset: true,
+                    test_trajectory: options.lod_hysteresis_test,
                 });
             }
             let cell_asset = if let Some(path) = &options.cell {
@@ -1586,6 +1593,16 @@ impl Renderer {
                     camera_rows,
                     self.lod.map(|mut lod| {
                         lod.extent = [chain.extent.width, chain.extent.height];
+                        // One fixed view/page pair owns this buffer. Resizing keeps
+                        // history; a fresh work buffer's first dispatch starts fine.
+                        lod.reset = self.presented == 0;
+                        if lod.test_trajectory {
+                            let phase = ((self.presented / 20) % 8) as usize;
+                            lod.pixels = [6., 7., 6., 4., 7., 6., 6., 4.][phase];
+                            // Explicit qualification probe: a new history context
+                            // throughout phase six must ignore old coarse state.
+                            lod.reset |= phase == 6;
+                        }
                         lod
                     }),
                 );

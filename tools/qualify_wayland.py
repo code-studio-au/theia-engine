@@ -13,7 +13,7 @@ import tempfile
 import time
 
 
-def qualify(weston_root, output, network=False, capture=False, pixels=False, capacity_cook=None):
+def qualify(weston_root, output, network=False, capture=False, pixels=False, capacity_cook=None, lod_pair=None):
     if os.name != 'posix' or not os.environ.get('DISPLAY'):
         raise RuntimeError('Nested qualification requires Linux/X11 DISPLAY')
     weston_root, output = weston_root.resolve(), output.resolve()
@@ -48,9 +48,14 @@ def qualify(weston_root, output, network=False, capture=False, pixels=False, cap
                 client_env['WAYLAND_DISPLAY'] = 'theia-qualification'
                 client_env['XDG_RUNTIME_DIR'] = runtime
                 executable = Path('apps/theia-render-lab/target/debug/theia-render-lab').resolve()
-                for name, mode in [('clear',['--clear-only']),('mesh',['--mesh-only']),
+                modes = [('clear',['--clear-only']),('mesh',['--mesh-only']),
                         ('task',['--direct-task']),('indirect',[]),
-                        ('authority',['--authority-test']),('demo',['--authority-demo'])]:
+                        ('authority',['--authority-test']),('demo',['--authority-demo'])]
+                if lod_pair:
+                    pair = ['--lod-test', *map(str, lod_pair)]
+                    modes += [('lod-hysteresis', pair + ['--lod-hysteresis', '.2']),
+                              ('lod-hysteresis-trajectory', pair + ['--lod-hysteresis-test'])]
+                for name, mode in modes:
                     path = output/(name+'.log')
                     with path.open('w') as client_log:
                         subprocess.run([str(executable),'--gpu','7900','--wsi-smoke-test',*mode],
@@ -63,6 +68,16 @@ def qualify(weston_root, output, network=False, capture=False, pixels=False, cap
                         if required not in text:
                             raise RuntimeError('Missing '+required+': '+text)
                     print('Qualified nested Wayland:',name,flush=True)
+                if lod_pair:
+                    path = output/'lod-hysteresis-full-trajectory.log'
+                    with path.open('w') as client_log:
+                        subprocess.run([str(executable), '--gpu', '7900', '--frames', '180',
+                            *pair, '--lod-hysteresis-test'], env=client_env,
+                            stdout=client_log, stderr=subprocess.STDOUT, check=True, timeout=30)
+                    text = path.read_text()
+                    if not all(value in text for value in ['Native surface created (Wayland)',
+                            'Presented 180 frames', 'Validation totals (including teardown): 0 warnings, 0 errors']):
+                        raise RuntimeError('Incomplete full Wayland LOD trajectory execution')
                 capacity_report = None
                 if capacity_cook:
                     fixture = json.loads(capacity_cook.read_bytes())
@@ -149,7 +164,8 @@ def qualify(weston_root, output, network=False, capture=False, pixels=False, cap
                         raise RuntimeError('Injected target did not confirm its Wayland surface')
                     print('Qualified nested Wayland: indirect capture/replay',flush=True)
                 (output/'report.json').write_text(json.dumps({'nested_compositor':'Weston 13.0.0 X11/GL',
-                    'native_surface':'Wayland','standalone_modes':6,'frames_per_mode':120,
+                    'native_surface':'Wayland','standalone_modes':len(modes),'frames_per_mode':120,
+                    'lod_full_trajectory_frames':180 if lod_pair else 0,
                     'network_pair':network,'compositor_pixels':pixels,'capture_replay':capture,'programmatic_minimize_restore':False,
                     'texture_capacity':capacity_report,
                     'validation':'zero warnings/errors in checked standalone runs'},indent=2)+'\n')
@@ -171,5 +187,6 @@ if __name__ == '__main__':
     parser.add_argument('--capture',action='store_true')
     parser.add_argument('--pixels',action='store_true')
     parser.add_argument('--capacity-cook', type=Path, help='Optional 16-image fixture cook report')
+    parser.add_argument('--lod-pair', nargs=2, type=Path, metavar=('FINE', 'COARSE'), help='Optional resident LOD hysteresis qualification')
     args = parser.parse_args()
-    qualify(args.weston_root,args.output,args.network,args.capture,args.pixels,args.capacity_cook)
+    qualify(args.weston_root,args.output,args.network,args.capture,args.pixels,args.capacity_cook,args.lod_pair)

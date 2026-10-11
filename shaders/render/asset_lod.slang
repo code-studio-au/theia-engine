@@ -7,7 +7,7 @@ struct LodInput {
 #ifndef THEIA_LOD_MESH
     float4 boundsMin; // xyz common bounds, w upward represented vertical error
     float4 boundsMax; // xyz common bounds, w pixel budget
-    float4 viewport; // xy actual extent, zw reserved
+    float4 viewport; // xy actual extent, z hysteresis fraction, w first-dispatch reset
 #endif
 };
 [[vk::push_constant]] ConstantBuffer<LodInput> lod;
@@ -27,6 +27,11 @@ void assetLodCompute(uint lane:SV_GroupIndex) {
     if (lane==0) {
         lodVisibleCount=0; lodVisibleMask=0;
         uint selected=0; uint reason=1;
+        // The first dispatch must not read uninitialized device-local storage.
+        // Disabled hysteresis also avoids reading history and preserves old policy.
+        uint previous=0;
+        if(lod.viewport.w==0 && lod.viewport.z>0) previous=lodWork.Load(44);
+        float entryBudget=max(0,lod.boundsMax.w*(1-lod.viewport.z)*(1-2e-6)-1e-6);
         float2 pixels=float2(0,0); float minimumW=1e30;
         float2 maximumXY=float2(0,0);
         // Bounded f32 qualification policy. Absolute/relative margins absorb
@@ -36,7 +41,8 @@ void assetLodCompute(uint lane:SV_GroupIndex) {
             && all(abs(lod.row2)<=64) && all(abs(lod.row3)<=64)
             && all(abs(lod.boundsMin.xyz)<=64) && all(abs(lod.boundsMax.xyz)<=64)
             && (zero || (lod.boundsMin.w>=1e-6 && lod.boundsMin.w<=1))
-            && all(lod.viewport.xy>=1) && all(lod.viewport.xy<=16384);
+            && all(lod.viewport.xy>=1) && all(lod.viewport.xy<=16384)
+            && lod.viewport.z>=0 && lod.viewport.z<=1;
         bool clipped=false;
         for(uint corner=0;corner<8;++corner) {
             float4 p=float4((corner&1)!=0 ? lod.boundsMax.x:lod.boundsMin.x,
@@ -59,7 +65,12 @@ void assetLodCompute(uint lane:SV_GroupIndex) {
             if (!zero) pixels=pixels*1.0001+.001;
             selected=all(pixels<=lod.boundsMax.w) ? 1u:0u;
             reason=selected==1 ? 0u:2u;
+            if(selected==1 && lod.viewport.z>0 && previous!=1 && any(pixels>entryBudget)) {
+                selected=0; reason=4;
+            }
         }
+        lodWork.Store(16,previous); lodWork.Store(20,asuint(entryBudget));
+        lodWork.Store(24,asuint(lod.boundsMax.w)); lodWork.Store(28,uint(lod.viewport.w));
         lodWork.Store(44,selected); lodWork.Store2(48,asuint(pixels));
         lodWork.Store(56,reason); lodWork.Store(60,asuint(minimumW));
     }

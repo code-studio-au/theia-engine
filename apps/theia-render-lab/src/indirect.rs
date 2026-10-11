@@ -12,6 +12,9 @@ pub struct Lod {
     pub error: f32,
     pub pixels: f32,
     pub extent: [u32; 2],
+    pub entry_fraction: f32,
+    pub reset: bool,
+    pub test_trajectory: bool,
 }
 pub struct IndirectWork {
     device: ash::Device,
@@ -322,7 +325,9 @@ impl IndirectWork {
                         | vk::AccessFlags2::SHADER_STORAGE_WRITE,
                 )
                 .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
-                .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                .dst_access_mask(
+                    vk::AccessFlags2::SHADER_STORAGE_READ | vk::AccessFlags2::SHADER_STORAGE_WRITE,
+                )
                 .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                 .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                 .buffer(self.buffer)
@@ -366,8 +371,8 @@ impl IndirectWork {
                     lod.pixels,
                     lod.extent[0] as f32,
                     lod.extent[1] as f32,
-                    0.,
-                    0.,
+                    lod.entry_fraction,
+                    u32::from(lod.reset) as f32,
                 ];
                 for (i, value) in values.iter().enumerate() {
                     camera_bytes[64 + i * 4..68 + i * 4].copy_from_slice(&value.to_ne_bytes());

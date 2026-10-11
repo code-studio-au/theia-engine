@@ -816,3 +816,12 @@ To include maximum texture capacity in the owned Wayland suite, pass
 `--capacity-cook build/qualification/m4-capacity/assets/cook.json` to
 `tools/qualify_wayland.py`. [Wayland capacity evidence](validation/M4_WAYLAND_TEXTURE_CAPACITY.md)
 records measured budgets, generation accounting and platform limitations.
+
+## GPU LOD hysteresis
+
+Use `--lod-hysteresis <0..1>` with the qualified `--lod-test` pair to retain level
+history under a stricter entry threshold. Default zero preserves old selection.
+`--lod-hysteresis-test` drives the explicit eight-phase budget/reset test. The
+`tools/qualify_lod_hysteresis.py` replay/validation harness and optional
+`tools/qualify_wayland.py --lod-pair <fine coarse>` checks are documented in
+[M4 GPU LOD hysteresis evidence](validation/M4_GPU_LOD_HYSTERESIS.md).

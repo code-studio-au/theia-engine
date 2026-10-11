@@ -287,3 +287,8 @@ X11-only; native-seat/restore, Windows and cross-vendor gates remain open.
 Next M4 implementation slice: GPU adoption of the qualified CPU hysteresis contract
 for the bounded resident heightfield pair. Preserve hard pixel limits and clip
 fallback, initialize history explicitly and qualify temporal selection trajectories.
+
+M4 bounded GPU LOD hysteresis now qualifies retained selection, stricter entry,
+hard-limit refinement and explicit reset in both shader variants. X11 replay,
+Wayland execution and Windows GNU/Wine checks pass; general hierarchy/streamed page
+demand and texture mip/tile fallback remain implementation gates.

@@ -4,6 +4,21 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 GPU LOD hysteresis — independently executed (2026-10-11)
+
+The two resident heightfield pages now retain GPU-owned level history with explicit
+first-dispatch initialization and read/write synchronization. A stricter coarsening
+threshold preserves the original hard-limit refinement and clip/profile guards.
+Default zero fraction preserves stateless behavior. Sixteen default/shared trajectory
+captures and four guard/disabled/zero-error captures verify work and 81 pixels each.
+Standalone full trajectories/WSI and preserved indirect/texture/authority/compute
+regressions pass zero diagnostics. Native Wayland execution passes eight WSI modes
+plus a full trajectory. Assets/renderer tests 42/22, both shader variants 31 outputs,
+formatting/Clippy pass; Windows GNU 11-package cross-build and 132 Wine CPU tests pass.
+No hierarchy/page demand, morphing, general 3D error or performance claim. Native
+Windows/cross-vendor and broader M4 gates remain open.
+[Evidence](validation/M4_GPU_LOD_HYSTERESIS.md).
+
 ## M4 CPU LOD hysteresis contract — independently executed (2026-10-11)
 
 A bounded two-page selection oracle delays fine-to-coarse transitions using a
