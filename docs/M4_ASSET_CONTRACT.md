@@ -649,3 +649,31 @@ its content identity. Unsimplified position-only fixture hashes are preserved.
 Authored material imports also hash their cooker source, so recooking them after
 any cooker edit deliberately changes provenance-bound identities. Existing
 immutable assets remain valid. Projected-error selection is still outstanding.
+
+### Projected vertical-error CPU selection
+
+`theia_assets::lod::select` takes a common finite f32 AABB enclosing both
+continuous surfaces, a nonnegative represented f32 vertical-error bound, f32
+clip matrix rows, nonzero extent and finite nonnegative pixel budget. Both
+surfaces must share XY correspondence and differ only in Z; this is a caller
+precondition derived from the qualified rectangular-heightfield producer.
+Finite f32 products are exact in f64; subsequent sums and positive bound
+operations round outward. The oracle guards the whole box against nonpositive
+W and Vulkan Z=0/Z=W clip boundaries and chooses the fine baseline if crossed.
+
+With minimum W `d`, maximum absolute clip X/Y `a`, vertical matrix coefficient
+`c` and W's vertical coefficient `b`, projected NDC displacement is bounded by
+`E * (abs(c) + a * abs(b) / d) / d`. Both endpoint denominators are at least `d`
+because both surfaces lie inside the box. Pixel bounds scale by width/2 and
+height/2. Coarse is allowed only when both bounds fit the budget; finite-input
+numeric overflow retains fine. `error_f32` rounds a producer f64 upper bound
+upward rather than losing its guarantee during conversion.
+
+`--lod-reference <fine coarse width height view pixels>` checks hash-named
+mesh containers, source links, triangle counts, boundary/profile metadata and
+identical common position bits. It consumes the producer's declared bound and
+explicitly reports `proof_recomputed=false`. Output ends with a JSON record
+after asset diagnostics. Arbitrary metadata is not authenticated or proved.
+This is CPU oracle selection only: no GPU page choice, shader-rounding guarantee,
+LOD hysteresis, depth/disocclusion, silhouette/material error, general 3D
+hierarchy or texture LOD contract is implied. Geometry streaming remains separate.

@@ -132,3 +132,8 @@ A continuous vertical-error gate now qualifies bounded rectangular terrain LODs
 with exact triangle overlays and producer provenance, supplementing sampled
 checks. General 3D errors/hierarchies remain open. Next implement a bounded
 projected-error CPU selection contract before GPU LOD selection.
+
+Bounded projected vertical-error CPU selection now passes source-link/profile
+checks, perspective-denominator bounds, clip/numeric guards and real terrain
+threshold/extent/camera cases. Next qualify GPU LOD selection against this oracle;
+general hierarchy, hysteresis and 3D/material errors remain open.

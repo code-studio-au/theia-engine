@@ -4,6 +4,25 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 projected heightfield LOD CPU selection — independently executed (2026-10-11)
+
+A separate pure Rust oracle bounds projected correspondence error for two
+continuous heightfields enclosed by a common AABB. It accounts for perspective
+W changes as well as X/Y displacement, evaluates box corners with outward
+rounding, and keeps fine LOD at Vulkan clip boundaries or unbounded projection.
+Producer float bounds convert upward to represented f32. `--lod-reference`
+checks real source links, common position bits/counts/profile and reports the
+CPU choice before Vulkan initialization. It does not recompute the offline proof.
+
+Thirty-nine asset tests pass, including analytic cases, perspective denominator
+changes, conversion/clip/extreme-numeric guards and 3000 independent sampled
+point correspondences. The real 128-triangle terrain chooses coarse at a 10-pixel
+budget/960x540 (Y bound 5.03307), fine at 1920x1080 (10.06614) or the narrow
+camera (16.47987). Flat terrain qualifies zero error/budget. Three malformed
+bindings/budgets fail without Vulkan. Renderer tests (14), formatting and
+Clippy pass. No GPU LOD selection is implemented yet; that is next. Details:
+[projected-error evidence](validation/M4_PROJECTED_LOD_ERROR.md).
+
 ## M4 continuous heightfield LOD error — independently executed (2026-10-11)
 
 The offline terrain simplification gate now supplements sampled checks with

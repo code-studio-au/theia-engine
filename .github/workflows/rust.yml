@@ -77,6 +77,16 @@ jobs:
           subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'inspect', '--', coarse], check=True)
           subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'residency', '--', manifest], check=True)
           PY
+      - name: Qualify CPU projected heightfield LOD selection
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          fine = json.load(open('build/assets/terrain16-report.json'))['path']
+          coarse = json.load(open('build/assets/terrain16-lod-report.json'))['path']
+          for width, height, budget, expected in [(960, 540, 1, 'Fine'), (960, 540, 10, 'Coarse'), (1920, 1080, 10, 'Fine')]:
+              output = subprocess.check_output(['cargo', 'run', '--locked', '--manifest-path', 'apps/theia-render-lab/Cargo.toml', '--', '--lod-reference', fine, coarse, str(width), str(height), '2', str(budget)], text=True)
+              assert json.loads(output.splitlines()[-1])['level'] == expected
+          PY
       - name: Qualify bounded static glTF normalization and cooking
         run: |
           cargo run --locked --manifest-path tools/theia-gltf-import/Cargo.toml -- fixtures/gltf/transformed_scene.gltf build/assets/imported-scene.json

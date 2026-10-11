@@ -465,3 +465,13 @@ checks. Run `python3 -m unittest discover -s tools -p test_continuous_height_err
 for analytic diagonal extrema, continuity/coverage failures and malformed
 profiles. This offline check covers represented rectangular XY heightfields;
 it does not select runtime LOD or qualify arbitrary 3D geometry.
+
+## CPU projected LOD reference
+
+`theia-render-lab --lod-reference <fine mesh> <coarse mesh> 960 540 2 10`
+runs without Vulkan/window initialization. Use the full terrain and newly
+continuous-qualified ratio-.25/.5 pages. Its last output line is JSON containing
+source IDs, represented error, per-axis pixel bounds, chosen level/reason and
+`proof_recomputed=false`. At ratio .25 a budget 10 chooses coarse at 960x540,
+fine at 1920x1080 or view 1 (narrow); budget 1 keeps fine. This is a CPU oracle
+and does not change the viewer's GPU page selection.

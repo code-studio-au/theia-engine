@@ -4,6 +4,7 @@ use std::{error::Error, fmt};
 pub mod arena;
 pub mod bundle;
 pub mod bundle_residency;
+pub mod lod;
 pub mod material;
 pub mod residency;
 pub mod texture;
