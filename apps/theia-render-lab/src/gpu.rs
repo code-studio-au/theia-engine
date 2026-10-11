@@ -11,7 +11,7 @@ use std::{
 };
 use winit::{
     dpi::PhysicalSize,
-    raw_window_handle::{HasDisplayHandle, HasWindowHandle},
+    raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle},
     window::Window,
 };
 const LAYER: &CStr = c"VK_LAYER_KHRONOS_validation";
@@ -219,8 +219,15 @@ impl Context {
                 self.window.window_handle()?.as_raw(),
                 None,
             )?;
+            let backend = match self.window.display_handle()?.as_raw() {
+                RawDisplayHandle::Wayland(_) => "Wayland",
+                RawDisplayHandle::Xlib(_) => "Xlib",
+                RawDisplayHandle::Xcb(_) => "Xcb",
+                RawDisplayHandle::Windows(_) => "Windows",
+                _ => "Other",
+            };
             println!(
-                "Native surface created; loader {}.{}.{}",
+                "Native surface created ({backend}); loader {}.{}.{}",
                 vk::api_version_major(version),
                 vk::api_version_minor(version),
                 vk::api_version_patch(version)

@@ -253,3 +253,9 @@ through explicit THN3/ALPN revision. Faulted input/combat, WSI, replay and delib
 baseline eviction/full repair pass. Remaining gates include general lifecycle/
 roster and baseline leases, account/session recovery, persistence and scale. M8
 remains open; broader Windows/Wayland qualification and M4/M5 gates also remain.
+
+The broader platform gate now has nested-Weston Wayland Vulkan execution evidence
+for six renderer modes and faulted live replication/full repair. Native Wayland
+seat/user-driven minimize-restore, Wayland capture replay, Windows and other vendors
+remain open. The bounded X11 reference slice stays preserved; no performance or
+complete cross-platform milestone claim.

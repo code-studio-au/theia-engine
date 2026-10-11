@@ -4,6 +4,23 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## Nested Wayland platform qualification — independently executed (2026-10-11)
+
+An isolated Weston 13 compositor nested on X11 now executes Theia's actual Wayland
+Vulkan surface path on RX 7900 XTX/RADV. Six standalone modes each pass 120 frames/
+seven swapchain generations with zero diagnostics, plus two encrypted full/delta/
+repair viewers under packet faults and WSI recovery. Backend logging confirms
+Wayland. X11 ten-generation/minimize-restore and 256-value compute regressions pass.
+
+Initial smoke stalled after minimizing: pinned Winit cannot unminimize Wayland
+programmatically. Smoke now explicitly skips that round trip and still verifies
+resize, zero-size deferral and labeled recovery injection. Native user-driven
+minimize/restore remains unqualified. RenderDoc 1.46 portable build rejects
+VK_KHR_wayland_surface, so capture replay remains unqualified, not passed. Renderer
+22 tests/formatting/Clippy pass; no shader changes. This is nested-compositor
+reference evidence, not native-seat/Windows/cross-vendor or performance evidence.
+[Evidence](validation/WAYLAND_NESTED.md).
+
 ## M8 actual authority/live GPU deltas — independently executed (2026-10-11)
 
 Live authority now prepares bounded per-recipient full/delta TDR1 states, selecting

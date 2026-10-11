@@ -26,6 +26,7 @@ use winit::{
     event::{ElementState, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{Key, KeyCode, NamedKey, PhysicalKey},
+    raw_window_handle::{HasDisplayHandle, RawDisplayHandle},
     window::{Window, WindowId},
 };
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -871,7 +872,7 @@ impl ApplicationHandler for App {
                             let _ = window.request_inner_size(PhysicalSize::new(1280, 720));
                         }
                         60 => {
-                            // Exercise zero-size handling explicitly: X11 need not report 0x0 on minimize.
+                            // Exercise zero-size handling explicitly; compositor minimize need not report 0x0.
                             match self
                                 .renderer
                                 .as_mut()
@@ -884,9 +885,28 @@ impl ApplicationHandler for App {
                                     return;
                                 }
                             }
-                            window.set_minimized(true);
-                            self.restore = Some(Instant::now() + Duration::from_millis(300));
-                            println!("Smoke: requested minimize");
+                            match window.display_handle() {
+                                Ok(handle)
+                                    if matches!(handle.as_raw(), RawDisplayHandle::Wayland(_)) =>
+                                {
+                                    // Winit/Wayland cannot unminimize programmatically. Do not
+                                    // strand an unattended test in a hidden compositor surface.
+                                    println!(
+                                        "Smoke: Wayland minimize/restore skipped (programmatic restore unsupported); requesting resize"
+                                    );
+                                    let _ = window.request_inner_size(PhysicalSize::new(800, 600));
+                                }
+                                Ok(_) => {
+                                    window.set_minimized(true);
+                                    self.restore =
+                                        Some(Instant::now() + Duration::from_millis(300));
+                                    println!("Smoke: requested minimize");
+                                }
+                                Err(error) => {
+                                    self.fail(event_loop, error);
+                                    return;
+                                }
+                            }
                         }
                         _ => {}
                     }

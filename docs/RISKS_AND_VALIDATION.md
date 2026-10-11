@@ -47,3 +47,13 @@ full/delta baseline ACK/repair now qualifies on the live GPU path; this remains 
 fixed two-actor profile with no general lifecycle/persistence or WAN/load evidence. Prototype units/tick/gap profiles are test settings, not locked network
 precision or cadence choices. IPv6 is disabled on the local host; Windows/hosted
 CI remain unexecuted. See CURRENT_STATUS and M7/M8 validation reports.
+
+## Nested Wayland platform evidence (2026-10-11)
+
+Actual Wayland Vulkan surfaces execute within an owned Weston-on-X11 compositor;
+six standalone modes and a faulted encrypted full/delta/repair pair pass Vulkan
+validation. Winit's unsupported programmatic unminimize is explicitly excluded
+from automated smoke. Available RenderDoc 1.46 rejects the Wayland surface extension;
+that capture attempt fails and is not counted as validation/replay success. Native
+seat/user minimize-restore, Windows and other vendors remain gates. No timing/
+performance claim. [Evidence](validation/WAYLAND_NESTED.md).

@@ -742,3 +742,28 @@ never default input/network behavior. Live replication counters distinguish acce
 full/delta state, queued ACK/repair and intentionally withheld ACKs. Profile roster
 stays exactly two server-assigned actors; general lifecycle replication remains open.
 [Evidence](validation/M8_LIVE_DELTA_REPLICATION.md).
+
+## Isolated nested Wayland qualification
+
+Extract Ubuntu Noble Weston 13.0.0-4build3 `weston`/`libweston-13-0` packages below
+`build/qualification/wayland-tool/root` using `dpkg-deb --extract`; no system install
+is needed. Qualified package hashes and setup limits are in the evidence report.
+Build both labs and keep the RADV ICD/display setup from earlier qualification.
+
+```sh
+python3 tools/qualify_wayland.py --network --output build/qualification/wayland-qualified
+```
+
+The helper creates an owned mode-700 temporary runtime/socket, starts only its
+Weston X11/GL compositor, removes DISPLAY from Rust client environments, checks
+actual Wayland backend logs, and closes its owned processes/runtime. It runs six
+120-frame WSI modes and optionally the faulted live delta/full-repair pair.
+Wayland smoke explicitly skips unsupported programmatic minimize/restore; no silent
+X11 fallback. Weston remains a third-party offline qualification tool.
+
+Optional `--capture` attempts the existing local RenderDoc pipeline and requires
+replay success. The available 1.46 portable build rejects VK_KHR_wayland_surface,
+so this option currently fails with that explicit limitation. Do not report a
+capture/validation pass from that failed attempt. Native-seat, user-driven window
+restore, Windows and cross-vendor execution remain unqualified.
+[Evidence and primary references](validation/WAYLAND_NESTED.md).
