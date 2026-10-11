@@ -9,6 +9,8 @@ Project: Custom MMO Engine / Theia
 
 > **DETAILED COMPANION:** [THEIA_DETAILED_LORE_ARCHIVE.md](THEIA_DETAILED_LORE_ARCHIVE.md) expands the creation myth, First/Second Sunderings, complete divine relationships, peoples and institutions, Shattered Delegation, Guardians/Unmade shadow war, cross-continental incursions, launch story, zone catalogues and a reconstructed question-by-question decision register (Q376–Q444, with unanswered questions marked). **Read both files together.** This is not a verbatim export of any original chat that is unavailable to this project context.
 
+> **CURRENT LONG-FORM NARRATIVE:** [THEIA_INTERWOVEN_CHRONICLE.md](THEIA_INTERWOVEN_CHRONICLE.md) is the latest integrated creator-facing story, including the origins of the seventh people, Nhal's contact and the Unmade's long silence, the aftermath for each race, migrations, alliances, contested resource incursions, and launch-era revelation. It expands on the [detailed decision archive](THEIA_DETAILED_LORE_ARCHIVE.md). All new causal connections identified there as **WORKING** remain proposals, not automatically confirmed canon.
+
 ## 1. Creative pillars [CONFIRMED]
 
 Theia is a large-scale high-fantasy MMORPG with layered, unreliable historical traditions, ancient lost magical achievement, living mortal civilizations, and a gradually reawakening existential danger. It should evoke the depth of an epic fantasy saga while remaining original.
