@@ -138,7 +138,7 @@ pub struct Buffer {
     _lease: Option<theia_assets::arena::Lease>,
     pub offset: u64,
     pub handle: vk::Buffer,
-    memory: vk::DeviceMemory,
+    pub(super) memory: vk::DeviceMemory,
     pub bytes: u64,
     pub allocated_bytes: u64,
     pub reserved_bytes: u64,
@@ -208,7 +208,7 @@ impl GeometryArena {
     }
 }
 impl Buffer {
-    fn allocate(
+    pub(super) fn allocate(
         device: &ash::Device,
         memory: &vk::PhysicalDeviceMemoryProperties,
         bytes: u64,
@@ -419,11 +419,11 @@ impl Upload {
         Ok(destination)
     }
 }
-struct Transfer {
-    device: ash::Device,
-    pool: vk::CommandPool,
-    fence: vk::Fence,
-    submitted: bool,
+pub(super) struct Transfer {
+    pub(super) device: ash::Device,
+    pub(super) pool: vk::CommandPool,
+    pub(super) fence: vk::Fence,
+    pub(super) submitted: bool,
 }
 impl Drop for Transfer {
     fn drop(&mut self) {

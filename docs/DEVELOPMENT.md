@@ -348,3 +348,20 @@ cargo run --locked --manifest-path crates/theia-assets/Cargo.toml --example text
 
 The initial source is explicit row-major RGBA8 JSON, not a general image importer.
 The official validator's custom-provenance-key warning is expected and recorded.
+
+## Resident texture sampling qualification
+
+```bash
+apps/theia-render-lab/target/debug/theia-render-lab --asset <mesh> \
+  --materials <material-page> --uv-test <uv-page> --texture-test <hash.ktx2> \
+  --gpu 7900 --wsi-smoke-test
+```
+
+This fixed-asset profile applies one nearest-repeat mip-zero texture to all
+opaque unlit factors. `--texture-budget <bytes>` caps actual image memory
+requirements before allocation. It rejects cell/fallback combinations.
+CPU reference: `--texture-reference <mesh material uv texture x y width height view>`.
+Capture uses `THEIA_CAPTURE_TEXTURE_PAGE` together with `THEIA_CAPTURE_ASSET`,
+`THEIA_CAPTURE_UV_PAGE` and `THEIA_CAPTURE_MATERIAL_PAGE`; select default/shared
+identity shaders as before. Texture replay checks exact GPU texels, both sidecar
+buffers, identities, depth and sampled colours against the CPU reference.

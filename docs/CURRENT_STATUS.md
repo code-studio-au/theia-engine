@@ -4,6 +4,30 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 resident texture sampling — independently executed (2026-10-11)
+
+`--texture-test <ktx2>` connects one immutable opaque RGBA8 sRGB texture to fixed
+geometry, UV and unlit factor pages. Vulkan image-format limits and physical
+allocation budget are checked; dedicated upload fence and transfer-to-fragment
+sampled-read barrier publish the image. One nearest-repeat sampler samples mip
+zero; Slang reconstructs perspective UVs and multiplies sampled linear RGB by
+the authored factor. Descriptor/frame retirement protects image/sampler lifetime.
+
+RX 7900 XTX passes 15 standalone 120-frame/ten-generation validation paths,
+including imported/terrain/shared texture paths and earlier rendering modes,
+with zero diagnostics through teardown. Six separate texture captures verify
+actual GPU texels/geometry/UV/factor bytes, identities/work, depth and colours;
+terrain checks all 512 visible triangles plus 81 grid samples. Original UV and
+M3 captures also pass. A 4095-byte physical image cap rejects the 4096-byte image;
+missing texture shader cleanup passes. Fourteen renderer tests, formatting,
+denied-warning Clippy and both 26-output shader builds/validation pass.
+
+This applies one explicitly supplied texture to all material factors. It does
+not import glTF images, establish per-material texture bindings, mip/derivative
+selection, streaming dependency publication or virtual textures. Next: bounded
+authored image import and dependency binding. No push or performance claim.
+[Evidence](validation/M4_TEXTURES.md).
+
 ## M4 bounded texture asset contract — independently executed (2026-10-11)
 
 Pinned offline KTX-Software 4.4.2 now produces synthetic opaque RGBA8 sRGB,

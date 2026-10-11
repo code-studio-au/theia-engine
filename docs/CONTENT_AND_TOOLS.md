@@ -40,8 +40,9 @@ and [local qualification evidence](validation/M4_COOKED_MESHLETS.md).
 Pinned offline KTX-Software 4.4.2 now qualifies bounded synthetic opaque RGBA8
 sRGB single-mip textures. The source build excludes the separately licensed ETC
 decoder; no native tool enters the runtime. The pure Rust KTX2 reader borrows
-verified dense texels. This is the CPU asset contract; authored glTF image import,
-GPU upload/sampling, mip/gradient and residency integration remain open.
+verified dense texels. A resident Vulkan upload/nearest-repeat mip-zero path now
+qualifies perspective sampling with unlit factors. Authored glTF image import,
+per-material texture dependencies, mip/gradient and residency integration remain open.
 [Profile/evidence](validation/M4_TEXTURES.md).
 
 `tools/theia-gltf-import` now evaluates pinned Rust `gltf` 1.4.1 offline for a

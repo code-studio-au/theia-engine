@@ -39,6 +39,25 @@ source hash and executable/library evidence are recorded in
 [texture qualification](validation/M4_TEXTURES.md). GPU upload/sampling is not
 established by this CPU contract.
 
+The subsequent fixed-asset `--texture-test <ktx2> --uv-test <uv> --materials <mat>`
+qualification uploads one RGBA8_SRGB sampled image and applies it to all factors.
+The two sidecars independently bind exact geometry; the texture is explicitly
+supplied, not resolved from an authored material dependency. Cell/fallback
+combinations are rejected. One nearest-repeat sampler clamps mip selection to
+zero; the Slang shader uses explicit SampleLevel at zero. This qualifies sRGB
+RGB decoding before multiplication by linear unlit factors, source top-left
+orientation and wrapping. It does not qualify derivatives, filtering/mips,
+alpha, multiple textures, authored glTF images or virtual textures.
+
+`--texture-budget` caps actual Vulkan image memory requirements (default 4 MiB)
+before allocation. Staging has its own 4 MiB cap. Query image format/dimensions,
+upload with a dedicated fence, transition TRANSFER_DST to SHADER_READ_ONLY with
+TRANSFER_WRITE -> FRAGMENT sampled-read synchronization. Successful upload uses
+no device/queue idle wait. Error guards retire submitted work before staging or
+image destruction. Renderer retains image/sampler across swapchain generations
+and retires frame/descriptor users before teardown. Binding 7 is the sampled
+image, binding 8 its sampler; UV/material storage bindings remain 6/5.
+
 ## Version 1 byte layout
 
 All integer/float words are little-endian. The 76-byte header is:

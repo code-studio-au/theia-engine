@@ -59,3 +59,68 @@ CI configuration includes source build, native production and Rust inspection;
 hosted CI and Windows native tool/GPU execution have not run. No push or
 performance claim. Next qualification is bounded resident Vulkan upload/sampling
 against the existing perspective UV reference.
+
+## Resident Vulkan texture sampling (2026-10-11)
+
+The same 916-byte KTX2 asset now feeds one resident Vulkan R8G8B8A8_SRGB image.
+Fixed geometry/UV/factor paths are the preceding authored UV fixture and terrain
+pairs, unchanged hashes. Physical-device image format/dimension limits are
+queried. Actual image memory requirements are checked before allocation:
+2x2/16 texel bytes requires 4,096 image bytes and 16 coherent staging bytes on
+the RX 7900 XTX. The default physical cap is 4 MiB; an explicit 4,095-byte cap
+fails after image creation without a Vulkan warning/error or leaked live object.
+
+A dedicated upload fence protects staging/image ownership. Scoped Sync2 image
+barriers transition UNDEFINED -> TRANSFER_DST -> SHADER_READ_ONLY and publish
+transfer writes to fragment sampled reads. Successful upload has no queue/device
+idle wait. Renderer owns image and nearest-repeat sampler across swapchain
+recreation, retires frame/descriptor users first, and releases children before
+the device. Missing resolve shader fails after uploads/target construction with
+zero Vulkan diagnostics through cleanup.
+
+Slang fragment resolve shares the qualified perspective UV reconstruction,
+samples explicit mip zero and multiplies sampled linear RGB by the authored
+linear unlit factor. Bindings 7/8 hold the image/sampler; 5/6 retain factors/UVs.
+One supplied texture applies to all material assignments; no authored source
+material-to-texture table exists yet. Other rendering/identity modes remain
+available. UV and factor pages both validate exact geometry binding.
+
+CPU nearest-repeat reference independently decodes sRGB with the standard
+piecewise transfer function. A new analytic test checks known texel values,
+top-left orientation, integer boundaries and negative/repeated coordinates.
+Fourteen renderer tests, formatting and denied-warning Clippy pass. Both default
+and shared-identity compiler builds compile/SPIR-V validate all 26 shader outputs.
+
+Standalone synchronization-validation regression on RX 7900 XTX/RADV passes 15
+paths, each 120 presented frames and ten swapchain generations with zero
+diagnostics including teardown: imported texture, terrain texture, shared
+texture, UV, authored factors, M3 visibility, indirect, clear, mesh, task,
+spatial, asset, camera, frustum and diagnostic material cell. Separately recorded
+failure paths reject the physical allocation cap and missing shader safely.
+
+RenderDoc 1.46 capture validation remains disabled, separate from standalone
+validation. Each target presents 180 frames. Captures verify exact GPU texture
+texels, geometry, UV and factor bytes, GPU indirect work and visibility identity,
+and compare CPU depth/sampled colour at 2e-6 depth/two RGB-byte tolerances:
+
+| Texture case | Samples | Visible triangle probes |
+| --- | ---: | ---: |
+| Imported full | 85 | 4 |
+| Imported empty | 81 | 0 |
+| Imported narrow | 83 | 2 |
+| Imported shared identity | 85 | 4 |
+| Terrain | 593 | 512 |
+| Terrain shared identity | 593 | 512 |
+
+The original UV diagnostic replay passes 85 samples; original M3 replay passes
+84 samples. Captures exercise reflected geometry and UVs outside [0,1] with
+nearest repeat. Reports retain expected UV and actual identities; actual GPU
+texel readback matches all source bytes, including row/channel ordering.
+
+Artifacts: `build/qualification/m4-texture-gpu-{shaders.log,shared-shaders.log,
+smoke.log,terrain-smoke.log,allocation.log,missing-shader.log}`,
+`m4-texture-gpu-regression-*.log` and
+`m4-texture-gpu-{full,empty,narrow,shared,terrain,terrain-shared,uv-regression,
+m3-regression}/report.json` with captures/images. No hosted CI, push, benchmark
+or Windows GPU claim. Next: bounded authored image import/material dependencies;
+general mip/derivative/filtering, compression and virtual textures remain open.

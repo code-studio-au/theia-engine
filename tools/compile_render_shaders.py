@@ -43,7 +43,8 @@ def main():
                ('asset_visibility.slang', 'assetVisibilityFragment', 'fragment', 'asset.visibility.frag.spv'),
                ('asset_resolve.slang', 'assetResolveFragment', 'fragment', 'asset.resolve.frag.spv'),
                ('asset_authored_resolve.slang', 'assetAuthoredResolveFragment', 'fragment', 'asset.authored.resolve.frag.spv'),
-               ('asset_uv_resolve.slang', 'assetUvResolveFragment', 'fragment', 'asset.uv.resolve.frag.spv')]
+               ('asset_uv_resolve.slang', 'assetUvResolveFragment', 'fragment', 'asset.uv.resolve.frag.spv'),
+               ('asset_texture_resolve.slang', 'assetTextureResolveFragment', 'fragment', 'asset.texture.resolve.frag.spv')]
     try:
         subprocess.run([args.slangc, '-version'], check=True)
         if args.shared_primitive_interface:

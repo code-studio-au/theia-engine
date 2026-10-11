@@ -8,6 +8,7 @@ pub(super) struct Image {
     memory: vk::DeviceMemory,
     pub(super) view: vk::ImageView,
     aspect: vk::ImageAspectFlags,
+    pub(super) allocated_bytes: u64,
 }
 impl Image {
     pub(super) fn new(
@@ -18,12 +19,24 @@ impl Image {
         aspect: vk::ImageAspectFlags,
         usage: vk::ImageUsageFlags,
     ) -> Result<Self> {
+        Self::bounded(device, memory, extent, format, aspect, usage, u64::MAX)
+    }
+    pub(super) fn bounded(
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        extent: vk::Extent2D,
+        format: vk::Format,
+        aspect: vk::ImageAspectFlags,
+        usage: vk::ImageUsageFlags,
+        budget: u64,
+    ) -> Result<Self> {
         let mut image = Self {
             device: device.clone(),
             handle: vk::Image::null(),
             memory: vk::DeviceMemory::null(),
             view: vk::ImageView::null(),
             aspect,
+            allocated_bytes: 0,
         };
         // SAFETY: Device and create-info storage are live. Each successful handle is immediately retained.
         unsafe {
@@ -45,6 +58,10 @@ impl Image {
                 None,
             )?;
             let requirements = device.get_image_memory_requirements(image.handle);
+            if requirements.size > budget {
+                return Err("Texture image allocation exceeds physical byte budget".into());
+            }
+            image.allocated_bytes = requirements.size;
             let index = (0..memory.memory_type_count)
                 .find(|&i| {
                     requirements.memory_type_bits & (1 << i) != 0
@@ -98,6 +115,7 @@ impl Drop for Image {
 pub struct ResolveBuffers {
     pub materials: Option<vk::DescriptorBufferInfo>,
     pub uvs: Option<vk::DescriptorBufferInfo>,
+    pub texture: Option<vk::DescriptorImageInfo>,
 }
 pub struct Target {
     visibility: Option<Pipeline>,
@@ -230,6 +248,20 @@ impl Target {
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
+            if buffers.texture.is_some() {
+                for (binding, ty) in [
+                    (7, vk::DescriptorType::SAMPLED_IMAGE),
+                    (8, vk::DescriptorType::SAMPLER),
+                ] {
+                    bindings.push(
+                        vk::DescriptorSetLayoutBinding::default()
+                            .binding(binding)
+                            .descriptor_type(ty)
+                            .descriptor_count(1)
+                            .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+                    );
+                }
+            }
             let mut flags = vec![
                 vk::DescriptorBindingFlags::empty(),
                 vk::DescriptorBindingFlags::empty(),
@@ -245,6 +277,9 @@ impl Target {
             if uv {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
+            if buffers.texture.is_some() {
+                flags.extend([vk::DescriptorBindingFlags::empty(); 2]);
+            }
             let mut binding_flags =
                 vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(&flags);
             target.layout = device.create_descriptor_set_layout(
@@ -256,10 +291,10 @@ impl Target {
             let mut sizes = vec![
                 vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::SAMPLED_IMAGE)
-                    .descriptor_count(4),
+                    .descriptor_count(4 + u32::from(buffers.texture.is_some())),
                 vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::SAMPLER)
-                    .descriptor_count(1),
+                    .descriptor_count(1 + u32::from(buffers.texture.is_some())),
             ];
             if cooked {
                 sizes.push(
@@ -343,6 +378,21 @@ impl Target {
                         .buffer_info(info),
                 );
             }
+            let texture_images = buffers.texture.map(|info| [info]);
+            if let Some(info) = &texture_images {
+                for (binding, ty) in [
+                    (7, vk::DescriptorType::SAMPLED_IMAGE),
+                    (8, vk::DescriptorType::SAMPLER),
+                ] {
+                    writes.push(
+                        vk::WriteDescriptorSet::default()
+                            .dst_set(target.set)
+                            .dst_binding(binding)
+                            .descriptor_type(ty)
+                            .image_info(info),
+                    );
+                }
+            }
             device.update_descriptor_sets(&writes, &[]);
         }
         target.visibility = Some(Pipeline::visibility(device, shaders, work_layout, cooked)?);
@@ -351,9 +401,12 @@ impl Target {
             color_format,
             shaders,
             target.layout,
-            cooked,
-            authored,
-            uv,
+            crate::pipeline::ResolveMode {
+                cooked,
+                authored,
+                uv,
+                texture: buffers.texture.is_some(),
+            },
         )?);
         println!(
             "Visibility targets ready: R32G32_UINT {}/primitive + D32_SFLOAT depth; mesh material resolve",

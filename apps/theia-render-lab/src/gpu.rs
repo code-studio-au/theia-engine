@@ -851,6 +851,7 @@ pub struct Renderer {
     work: Option<IndirectWork>,
     materials: Option<crate::asset::Buffer>,
     uvs: Option<crate::asset::Buffer>,
+    texture: Option<crate::texture::ResidentTexture>,
     pub recreate: bool,
     generations: u64,
     shader_dir: Option<std::path::PathBuf>,
@@ -879,6 +880,7 @@ impl Renderer {
             work: None,
             materials: None,
             uvs: None,
+            texture: None,
             work_items: options.work_items.unwrap_or(2),
             cycle_work: options.smoke,
             presented: 0,
@@ -1029,6 +1031,45 @@ impl Renderer {
                     None,
                 )?);
             }
+            if let Some(path) = &options.texture {
+                let bytes = crate::texture::load(path)?;
+                let texture = theia_assets::texture::Texture::decode(
+                    &bytes,
+                    None,
+                    theia_assets::texture::DEFAULT_BUDGET,
+                )?;
+                // SAFETY: Selected physical device and instance are retained and live.
+                let properties = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_image_format_properties(
+                            renderer.ctx.physical,
+                            vk::Format::R8G8B8A8_SRGB,
+                            vk::ImageType::TYPE_2D,
+                            vk::ImageTiling::OPTIMAL,
+                            vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                            vk::ImageCreateFlags::empty(),
+                        )?
+                };
+                if texture.width > properties.max_extent.width
+                    || texture.height > properties.max_extent.height
+                {
+                    return Err("Resident texture exceeds device image limits".into());
+                }
+                renderer.texture = Some(crate::texture::ResidentTexture::upload(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    &texture,
+                    renderer.ctx.graphics_family,
+                    renderer.ctx.graphics,
+                    options
+                        .texture_budget
+                        .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64),
+                )?);
+            }
             renderer.work = Some(IndirectWork::new(
                 renderer.ctx.device.as_ref().unwrap(),
                 &memory,
@@ -1082,6 +1123,7 @@ impl Renderer {
                         .offset(buffer.offset)
                         .range(buffer.bytes)
                 }),
+                texture: self.texture.as_ref().map(|texture| texture.descriptor()),
                 uvs: self.uvs.as_ref().map(|buffer| {
                     vk::DescriptorBufferInfo::default()
                         .buffer(buffer.handle)
@@ -1467,6 +1509,7 @@ impl Drop for Renderer {
         drop(self.work.take());
         drop(self.materials.take());
         drop(self.uvs.take());
+        drop(self.texture.take());
         println!(
             "Render Lab teardown: {} swapchain generations",
             self.generations

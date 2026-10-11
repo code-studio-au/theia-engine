@@ -32,6 +32,13 @@ impl Drop for ShaderModule {
         }
     }
 }
+#[derive(Clone, Copy)]
+pub struct ResolveMode {
+    pub cooked: bool,
+    pub authored: bool,
+    pub uv: bool,
+    pub texture: bool,
+}
 pub struct Pipeline {
     device: ash::Device,
     pub handle: vk::Pipeline,
@@ -147,10 +154,14 @@ impl Pipeline {
         format: vk::Format,
         shader_dir: &Path,
         descriptor_layout: vk::DescriptorSetLayout,
-        cooked: bool,
-        authored: bool,
-        uv: bool,
+        mode: ResolveMode,
     ) -> Result<Self> {
+        let ResolveMode {
+            cooked,
+            authored,
+            uv,
+            texture,
+        } = mode;
         Self::configured(
             device,
             format,
@@ -159,7 +170,9 @@ impl Pipeline {
             ShaderStages {
                 mesh: "resolve.mesh.spv",
                 task: None,
-                fragment: if uv {
+                fragment: if texture {
+                    "asset.texture.resolve.frag.spv"
+                } else if uv {
                     "asset.uv.resolve.frag.spv"
                 } else if authored {
                     "asset.authored.resolve.frag.spv"
