@@ -4,6 +4,22 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## Composited Wayland pixel reference — independently executed (2026-10-11)
+
+The owned nested compositor now captures its own output via Weston's screenshot
+API. An offline analytical reference locates the unscaled 960x540 canvas and checks
+GPU-generated indirect counts 0/1/2, interpolated RGB/sRGB and clear background.
+Three actual 300-frame Wayland runs pass zero diagnostics; screenshots verify
+7973/7932/7888 sampled pixels, including absent/right-present geometry. Six WSI
+modes also pass again. No Rust/shader changes in this unit.
+
+This is composited display evidence, not RenderDoc replay (the available build still
+rejects Wayland surfaces). Debug screenshot access exists only in the owned temporary
+compositor; no main desktop capture/system installation. Weston logs its own layer
+finalization diagnostic on termination; no clean-compositor-shutdown claim. Native
+seat/manual restore, Windows/cross-vendor and performance gates remain open.
+[Evidence](validation/WAYLAND_PIXELS.md).
+
 ## Nested Wayland platform qualification — independently executed (2026-10-11)
 
 An isolated Weston 13 compositor nested on X11 now executes Theia's actual Wayland

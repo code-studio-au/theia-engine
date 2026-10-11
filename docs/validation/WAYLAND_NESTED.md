@@ -70,3 +70,7 @@ Primary references: [Weston running/backends documentation](https://wayland.page
 Pinned local Weston help/source and Winit source were also inspected. No unsupported
 restore API is treated as working. Next investigate an isolated compositor screenshot
 oracle or a debugger with proven Wayland support; do not infer replay from execution.
+
+Subsequent [composited pixel qualification](WAYLAND_PIXELS.md) now verifies visible
+indirect count 0/1/2 output through the owned compositor's screenshot protocol.
+It is a distinct display oracle; Wayland RenderDoc replay remains unqualified.

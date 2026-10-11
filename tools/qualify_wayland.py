@@ -12,7 +12,7 @@ import tempfile
 import time
 
 
-def qualify(weston_root, output, network=False, capture=False):
+def qualify(weston_root, output, network=False, capture=False, pixels=False):
     if os.name != 'posix' or not os.environ.get('DISPLAY'):
         raise RuntimeError('Nested qualification requires Linux/X11 DISPLAY')
     weston_root, output = weston_root.resolve(), output.resolve()
@@ -35,7 +35,7 @@ def qualify(weston_root, output, network=False, capture=False):
                 compositor = subprocess.Popen([str(weston_root/'usr/bin/weston'),
                     '--no-config','--backend=x11','--renderer=gl','--width=1400',
                     '--height=900','--socket=theia-qualification','--idle-time=0',
-                    '--log='+str(output/'weston.log')], env=weston_env, stdout=log, stderr=subprocess.STDOUT)
+                    '--log='+str(output/'weston.log'),*(['--debug'] if pixels else [])], env=weston_env, stdout=log, stderr=subprocess.STDOUT)
                 deadline = time.monotonic()+10
                 while not (Path(runtime)/'theia-qualification').exists():
                     if time.monotonic()>=deadline or compositor.poll() is not None:
@@ -62,6 +62,9 @@ def qualify(weston_root, output, network=False, capture=False):
                         if required not in text:
                             raise RuntimeError('Missing '+required+': '+text)
                     print('Qualified nested Wayland:',name,flush=True)
+                if pixels:
+                    from qualify_wayland_pixels import qualify as qualify_pixels
+                    qualify_pixels(weston_root,client_env,output)
                 if network:
                     with (output/'network-harness.log').open('w') as client_log:
                         subprocess.run(['python3','tools/qualify_network_viewer.py','--faults',
@@ -96,7 +99,7 @@ def qualify(weston_root, output, network=False, capture=False):
                     print('Qualified nested Wayland: indirect capture/replay',flush=True)
                 (output/'report.json').write_text(json.dumps({'nested_compositor':'Weston 13.0.0 X11/GL',
                     'native_surface':'Wayland','standalone_modes':6,'frames_per_mode':120,
-                    'network_pair':network,'capture_replay':capture,'programmatic_minimize_restore':False,
+                    'network_pair':network,'compositor_pixels':pixels,'capture_replay':capture,'programmatic_minimize_restore':False,
                     'validation':'zero warnings/errors in checked standalone runs'},indent=2)+'\n')
             finally:
                 if compositor is not None and compositor.poll() is None:
@@ -114,5 +117,6 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, default=Path('build/qualification/wayland-wsi'))
     parser.add_argument('--network',action='store_true')
     parser.add_argument('--capture',action='store_true')
+    parser.add_argument('--pixels',action='store_true')
     args = parser.parse_args()
-    qualify(args.weston_root,args.output,args.network,args.capture)
+    qualify(args.weston_root,args.output,args.network,args.capture,args.pixels)

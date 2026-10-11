@@ -57,3 +57,9 @@ from automated smoke. Available RenderDoc 1.46 rejects the Wayland surface exten
 that capture attempt fails and is not counted as validation/replay success. Native
 seat/user minimize-restore, Windows and other vendors remain gates. No timing/
 performance claim. [Evidence](validation/WAYLAND_NESTED.md).
+
+The owned compositor's screenshot API now provides a separate visible-output oracle
+for indirect 0/1/2 work counts: actual pixel samples/300-frame validation pass.
+RenderDoc Wayland replay remains unqualified. Debug screenshot access is confined
+to the temporary owned runtime; screenshots are ignored local artifacts. No timing/
+performance or native-seat claim. [Evidence](validation/WAYLAND_PIXELS.md).

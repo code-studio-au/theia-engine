@@ -767,3 +767,16 @@ so this option currently fails with that explicit limitation. Do not report a
 capture/validation pass from that failed attempt. Native-seat, user-driven window
 restore, Windows and cross-vendor execution remain unqualified.
 [Evidence and primary references](validation/WAYLAND_NESTED.md).
+
+Composited Wayland pixel reference (same extracted Weston setup, Pillow available):
+
+```sh
+PYTHONPYCACHEPREFIX=build/python-cache python3 tools/qualify_wayland.py --pixels --output build/qualification/wayland-pixels
+```
+
+`--pixels` enables debug screenshot access only in the owned temporary compositor,
+uses its screenshooter with an owned output directory and validates actual displayed
+triangles/background against an analytical RGB/sRGB oracle. It additionally runs
+three 300-frame indirect cases with Vulkan validation. It does not capture the main
+X11 desktop, edit the PNG content or qualify RenderDoc replay. Source screenshots
+and reports remain ignored artifacts. [Evidence](validation/WAYLAND_PIXELS.md).

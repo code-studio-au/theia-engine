@@ -259,3 +259,7 @@ for six renderer modes and faulted live replication/full repair. Native Wayland
 seat/user-driven minimize-restore, Wayland capture replay, Windows and other vendors
 remain open. The bounded X11 reference slice stays preserved; no performance or
 complete cross-platform milestone claim.
+
+Nested Wayland now also has composited visible-pixel reference evidence for GPU
+indirect counts 0/1/2. This complements validation/execution; it does not close the
+Wayland debugger replay, native seat/restore, Windows or cross-vendor gates.
