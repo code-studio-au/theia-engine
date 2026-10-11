@@ -235,3 +235,14 @@ A death/respawn wholly hidden by lost snapshots cannot be detected without futur
 incarnation/version metadata. Teleport flags, collision-aware visual paths,
 network clock estimation, prediction and GPU renderer integration remain open.
 Interpolation may cut between legal positions and is never movement legality.
+
+## M7 actual fixed GPU presentation connection
+
+A separate Render Lab authority mode now consumes two completed local authority
+ticks through the readonly replica oracle. It transfers two actor positions/IDs/
+health as one 64-byte push; Slang performs positional interpolation and generates
+actor/obstacle squares in three mesh groups with one draw. IDs are split low/high
+32-bit words; fixture IDs exceed 32 bits and both words affect the palette.
+Health is current server state, not interpolated or client-owned. This fixed
+profile is neither a general GPU actor store nor animation/character system.
+The fixture does not consume live Quinn snapshots or interactive input yet.

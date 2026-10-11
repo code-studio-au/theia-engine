@@ -193,3 +193,9 @@ logical-ID/lifecycle, health, gap/clamp and large-counter checks, and both encry
 lab modes sample received state. Next inspect renderer integration for a small
 verifiable presentation slice. Production GPU smoothing, network clock estimation,
 prediction, delta baselines and account/persistence remain open.
+
+A fixed server-owned two-tick actor fixture now passes GPU interpolation/health/
+64-bit-ID colour checks and preserves the preceding render modes. Next add small
+interactive local-authority controls using that presentation contract, then
+connect a live encrypted network feed. This does not close M6 characters, M7
+navigation/gameplay or M8 live client/persistence gates.

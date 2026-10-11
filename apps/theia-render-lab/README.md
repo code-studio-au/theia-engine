@@ -210,3 +210,11 @@ Slots are fully populated; descriptor holes and updates during rendering are not
 qualified. Constant 1×1 textures qualify material selection, not UV patterns,
 mip gradients or production asset residency. General perspective reconstruction,
 compressed geometry/material tables and transparency remain later work.
+
+## Fixed authority snapshot fixture
+
+`--authority-test [--authority-alpha 0..1]` draws two GPU-interpolated actor squares
+and a static obstacle from completed Rust authority ticks; current health changes
+colour. One push/mesh draw, no vertex buffer. This is fixed qualification state,
+not interactive or a live network client. `--authority-reference .5` prints the
+CPU oracle without Vulkan. See [evidence](../../docs/validation/M7_GPU_AUTHORITY_PRESENTATION.md).

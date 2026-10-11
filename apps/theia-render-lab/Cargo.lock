@@ -1322,6 +1322,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "theia-protocol"
+version = "0.1.0"
+dependencies = [
+ "theia-sim",
+]
+
+[[package]]
 name = "theia-render-lab"
 version = "0.1.0"
 dependencies = [
@@ -1329,8 +1336,14 @@ dependencies = [
  "ash-window",
  "serde_json",
  "theia-assets",
+ "theia-protocol",
+ "theia-sim",
  "winit",
 ]
+
+[[package]]
+name = "theia-sim"
+version = "0.1.0"
 
 [[package]]
 name = "thiserror"

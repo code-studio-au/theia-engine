@@ -860,6 +860,7 @@ pub struct Renderer {
     texture: Option<crate::texture::ResidentTexture>,
     textures: Vec<crate::texture::ResidentTexture>,
     texture_table: Option<crate::asset::Buffer>,
+    authority: Option<[u8; 64]>,
     pub recreate: bool,
     generations: u64,
     shader_dir: Option<std::path::PathBuf>,
@@ -879,6 +880,11 @@ impl Renderer {
     ) -> Result<Self> {
         let ctx = Context::new(window, options, validation)?;
         let mut renderer = Self {
+            authority: if options.render_mode() == RenderMode::Authority {
+                Some(crate::authority::fixture(options.authority_alpha.unwrap_or(0.5))?.bytes)
+            } else {
+                None
+            },
             ctx,
             chain: None,
             stream: None,
@@ -904,6 +910,29 @@ impl Renderer {
                 })
             }),
         };
+        if renderer.mode == RenderMode::Authority {
+            let mut mesh = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
+            let mut props = vk::PhysicalDeviceProperties2::default().push_next(&mut mesh);
+            // SAFETY: Physical device/instance are retained by the context; writable chain is live.
+            unsafe {
+                renderer
+                    .ctx
+                    .instance
+                    .as_ref()
+                    .unwrap()
+                    .get_physical_device_properties2(renderer.ctx.physical, &mut props);
+            }
+            if props.properties.limits.max_push_constants_size < 64
+                || mesh.max_mesh_output_vertices < 4
+                || mesh.max_mesh_output_primitives < 2
+                || mesh.max_mesh_work_group_count[0] < 3
+                || mesh.max_mesh_work_group_total_count < 3
+                || mesh.max_mesh_output_memory_size < 4 * 28 + 2 * 12
+                || mesh.max_mesh_output_components < 7
+            {
+                return Err("Device cannot support bounded authority mesh/push profile".into());
+            }
+        }
         if matches!(
             renderer.mode,
             RenderMode::Indirect
@@ -1674,7 +1703,16 @@ impl Renderer {
                         &bytes,
                     );
                 }
-                if let Some(work) = &self.work {
+                if let Some(bytes) = &self.authority {
+                    device.cmd_push_constants(
+                        ctx.command,
+                        pipeline.layout,
+                        vk::ShaderStageFlags::MESH_EXT,
+                        0,
+                        bytes,
+                    );
+                    commands.cmd_draw_mesh_tasks(ctx.command, 3, 1, 1);
+                } else if let Some(work) = &self.work {
                     work.draw(ctx.command, pipeline.layout, commands);
                 } else {
                     commands.cmd_draw_mesh_tasks(ctx.command, 1, 1, 1);

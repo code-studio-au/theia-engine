@@ -48,6 +48,8 @@ jobs:
         run: cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml
       - name: Execute controlled encrypted packet fault qualification
         run: cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml -- --faults
+      - name: Qualify readonly authority presentation CPU fixture
+        run: cargo run --locked --manifest-path apps/theia-render-lab/Cargo.toml -- --authority-reference 0.5
   shaders:
     runs-on: ubuntu-latest
     steps:

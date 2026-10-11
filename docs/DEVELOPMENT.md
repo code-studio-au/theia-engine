@@ -576,3 +576,23 @@ against the last two accepted complete snapshots. The protocol tests include
 3000 independent numeric samples; both network modes check finite readonly
 presentation samples. These sample times are test inputs, not a synchronized
 screen clock. See [evidence](validation/M8_PRESENTATION_INTERPOLATION.md).
+
+## M7 fixed GPU authority presentation
+
+```sh
+python3 tools/compile_render_shaders.py --slangc /path/to/slangc
+cargo run --locked --manifest-path apps/theia-render-lab/Cargo.toml -- --authority-reference 0.5
+cargo run --locked --manifest-path apps/theia-render-lab/Cargo.toml -- --gpu 7900 --authority-test --smoke-test --wsi-smoke-test
+```
+
+`--authority-alpha 0..1` chooses interpolation fraction, default .5. This fixture
+uses actual server-owned movement/combat ticks and a readonly CPU oracle; no
+keyboard control/live network is implemented yet. Capture/replay qualification:
+
+```sh
+THEIA_AUTHORITY_ALPHA=.5 THEIA_CAPTURE_OUTPUT="$PWD/build/qualification/authority-replay" qrenderdoc --python tools/renderdoc_authority_qualify.py
+```
+
+Use the preceding local RenderDoc layer/XDG setup. Captures explicitly disable
+validation; standalone runs separately qualify Vulkan synchronization/lifetime.
+See [evidence](validation/M7_GPU_AUTHORITY_PRESENTATION.md).

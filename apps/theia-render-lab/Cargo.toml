@@ -9,3 +9,5 @@ ash-window = "0.13"
 winit = "0.30"
 theia-assets = { path = "../../crates/theia-assets" }
 serde_json = "1"
+theia-sim = { path = "../../crates/theia-sim" }
+theia-protocol = { path = "../../crates/theia-protocol" }

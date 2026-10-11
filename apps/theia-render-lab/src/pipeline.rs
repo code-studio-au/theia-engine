@@ -70,7 +70,9 @@ impl Pipeline {
                 | RenderMode::AssetCull
                 | RenderMode::AssetLod
         );
-        let mesh_file = if mode == RenderMode::AssetLod {
+        let mesh_file = if mode == RenderMode::Authority {
+            "authority.mesh.spv"
+        } else if mode == RenderMode::AssetLod {
             "asset.lod.mesh.spv"
         } else if mode == RenderMode::AssetCull {
             "asset.cull.mesh.spv"
@@ -114,7 +116,11 @@ impl Pipeline {
             ShaderStages {
                 mesh: mesh_file,
                 task: task_file,
-                fragment: "triangle.frag.spv",
+                fragment: if mode == RenderMode::Authority {
+                    "authority.frag.spv"
+                } else {
+                    "triangle.frag.spv"
+                },
                 depth: matches!(
                     mode,
                     RenderMode::AssetCamera | RenderMode::AssetCull | RenderMode::AssetLod
@@ -122,7 +128,10 @@ impl Pipeline {
                 .then_some(vk::Format::D32_SFLOAT),
                 push: matches!(
                     mode,
-                    RenderMode::AssetCamera | RenderMode::AssetCull | RenderMode::AssetLod
+                    RenderMode::Authority
+                        | RenderMode::AssetCamera
+                        | RenderMode::AssetCull
+                        | RenderMode::AssetLod
                 )
                 .then_some(vk::ShaderStageFlags::MESH_EXT),
             },

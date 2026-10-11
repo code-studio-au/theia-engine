@@ -4,6 +4,25 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M7 fixed GPU authority presentation — independently executed (2026-10-11)
+
+Separate Render Lab `--authority-test` consumes a fixed two-tick movement/combat
+fixture from `theia-sim`, validated through the readonly replica/presentation
+oracle. One 64-byte push transfers two previous/current positions, split 64-bit
+logical IDs, current health, blend mask and alpha. Slang mesh groups interpolate
+positions and generate two actor squares plus one static obstacle; one draw,
+no vertex buffer or per-actor host draw. Gameplay remains CPU/server-owned.
+
+RX 7900 XTX default/shared authority modes pass 120 frames/ten swapchain generations
+with zero diagnostics. Three RenderDoc captures (alpha 0/.5/1) match 32371/32371/
+32387 sampled pixels to CPU positions/health colours, checking IDs above 32 bits.
+Sixteen legacy modes also pass 120-frame/WSI validation; preserved compute verifies
+256 values. Both shader variants compile/SPIR-V validate 31 outputs. Renderer
+15 tests, formatting/Clippy and malformed-option/missing-shader cleanup pass.
+This is a fixed snapshot fixture, not interactive or connected to Quinn. Next
+add bounded interactive local authority controls before a live network feed.
+[Evidence](validation/M7_GPU_AUTHORITY_PRESENTATION.md).
+
 ## M8 bounded presentation interpolation — independently executed (2026-10-11)
 
 The readonly replica now retains two complete sets and provides a separate CPU
