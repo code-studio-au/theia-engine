@@ -501,3 +501,18 @@ true zero error, exercising unsupported-numeric fallback. For near-only work
 replay set `THEIA_CAPTURE_LOD_GUARD_ONLY=1`; its report explicitly leaves
 framebuffer verification false. `--frustum-ids <mesh width height view>` permits
 CPU culling-ID checks without the unclipped raster oracle.
+
+## Local authoritative movement lab
+
+```bash
+cargo test --locked --manifest-path crates/theia-sim/Cargo.toml
+cargo clippy --locked --manifest-path crates/theia-sim/Cargo.toml --all-targets -- -D warnings
+cargo run --locked --manifest-path apps/theia-server-lab/Cargo.toml -- --ticks 10000
+```
+
+The headless lab runs fixed **simulation** steps as fast as the local test loop
+can execute; it does not listen on sockets or pace a realtime server. Tick count
+is bounded 1..100000. Three actors exercise server-owned movement/collision,
+replay/invalid-intent rejection and change streams. The collider fixture is a
+flat floor plus static rectangles, independent of renderer LOD or GI. Nine
+library tests and default/100000-tick executions pass locally.

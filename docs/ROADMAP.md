@@ -145,3 +145,11 @@ textures remain open; this does not close M4. Stable authority/presentation and
 resource contracts now support starting a bounded M7 authoritative movement
 slice in parallel, as the roadmap's early-playable-slice priority permits.
 Advanced GI remains deferred.
+
+The permitted parallel M7 track now has a bounded authoritative movement slice
+with fixed ticks, server-controlled speed/swept static collision, sequenced
+inputs, stale-session rejection, non-blocking ordinary actors and stable IDs
+through compaction. Next add simple authoritative interactions/combat, then
+transport/replication qualification. M7 is not complete; navigation/mesh collision
+and client integration remain open. M4 hierarchy/virtual textures remain open;
+advanced GI stays deferred.

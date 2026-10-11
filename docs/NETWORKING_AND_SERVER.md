@@ -41,3 +41,34 @@ PostgreSQL for ACID currency, item ownership, inventory, trades, meaningful prog
 ## Benchmark metrics
 
 Packet-processing cycles/packet, p99 latency, useful updates/sec, recipient–entity delivery count, shared-encoding cache hit rate, baseline repair, per-client bytes/queue age, contention, server tick p99, cross-worker traffic, DB commit p99. Distinguish transport crypto cost from replication/interest cost.
+
+## M7 actual bounded movement prototype
+
+A separate pure Rust `theia-sim` store and headless `theia-server-lab` now
+qualify server-owned fixed-tick movement. This is an early parallel M7 slice,
+not a networked server or full authoritative ECS. Dense ID/position/intent/expiry/
+controller columns and a logical-ID row map implement single-writer ownership.
+The server supplies world IDs; the prototype has no persistence identity
+registry. Connection contexts are issued per world/session and must be bound by
+a future authenticated transport, never accepted as client packet credentials.
+
+Clients supply only direction axes and monotonically increasing sequence.
+Admission queues input; it does not acknowledge completed movement. Latest
+accepted direction wins within a tick, and each actor moves once. Bounded
+global/per-session queues reject pressure without consuming retry sequence.
+Held direction expires after a server-defined tick count. Client time/destination/
+speed are not authority inputs. Immutable scene/rules are server-owned.
+
+The qualification uses integer millimetres on a Z=0 floor, static rectangles
+and axis-aligned square actor footprints. Speed normalization rounds
+conservatively; exact rational slab intersection prevents swept tunneling.
+Ordinary actors never block each other. Whole moves into world/obstacle contact
+are rejected; sliding, meshes/capsules/slopes/caves/flight and navigation remain
+unimplemented. Prototype default 50 ms/3000 mm/s/250 mm half extent/three-tick
+input hold are local test values, not approved engine/network policy constants.
+
+Administrative spawn/despawn occur at tick boundaries, with logical identity
+independent of dense row placement. Character respawn issues a fresh context;
+stale queued commands are cancelled. Snapshots/changes are copied immutable
+values, not writable authority. Combat, interactions, reliable gameplay outcomes,
+Quinn, replication, persistence and worker handoff remain future gates.

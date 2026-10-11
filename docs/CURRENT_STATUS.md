@@ -4,6 +4,27 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M7 parallel authoritative movement slice — independently executed (2026-10-11)
+
+`theia-sim` is a separate single-writer Rust authority prototype. Server-owned
+rules/static collision/session bindings accept sequenced directional intents,
+move each actor once per fixed tick, enforce speed and swept world collision,
+and expire missing input. Dense SoA columns keep logical server-supplied world
+IDs independent of rows; compaction and character respawn preserve identity,
+while stale/foreign session contexts fail. Ordinary actors overlap freely.
+Collision is an analytic flat floor plus static rectangles; renderer LOD/GI is
+never gameplay truth. Session binding is not authentication/networking.
+
+Nine tests pass, including 5000 independent segment-intersection comparisons
+and 5000 three-actor ticks. The headless server lab executes 10000 and 100000
+ticks (30000/300000 admitted inputs), verifies maximum movement <=150 mm/tick,
+collision and replay/malformed-intent rejection. Formatting and Clippy pass.
+Prototype units/rules are not engine-wide or wire-format decisions. No combat,
+navigation/mesh collision, networking, persistence or renderer integration yet.
+Next add bounded server-owned interaction/combat rules. M7 remains open;
+M4/general hierarchy/virtual textures and M5 GI also remain open/deferred.
+[Movement evidence](validation/M7_AUTHORITATIVE_MOVEMENT.md).
+
 ## M4 GPU heightfield LOD selection — independently executed (2026-10-11)
 
 Separate `--lod-test <fine coarse>` keeps two source-linked geometry pages
