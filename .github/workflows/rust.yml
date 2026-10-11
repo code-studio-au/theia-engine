@@ -52,6 +52,8 @@ jobs:
         run: cargo run --locked --manifest-path apps/theia-render-lab/Cargo.toml -- --authority-reference 0.5
       - name: Qualify completed local authority intent script without Vulkan
         run: cargo run --locked --manifest-path apps/theia-render-lab/Cargo.toml -- --authority-script-reference
+      - name: Qualify independent encrypted listener and client processes
+        run: python tools/qualify_network_listener.py
   shaders:
     runs-on: ubuntu-latest
     steps:

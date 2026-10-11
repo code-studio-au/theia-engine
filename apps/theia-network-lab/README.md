@@ -21,3 +21,13 @@ See [qualification evidence](../../docs/validation/M8_QUINN_LOOPBACK.md).
 `--faults` enables bounded encrypted packet drop/delay/reordering/duplication after
 handshake. Movement retries until a snapshot's applied watermark. See
 [fault evidence](../../docs/validation/M8_NETWORK_FAULTS.md); no WAN/load claim.
+
+## Separate localhost listener
+
+`--serve [--listen 127.0.0.1:PORT] [--certificate public.der]` prints readiness JSON
+and waits for exactly two verified connections. Only the public certificate is
+written; keys stay in memory. Default local-demo scene; `--laboratory-profile`
+selects empty floor. Two `--client-probe ADDRESS CERTIFICATE` processes verify
+server assignment/movement. `python3 tools/qualify_network_listener.py` automates
+the three processes. Current prototype: THN2/ALPN theia-lab-2. See
+[evidence](../../docs/validation/M8_NETWORK_LISTENER.md); no accounts/graphics yet.

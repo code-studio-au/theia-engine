@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    wire::{self, Message},
+    wire::{self, Message, Profile, Welcome},
 };
 use quinn::Connection;
 use std::{
@@ -71,13 +71,30 @@ async fn read_peer(
     streams.abort_all();
     while streams.join_next().await.is_some() {}
 }
-pub async fn run(connections: [Connection; 2], mut stop: oneshot::Receiver<()>) -> Result<Report> {
+pub async fn run(connections: [Connection; 2], stop: oneshot::Receiver<()>) -> Result<Report> {
+    run_profile(connections, stop, Profile::Laboratory).await
+}
+pub async fn run_profile(
+    connections: [Connection; 2],
+    mut stop: oneshot::Receiver<()>,
+    profile: Profile,
+) -> Result<Report> {
+    if connections[0].stable_id() == connections[1].stable_id() {
+        return Err("Fixture pair requires distinct connections".into());
+    }
     let scene = Scene::new(
         Rect {
             min: [-4000; 2],
             max: [4000; 2],
         },
-        vec![],
+        if profile == Profile::LocalDemo {
+            vec![Rect {
+                min: [-100; 2],
+                max: [100; 2],
+            }]
+        } else {
+            vec![]
+        },
     )?;
     let mut authority = Authority::new(
         scene,
@@ -87,10 +104,33 @@ pub async fn run(connections: [Connection; 2], mut stop: oneshot::Receiver<()>) 
             request_window: 4,
         },
     )?;
+    let y = if profile == Profile::LocalDemo {
+        -1000
+    } else {
+        0
+    };
     let peers = [
-        authority.attach_actor(WorldId::new(10)?, [-1000, 0])?,
-        authority.attach_actor(WorldId::new(20)?, [1000, 0])?,
+        authority.attach_actor(WorldId::new(10)?, [-1000, y])?,
+        authority.attach_actor(WorldId::new(20)?, [1000, y])?,
     ];
+    for (i, connection) in connections.iter().enumerate() {
+        timeout(Duration::from_secs(2), async {
+            let (mut send, mut receive) = connection.open_bi().await?;
+            let welcome = Welcome {
+                actor: WorldId::new(if i == 0 { 10 } else { 20 })?,
+                target: WorldId::new(if i == 0 { 20 } else { 10 })?,
+                profile,
+            };
+            send.write_all(&wire::encode(&Message::Welcome(welcome)))
+                .await?;
+            send.finish()?;
+            if !receive.read_to_end(0).await?.is_empty() {
+                return Err("Unexpected welcome acknowledgement payload".into());
+            }
+            Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
+        })
+        .await??;
+    }
     let (tx, mut rx) = mpsc::channel(32);
     let malformed = Arc::new(AtomicU64::new(0));
     let mut workers = JoinSet::new();
@@ -107,11 +147,11 @@ pub async fn run(connections: [Connection; 2], mut stop: oneshot::Receiver<()>) 
     clock.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut report = Report::default();
     let result: Result<()> = async {
-        loop {
+        'serving: loop {
             tokio::select! {
                 _ = &mut stop => break,
                 event = rx.recv() => {
-                    let Some(event) = event else { return Err("all network readers exited".into()) };
+                    let Some(event) = event else { break };
                     let response = match event.message {
                         Message::Move(input) => { match authority.movement(event.peer, input) { Ok(()) => report.movements += 1, Err(_) => report.rejected_moves += 1 }; None }
                         Message::Attack(input) => Some(Message::Response { request: input.sequence, reply: authority.attack(event.peer, input).map_err(Into::into) }),
@@ -127,7 +167,10 @@ pub async fn run(connections: [Connection; 2], mut stop: oneshot::Receiver<()>) 
                     let actors = [actors[0], actors[1]];
                     for i in 0..2 {
                         let snapshot = Message::Snapshot { tick: report.ticks, applied_move: authority.applied_move(peers[i])?, actors };
-                        connections[i].send_datagram(wire::encode(&snapshot).into())?;
+                        match connections[i].send_datagram(wire::encode(&snapshot).into()) {
+                            Ok(()) => {}, Err(quinn::SendDatagramError::ConnectionLost(_)) => break 'serving,
+                            Err(error) => return Err(error.into()),
+                        }
                     }
                 }
             }

@@ -4,6 +4,25 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 separate listener and actor bootstrap — independently executed (2026-10-11)
+
+`theia-network-lab --serve` binds localhost and writes only its public DER
+certificate; signing keys stay in memory. Two independent `--client-probe`
+processes verify that certificate, receive server-owned actor/target/profile
+bootstrap, bind snapshot reception to their exact retained connection and send
+sequenced movement. The pair ends when a peer disconnects. Fixed laboratory and
+local-demo scene profiles are server-selected; this is not an account service.
+
+Prototype version is now THN2/ALPN `theia-lab-2`; old version/unknown profile/
+duplicate bootstrap IDs fail. Four shared codec tests, one app relay test,
+formatting/Clippy pass. Direct/faulted two-client gameplay still passes two hits/
+health [75,75], and foreign-connection reception is rejected before consumption.
+Independent process probes qualify roles 10/20, direction/applied watermark and
+health 100 for both scene profiles. A six-second delayed second peer passes with
+one-second keepalive; non-loopback/malformed CLI cases reject. Windows/hosted CI
+unexecuted. Next connect this encrypted bootstrap/state to the GPU viewer.
+[Evidence](validation/M8_NETWORK_LISTENER.md).
+
 ## M8 shared encrypted transport fixture — independently executed (2026-10-11)
 
 The already qualified strict wire, TLS configuration, two-actor authority loop

@@ -274,3 +274,28 @@ The executable imports those modules; the opaque fault relay stays app-local.
 This extraction preserves protocol/limits/gameplay behavior and is preparation
 for a separate listener and renderer client. It does not implement accounts,
 a production server API or a live graphics connection by itself.
+
+## M8 actual separate listener/bootstrap
+
+The shared fixture now uses THN2 and `theia-lab-2` ALPN. A reliable server-owned
+welcome contains actor, target and one of two fixed scene profile enums. Completed
+verified handshakes and empty welcome stream completion precede gameplay. Old
+wire/ALPN and invalid profile/duplicate IDs fail. Actors still come from trusted
+server connection context; welcome is identity assignment, not client login.
+No production replication format is locked by this prototype update.
+
+`--serve` accepts exactly two localhost peers, stores only the public localhost
+DER certificate at a generated path and keeps the signing key in memory. A
+separate probe trusts that explicit public certificate, then binds its readonly
+receiver to the retained connection object (preventing stable-ID lifetime reuse).
+Foreign connection data is rejected before consumption; roster must match welcome.
+The server rejects a duplicate connection pair. A one-second keepalive permits the
+first peer to wait for the second beyond the five-second idle timeout; bootstrap
+acceptance is still bounded. One peer closing ends the pair; early first-peer
+closure before pairing fails the fixture. Reconnect/general lifecycle is absent.
+
+Profile 0 keeps the preceding empty rectangle-floor laboratory at Y=0. Profile 1
+uses the local demo's central static rectangle and actor spawns at Y=-1000 mm.
+Both use the existing 50 ms/100 health/250 mm actor footprint/4000 mm half-world
+prototype rules. No configurable production scene, account authorization,
+persistence or graphics connection is implemented by this listener unit.

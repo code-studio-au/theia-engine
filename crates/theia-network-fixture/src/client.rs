@@ -1,7 +1,7 @@
 //! Connection-scoped readonly replica for the bounded full-snapshot wire profile.
 use crate::{
     Result,
-    wire::{self, Message},
+    wire::{self, Message, Welcome},
 };
 use quinn::Connection;
 use theia_protocol::replica::{Replica, Snapshot, Source};
@@ -9,6 +9,8 @@ pub struct Client {
     replica: Replica,
     source: Source,
     samples: u64,
+    connection: Option<Connection>,
+    welcome: Option<Welcome>,
 }
 impl Client {
     pub fn new() -> Result<Self> {
@@ -18,9 +20,21 @@ impl Client {
             replica,
             source,
             samples: 0,
+            connection: None,
+            welcome: None,
         })
     }
+    pub fn bind(&mut self, connection: &Connection, welcome: Welcome) -> Result<()> {
+        welcome.validate()?;
+        self.source = self.replica.connect()?;
+        self.connection = Some(connection.clone());
+        self.welcome = Some(welcome);
+        Ok(())
+    }
     pub async fn receive(&mut self, connection: &Connection) -> Result<()> {
+        if self.connection.as_ref().map(Connection::stable_id) != Some(connection.stable_id()) {
+            return Err("Snapshot delivered from an unbound connection".into());
+        }
         let message = wire::decode(&connection.read_datagram().await?)?;
         let Message::Snapshot {
             tick,
@@ -30,6 +44,12 @@ impl Client {
         else {
             return Err("unexpected server DATAGRAM kind".into());
         };
+        let welcome = self.welcome.ok_or("Missing server welcome")?;
+        if actors.iter().all(|v| v.id != welcome.actor)
+            || actors.iter().all(|v| v.id != welcome.target)
+        {
+            return Err("Snapshot roster differs from bootstrap".into());
+        }
         self.replica.publish(
             self.source,
             Snapshot {
@@ -69,6 +89,25 @@ impl Client {
         self.replica.latest()
     }
     pub fn disconnect(&mut self) -> Result<()> {
-        Ok(self.replica.disconnect(self.source)?)
+        self.replica.disconnect(self.source)?;
+        self.connection = None;
+        self.welcome = None;
+        Ok(())
     }
+}
+
+/// Server-owned identity/profile bootstrap after a complete verified handshake.
+pub async fn receive_welcome(connection: &Connection) -> Result<Welcome> {
+    let (mut send, mut receive) =
+        tokio::time::timeout(std::time::Duration::from_secs(30), connection.accept_bi()).await??;
+    let bytes = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        receive.read_to_end(wire::MAX_BYTES),
+    )
+    .await??;
+    let Message::Welcome(welcome) = wire::decode(&bytes)? else {
+        return Err("Expected server welcome".into());
+    };
+    send.finish()?;
+    Ok(welcome)
 }

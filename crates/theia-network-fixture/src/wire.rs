@@ -2,8 +2,29 @@
 use theia_protocol::{Error, Outcome, Reply};
 use theia_sim::{ActorState, AttackInput, AttackReject, AttackResult, MoveInput, WorldId};
 pub const MAX_BYTES: usize = 128;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Profile {
+    Laboratory = 0,
+    LocalDemo = 1,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Welcome {
+    pub actor: WorldId,
+    pub target: WorldId,
+    pub profile: Profile,
+}
+impl Welcome {
+    pub fn validate(self) -> Result<(), &'static str> {
+        if self.actor == self.target {
+            return Err("duplicate welcome actor/target");
+        }
+        Ok(())
+    }
+}
 #[derive(Debug, PartialEq, Eq)]
 pub enum Message {
+    Welcome(Welcome),
     Move(MoveInput),
     Attack(AttackInput),
     Ack(u64),
@@ -65,8 +86,14 @@ impl Read<'_> {
 }
 pub fn encode(message: &Message) -> Vec<u8> {
     let mut b = Vec::with_capacity(MAX_BYTES);
-    b.extend_from_slice(b"THN1");
+    b.extend_from_slice(b"THN2");
     match message {
+        Message::Welcome(v) => {
+            b.push(5);
+            b.extend(v.actor.value().to_le_bytes());
+            b.extend(v.target.value().to_le_bytes());
+            b.push(v.profile as u8);
+        }
         Message::Move(v) => {
             b.push(0);
             b.extend(v.sequence.to_le_bytes());
@@ -155,7 +182,7 @@ pub fn decode(bytes: &[u8]) -> Result<Message, &'static str> {
         return Err("oversize message");
     }
     let mut r = Read(bytes);
-    if r.take::<4>()? != *b"THN1" {
+    if r.take::<4>()? != *b"THN2" {
         return Err("unknown version");
     }
     let message = match r.byte()? {
@@ -258,6 +285,22 @@ pub fn decode(bytes: &[u8]) -> Result<Message, &'static str> {
                 actors,
             }
         }
+        5 => {
+            let actor = r.id()?;
+            let target = r.id()?;
+            let profile = match r.byte()? {
+                0 => Profile::Laboratory,
+                1 => Profile::LocalDemo,
+                _ => return Err("unknown scene profile"),
+            };
+            let welcome = Welcome {
+                actor,
+                target,
+                profile,
+            };
+            welcome.validate()?;
+            Message::Welcome(welcome)
+        }
         _ => return Err("unknown kind"),
     };
     if !r.0.is_empty() {
@@ -278,6 +321,11 @@ mod tests {
             health: 100,
         };
         let messages = [
+            Message::Welcome(Welcome {
+                actor: id,
+                target,
+                profile: Profile::LocalDemo,
+            }),
             Message::Move(MoveInput {
                 sequence: u64::MAX,
                 axes: [-1000, 1000],
@@ -319,7 +367,7 @@ mod tests {
             longer.push(0);
             assert!(decode(&longer).is_err());
             let mut wrong = b.clone();
-            wrong[3] = b'2';
+            wrong[3] = b'1';
             assert!(decode(&wrong).is_err());
         }
     }
@@ -367,7 +415,7 @@ mod tests {
             sequence: 0,
             axes: [0, 0],
         }));
-        assert_eq!(movement, [b"THN1".as_slice(), &[0; 13]].concat());
+        assert_eq!(movement, [b"THN2".as_slice(), &[0; 13]].concat());
         let mut invalid = movement;
         invalid[13..15].copy_from_slice(&1001i16.to_le_bytes());
         assert!(decode(&invalid).is_err());
@@ -420,6 +468,30 @@ mod tests {
         }
     }
     #[test]
+    fn welcome_rejects_invalid_profile_duplicate_actor_and_old_wire_version() {
+        let actor = WorldId::new(10).unwrap();
+        let target = WorldId::new(20).unwrap();
+        let mut bytes = encode(&Message::Welcome(Welcome {
+            actor,
+            target,
+            profile: Profile::LocalDemo,
+        }));
+        bytes[21] = 2;
+        assert!(decode(&bytes).is_err());
+        let duplicate = Message::Welcome(Welcome {
+            actor,
+            target: actor,
+            profile: Profile::Laboratory,
+        });
+        assert!(decode(&encode(&duplicate)).is_err());
+        let mut old = encode(&Message::Move(MoveInput {
+            sequence: 0,
+            axes: [0, 0],
+        }));
+        old[3] = b'1';
+        assert!(decode(&old).is_err());
+    }
+    #[test]
     fn arbitrary_bytes_are_bounded_and_canonical_when_accepted() {
         let mut seed = 719u64;
         for n in 0..20000 {
@@ -429,7 +501,7 @@ mod tests {
                 *v = (seed >> 32) as u8;
             }
             if n % 2 == 0 && b.len() >= 4 {
-                b[..4].copy_from_slice(b"THN1");
+                b[..4].copy_from_slice(b"THN2");
             }
             if let Ok(message) = decode(&b) {
                 assert_eq!(encode(&message), b);

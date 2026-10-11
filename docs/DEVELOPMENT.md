@@ -631,3 +631,22 @@ The shared encrypted fixture's strict codec tests now run with
 `cargo test --locked --manifest-path crates/theia-network-fixture/Cargo.toml`;
 the network executable retains its app-local relay test and direct/faulted runs.
 These are still bounded qualification APIs, not a production networking SDK.
+
+## Separate encrypted network listener
+
+```sh
+cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml -- --serve
+# Read address and public certificate path from the printed JSON, then in two terminals:
+cargo run --locked --manifest-path apps/theia-network-lab/Cargo.toml -- --client-probe 127.0.0.1:PORT /path/to/localhost.der
+# Portable process qualification (build first):
+python3 tools/qualify_network_listener.py
+python3 tools/qualify_network_listener.py --laboratory --output build/qualification/listener-lab
+python3 tools/qualify_network_listener.py --second-client-delay 6 --output build/qualification/listener-delayed
+```
+
+Listener defaults to local-demo profile; `--laboratory-profile` selects the preceding
+empty-floor test. `--listen` must name loopback; `--certificate` names a public DER
+output only. No private key is written. Two successful peers are required; one
+closing ends the pair. Probe commands validate assigned actor movement/readonly
+state, then exit. This unit does not yet start a graphics client.
+[Bootstrap evidence](validation/M8_NETWORK_LISTENER.md).

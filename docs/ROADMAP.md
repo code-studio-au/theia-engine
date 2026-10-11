@@ -206,3 +206,9 @@ replay. This remains a same-process development authority fixture. Next connect
 separate encrypted Quinn authority to the renderer's readonly presentation data;
 accounts/persistence, navigation/mesh collision and general client features remain
 open. No milestone completion or scale claim is implied.
+
+Separate localhost listener and independent client bootstrap now pass trusted
+public-certificate verification, server-owned actor/profile assignment, connection-
+bound readonly snapshots, sequenced movement and delayed pairing. Next feed that
+live encrypted state to GPU presentation. General lifecycle/reconnect, account
+identity/persistence and scalable replication remain open.

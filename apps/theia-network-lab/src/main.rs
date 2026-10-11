@@ -1,4 +1,5 @@
 //! Encrypted two-client loopback qualification, not a production server/account service.
+mod listener;
 mod proxy;
 use quinn::{Connection, Endpoint};
 use std::{error::Error, net::SocketAddr, time::Duration};
@@ -155,12 +156,21 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
             .ok_or("missing handshake data")?
             .downcast::<quinn::crypto::rustls::HandshakeData>()
             .map_err(|_| "unexpected crypto stack")?;
-        assert_eq!(data.protocol.as_deref(), Some(b"theia-lab-1".as_slice()));
+        assert_eq!(data.protocol.as_deref(), Some(b"theia-lab-2".as_slice()));
     }
     let (stop_tx, stop_rx) = oneshot::channel();
     let server = tokio::spawn(server::run([server_first, server_second], stop_rx));
+    let first_welcome = client::receive_welcome(&first).await?;
+    let second_welcome = client::receive_welcome(&second).await?;
+    assert_eq!(first_welcome.actor, WorldId::new(10)?);
+    assert_eq!(first_welcome.target, WorldId::new(20)?);
+    assert_eq!(second_welcome.actor, first_welcome.target);
+    assert_eq!(second_welcome.target, first_welcome.actor);
     let mut first_client = client::Client::new()?;
     let mut second_client = client::Client::new()?;
+    first_client.bind(&first, first_welcome)?;
+    second_client.bind(&second, second_welcome)?;
+    assert!(first_client.receive(&second).await.is_err()); // Reject a foreign connection before consuming its data.
     let a = WorldId::new(10)?;
     let b = WorldId::new(20)?;
     movement(
@@ -182,7 +192,7 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
     )
     .await?;
     let (mut stalled_send, mut stalled_recv) = first.open_bi().await?;
-    stalled_send.write_all(b"THN1").await?; // No FIN: this stream cannot stall the authority or another peer.
+    stalled_send.write_all(b"THN2").await?; // No FIN: this stream cannot stall the authority or another peer.
     assert_eq!(
         timeout(Duration::from_millis(600), complete(&second, 0, a))
             .await??
@@ -342,7 +352,7 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
     assert!(report.malformed >= if faults { 2 } else { 3 });
     assert!(report.rejected_moves >= 1);
     println!(
-        "Verified encrypted Quinn 0.11.11 {} loopback: two certificate-verified clients, ALPN theia-lab-1, wrong hostname, untrusted certificate and ALPN mismatch rejected; {} fixed ticks, {} admitted movement DATAGRAMs, {} hits, {} malformed messages and {} stale moves rejected; final health {:?}; reliable retry/conflict/ACK-hole/window repair and stalled-stream isolation and monotonic client snapshot publication passed.",
+        "Verified encrypted Quinn 0.11.11 {} loopback: two certificate-verified clients, ALPN theia-lab-2, wrong hostname, untrusted certificate and ALPN mismatch rejected; {} fixed ticks, {} admitted movement DATAGRAMs, {} hits, {} malformed messages and {} stale moves rejected; final health {:?}; reliable retry/conflict/ACK-hole/window repair and stalled-stream isolation and monotonic client snapshot publication passed.",
         if ipv6 { "IPv6" } else { "IPv4" },
         report.ticks,
         report.movements,
@@ -397,6 +407,12 @@ async fn qualify(ipv6: bool, faults: bool) -> Result<()> {
 #[tokio::main(worker_threads = 2)]
 async fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|arg| arg == "--serve") {
+        return listener::serve(&args[1..]).await;
+    }
+    if args.first().is_some_and(|arg| arg == "--client-probe") {
+        return listener::probe(&args[1..]).await;
+    }
     let mut ipv6 = false;
     let mut faults = false;
     for arg in args {
@@ -405,7 +421,7 @@ async fn main() -> Result<()> {
             "--faults" => faults = true,
             "--help" => {
                 println!(
-                    "Theia encrypted two-client loopback lab: [--ipv6] [--faults]; default IPv4; ephemeral localhost ports/certificates only"
+                    "Theia encrypted two-client loopback lab: [--ipv6] [--faults]; default IPv4; ephemeral localhost ports/certificates only; or --serve [--listen address] [--certificate public-DER-path] [--laboratory-profile]"
                 );
                 return Ok(());
             }

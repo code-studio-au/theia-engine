@@ -14,3 +14,9 @@ Extraction qualification logs: `build/qualification/m8-shared-network-*` (ignore
 Three shared codec tests/one app relay test, formatting/Clippy, direct/faulted
 runs pass; both clients retain exactly two authoritative hits and health [75,75].
 Wire/security/gameplay behavior is unchanged. Windows/hosted CI unexecuted.
+
+Prototype v2 adds server-owned actor/target/profile bootstrap over a reliable
+stream. Client receivers retain/bind the exact connection and reject foreign
+reception before consumption. TLS helpers expose bounded explicit public DER
+trust; no private key export. Profiles remain fixed qualification settings.
+See [listener evidence](../../docs/validation/M8_NETWORK_LISTENER.md).
