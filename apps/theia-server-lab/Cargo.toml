@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 theia-sim = { path = "../../crates/theia-sim" }
+theia-protocol = { path = "../../crates/theia-protocol" }

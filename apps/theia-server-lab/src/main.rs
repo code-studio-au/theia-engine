@@ -1,27 +1,36 @@
 //! Headless local authority qualification. No sockets, authentication or persistence.
 mod combat;
+mod protocol;
 use std::error::Error;
 use theia_sim::{Error as SimError, MoveInput, Rect, Rules, Scene, World, WorldId};
 fn main() -> Result<(), Box<dyn Error>> {
     let mut args = std::env::args().skip(1);
     let mut ticks = 10000u64;
     let mut combat_test = false;
+    let mut protocol_test = false;
     let mut explicit_ticks = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--combat-test" => combat_test = true,
+            "--protocol-test" => protocol_test = true,
             "--ticks" => {
                 ticks = args.next().ok_or("--ticks needs count")?.parse()?;
                 explicit_ticks = true;
             }
             "--help" => {
                 println!(
-                    "Theia local authority lab: --ticks <1..100000> or --combat-test; default 10000 movement ticks; no networking"
+                    "Theia local authority lab: --ticks <1..100000> or --combat-test or --protocol-test; default 10000 movement ticks; no networking"
                 );
                 return Ok(());
             }
             _ => return Err(format!("Unknown argument {arg}").into()),
         }
+    }
+    if protocol_test {
+        if combat_test || explicit_ticks {
+            return Err("Choose --protocol-test, --combat-test or --ticks".into());
+        }
+        return protocol::qualify();
     }
     if combat_test {
         if explicit_ticks {

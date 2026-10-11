@@ -4,6 +4,23 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M8 bounded request adapter — independently executed (2026-10-11)
+
+`theia-protocol` separates external supersedable movement sequences from reliable
+combat request IDs, assigning private simulation input sequences. Pending and
+completed retries reuse their result; conflicting target reuse fails. A bounded
+request window retains unacknowledged results and out-of-order ACK tombstones.
+Application outcome ACKs advance a contiguous floor; pressure rejects new work
+without silent eviction. Peer contexts are server-issued and session scoped.
+
+Seven adapter tests pass. The typed-message lab executes 10000 ticks/40000
+requests, verifies 110000 duplicate replies, 40000 payload conflicts and 20000
+window rejections; health 930000 matches an independent one-hit-per-tick model.
+Movement/combat regressions and formatting/Clippy pass. This is transport-neutral:
+no sockets, wire format, authentication, durable effects or reconnect continuity.
+Next qualify encrypted Quinn DATAGRAM and reliable-stream exchange with two
+local clients. M8 remains open. [Evidence](validation/M8_REQUEST_SEQUENCING.md).
+
 ## M7 bounded authoritative combat — independently executed (2026-10-11)
 
 The separate authority store now owns health, damage, point-target range,

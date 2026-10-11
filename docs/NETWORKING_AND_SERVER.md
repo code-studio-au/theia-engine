@@ -98,3 +98,35 @@ fails without damaging the row that replaces it. The local store currently
 shares input sequence ordering across moves/attacks. Before mixed DATAGRAM/
 reliable transport, qualify independent sequence domains and bounded idempotent
 outcomes so movement reordering cannot discard a reliable gameplay request.
+
+## M8 actual transport-neutral request adapter
+
+`theia-protocol::Authority` privately owns the simulation. Server-issued opaque
+peer handles bind callers to actors; they are trusted transport context, not
+packet credentials or authentication. Movement has an independent strictly
+increasing external sequence. Combat request IDs start at zero and may arrive
+out of order within a bounded sliding window. Private monotonic simulation
+sequences preserve the original store's ordering without mixing the two external
+domains. Movement ACKs describe consumed input, even when movement is blocked.
+
+Duplicate combat requests with the same target return pending, the original
+completed outcome, or an acknowledged tombstone. Different target reuse fails.
+Every admitted request has one effect/outcome within its live session. Completed
+outcomes retain their original tick/result even after subsequent damage. Dead
+attackers receive a cached semantic rejection. Queue pressure fails admission
+without consuming the retry ID. No durable exactly-once guarantee is implied.
+
+Outcome acknowledgements are application messages, separate from transport ACKs.
+Only completed outcomes can be acknowledged. Out-of-order ACK tombstones remain
+until all lower IDs are acknowledged; holes hold the window closed. Clients must
+allocate contiguous IDs and recover holes. Below-floor retries are stale. There
+is no timeout eviction of unacknowledged results. Defaults are 128 peers/64 IDs
+per peer, hard caps 4096 peers/256 IDs, also constrained by simulation actor/input
+budgets. Counts bound retained metadata; encoded byte limits belong to the future
+wire layer. Counters fail on exhaustion rather than wrap.
+
+Disconnect cancels that actor's pending inputs and drops its cache. Reattachment
+issues a fresh peer; old contexts fail. No cross-reconnect retry continuity,
+account binding, durable transactions, wire version, baseline replication or
+Quinn socket exists in this unit. Outcome delivery loss can be repaired by
+resubmitting the same unacknowledged request while the session remains live.

@@ -3,9 +3,17 @@
 version = 4
 
 [[package]]
+name = "theia-protocol"
+version = "0.1.0"
+dependencies = [
+ "theia-sim",
+]
+
+[[package]]
 name = "theia-server-lab"
 version = "0.1.0"
 dependencies = [
+ "theia-protocol",
  "theia-sim",
 ]
 

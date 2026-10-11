@@ -524,3 +524,17 @@ library tests and default/100000-tick executions pass locally.
 static LOS, movement-before-combat and same-tick death/order cases. It cannot
 combine with `--ticks`, which selects the separate movement run. Both operate
 without sockets/GPU. Sixteen library tests qualify both movement and combat.
+
+## M8 typed request qualification
+
+```sh
+cargo test --locked --manifest-path crates/theia-protocol/Cargo.toml
+cargo clippy --locked --manifest-path crates/theia-protocol/Cargo.toml --all-targets -- -D warnings
+cargo run --locked --manifest-path apps/theia-server-lab/Cargo.toml -- --protocol-test
+```
+
+This runs typed messages locally, without sockets or encryption. Test modes are
+mutually exclusive with `--ticks`/`--combat-test`. The lab validates mixed sequence
+spaces, shuffled request arrivals, duplicate results, ACK holes, bounded cache
+pressure and an independent health model. See
+[request evidence](validation/M8_REQUEST_SEQUENCING.md) for limits.

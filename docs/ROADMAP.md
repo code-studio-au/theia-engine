@@ -160,3 +160,10 @@ coalesced health changes. M7 remains open for navigation/mesh collision, wider
 interactions and client integration. Next qualify transport-facing sequencing/
 idempotency independently of movement, before implementing Quinn transport;
 no networking/persistence is implemented yet.
+
+The parallel M8 adapter now qualifies independent movement/request sequence
+spaces, bounded pending/result retention, conflicting retries, application ACK
+holes and session-scoped replay protection. Next implement a bounded encrypted
+Quinn two-client loopback qualification with DATAGRAM movement and reliable
+request/outcome streams. Persistence, replication baselines and client rendering
+remain open; this does not close M7 or M8.
