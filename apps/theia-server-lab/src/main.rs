@@ -1,20 +1,33 @@
 //! Headless local authority qualification. No sockets, authentication or persistence.
+mod combat;
 use std::error::Error;
 use theia_sim::{Error as SimError, MoveInput, Rect, Rules, Scene, World, WorldId};
 fn main() -> Result<(), Box<dyn Error>> {
     let mut args = std::env::args().skip(1);
     let mut ticks = 10000u64;
+    let mut combat_test = false;
+    let mut explicit_ticks = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--ticks" => ticks = args.next().ok_or("--ticks needs count")?.parse()?,
+            "--combat-test" => combat_test = true,
+            "--ticks" => {
+                ticks = args.next().ok_or("--ticks needs count")?.parse()?;
+                explicit_ticks = true;
+            }
             "--help" => {
                 println!(
-                    "Theia local authority lab: --ticks <1..100000>; default 10000; no networking"
+                    "Theia local authority lab: --ticks <1..100000> or --combat-test; default 10000 movement ticks; no networking"
                 );
                 return Ok(());
             }
             _ => return Err(format!("Unknown argument {arg}").into()),
         }
+    }
+    if combat_test {
+        if explicit_ticks {
+            return Err("Choose --combat-test or --ticks".into());
+        }
+        return combat::qualify();
     }
     if !(1..=100000).contains(&ticks) {
         return Err("Ticks must be 1..100000".into());
@@ -103,7 +116,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ticks * 3
     );
     println!(
-        "No networking, collision mesh/navigation, combat, persistence or GPU-authority claim."
+        "Movement run: combat not exercised; no networking, collision mesh/navigation, persistence or GPU-authority claim."
     );
     Ok(())
 }

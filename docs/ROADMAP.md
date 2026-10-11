@@ -153,3 +153,10 @@ through compaction. Next add simple authoritative interactions/combat, then
 transport/replication qualification. M7 is not complete; navigation/mesh collision
 and client integration remain open. M4 hierarchy/virtual textures remain open;
 advanced GI stays deferred.
+
+The parallel M7 authority store now qualifies basic server-owned point combat:
+range/LOS/current-state timing, cooldown, health/death, sequenced outcomes and
+coalesced health changes. M7 remains open for navigation/mesh collision, wider
+interactions and client integration. Next qualify transport-facing sequencing/
+idempotency independently of movement, before implementing Quinn transport;
+no networking/persistence is implemented yet.

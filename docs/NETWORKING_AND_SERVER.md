@@ -72,3 +72,29 @@ independent of dense row placement. Character respawn issues a fresh context;
 stale queued commands are cancelled. Snapshots/changes are copied immutable
 values, not writable authority. Combat, interactions, reliable gameplay outcomes,
 Quinn, replication, persistence and worker handoff remain future gates.
+
+## M7 actual bounded combat prototype
+
+Server-owned health/cooldown columns now share the movement store's stable IDs
+and lifecycle. `AttackInput` contains only sequence and requested target. The
+trusted connection context supplies the attacker; damage, range, health and
+timing come from server rules/current state. Prototype defaults: health 100,
+damage 25, point range 1500 mm and four-tick cooldown. These are local test
+settings, not agreed production gameplay/balance constants.
+
+Each tick consumes admitted inputs, moves actors once, then processes attacks
+in admitted order against current post-movement state. Unknown/self/dead targets,
+dead attackers, cooldown, range and static-rectangle LOS fail with explicit
+sequenced outcomes. Successful hits consume cooldown and clamp health to zero.
+Death clears held motion; dead actors reject new input. Ordinary actors do not
+occlude this prototype's point LOS, independently of non-blocking movement.
+No general 3D hit volume/faction/ability/projectile system is implied.
+
+Health changes coalesce to one final value per actor/tick. `Frame.applied` is
+a processed-input watermark, not a promise of successful movement/attack or
+durable gameplay commit. Rejected attacks still have explicit outcomes.
+Lifecycle target lookup uses logical IDs after compaction; a despawned target
+fails without damaging the row that replaces it. The local store currently
+shares input sequence ordering across moves/attacks. Before mixed DATAGRAM/
+reliable transport, qualify independent sequence domains and bounded idempotent
+outcomes so movement reordering cannot discard a reliable gameplay request.

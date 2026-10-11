@@ -44,6 +44,7 @@ impl Scene {
         if !bounds.valid() {
             return Err(Error::InvalidScene);
         }
+        let occluders = self.obstacles.clone();
         let obstacles = self
             .obstacles
             .into_iter()
@@ -52,14 +53,22 @@ impl Scene {
                 max: r.max.map(|v| v + half_extent),
             })
             .collect();
-        Ok(Collision { bounds, obstacles })
+        Ok(Collision {
+            bounds,
+            obstacles,
+            occluders,
+        })
     }
 }
 pub(crate) struct Collision {
     bounds: Rect,
     obstacles: Vec<Rect>,
+    occluders: Vec<Rect>,
 }
 impl Collision {
+    pub fn line_of_sight(&self, a: [i32; 2], b: [i32; 2]) -> bool {
+        !self.occluders.iter().any(|r| segment_intersects(a, b, *r))
+    }
     pub fn legal(&self, p: [i32; 2]) -> bool {
         self.bounds.contains(p) && !self.obstacles.iter().any(|r| r.contains(p))
     }

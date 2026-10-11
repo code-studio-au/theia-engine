@@ -27,5 +27,14 @@ respawning the same logical character issues a fresh context. Supplied IDs must
 retain their logical meaning; callers must not recycle them for unrelated actors.
 
 Nine tests cover authority/lifetime/counter/input/speed/collision invariants and
-independent randomized geometry checks. No complete ECS, combat, navmesh,
+independent randomized geometry checks. No complete ECS, navmesh,
 mesh/capsule/cave/flight collision or renderer connection is implemented.
+
+Basic point-target combat now checks server-owned health, range, static LOS and
+cooldown after movement. `submit_attack` shares the bounded input queue and
+sequence ordering with move inputs. Attack outcomes are sequenced and final
+health changes coalesce per actor/tick. A processed input watermark is not a
+successful effect; only valid hits consume cooldown. Death stops held movement.
+Defaults (health 100, damage 25, 1500 mm range, four ticks cooldown) are prototype
+settings. There is no hit-volume/faction/projectile/inventory system. Independent
+transport sequence domains/idempotent reliable outcomes are the next gate.

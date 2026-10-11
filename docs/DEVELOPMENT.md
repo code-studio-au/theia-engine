@@ -516,3 +516,11 @@ is bounded 1..100000. Three actors exercise server-owned movement/collision,
 replay/invalid-intent rejection and change streams. The collider fixture is a
 flat floor plus static rectangles, independent of renderer LOD or GI. Nine
 library tests and default/100000-tick executions pass locally.
+
+## Local authoritative combat lab
+
+`cargo run --locked --manifest-path apps/theia-server-lab/Cargo.toml --
+--combat-test` executes a 5000-tick independent health/cooldown comparison plus
+static LOS, movement-before-combat and same-tick death/order cases. It cannot
+combine with `--ticks`, which selects the separate movement run. Both operate
+without sockets/GPU. Sixteen library tests qualify both movement and combat.

@@ -32,6 +32,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Execute bounded authoritative movement qualification
         run: cargo run --locked --manifest-path apps/theia-server-lab/Cargo.toml -- --ticks 10000
+      - name: Execute bounded authoritative combat qualification
+        run: cargo run --locked --manifest-path apps/theia-server-lab/Cargo.toml -- --combat-test
   shaders:
     runs-on: ubuntu-latest
     steps:

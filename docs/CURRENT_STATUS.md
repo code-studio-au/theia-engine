@@ -4,6 +4,26 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M7 bounded authoritative combat — independently executed (2026-10-11)
+
+The separate authority store now owns health, damage, point-target range,
+static-rectangle line of sight and cooldown. Clients request a target/sequence;
+server connection context determines the attacker. Movement completes before
+combat; admitted attack order is deterministic. Only successful hits consume
+cooldown; death stops held movement and rejects further actions. Outcomes carry
+request sequences; final health changes coalesce once per actor/tick. Snapshot
+values remain readonly copies and logical IDs survive compaction.
+
+Sixteen library tests pass. The headless combat lab executes 5000 ticks/9921
+requests: 948 hits, 8973 cooldown rejections, final health 93364, matching an
+independent model. Range/LOS/self/missing/dead targets, same-tick death/order,
+replay, target despawn and counter failures pass. The 100000-tick movement run
+retains its preceding totals. Formatting/Clippy/app tests pass. M7 remains open;
+no networking, mesh navigation, hit volumes, inventory or renderer integration.
+Next establish independent movement/reliable-request sequencing and bounded
+idempotent outcome handling before Quinn transport.
+[Combat evidence](validation/M7_AUTHORITATIVE_COMBAT.md).
+
 ## M7 parallel authoritative movement slice — independently executed (2026-10-11)
 
 `theia-sim` is a separate single-writer Rust authority prototype. Server-owned

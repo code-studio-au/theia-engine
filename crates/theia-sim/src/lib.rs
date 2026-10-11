@@ -1,8 +1,10 @@
-//! Bounded single-writer authoritative movement slice. No networking or GPU truth.
+//! Bounded single-writer authoritative movement/combat slice. No networking or GPU truth.
 //! Positions are integer millimetres on an analytic Z=0 floor. These prototype
 //! precision/tick/rules are not approved global engine or wire-format constants.
 mod collision;
+mod combat;
 pub use collision::{Rect, Scene};
+pub use combat::{AttackInput, AttackOutcome, AttackReject, AttackResult, HealthChange};
 use std::{
     collections::BTreeMap,
     error, fmt,
@@ -19,6 +21,7 @@ pub enum Error {
     IllegalSpawn,
     UnknownActor,
     UnknownSession,
+    DeadActor,
     Sequence,
     InvalidIntent,
     InputBudget,
@@ -61,6 +64,10 @@ pub struct Rules {
     pub max_actors: usize,
     pub max_inputs: usize,
     pub max_inputs_per_session: usize,
+    pub max_health: u32,
+    pub attack_damage: u32,
+    pub attack_range_mm: u32,
+    pub attack_cooldown_ticks: u64,
 }
 impl Default for Rules {
     fn default() -> Self {
@@ -72,6 +79,10 @@ impl Default for Rules {
             max_actors: 128,
             max_inputs: 256,
             max_inputs_per_session: 4,
+            max_health: 100,
+            attack_damage: 25,
+            attack_range_mm: 1500,
+            attack_cooldown_ticks: 4,
         }
     }
 }
@@ -84,6 +95,7 @@ pub struct MoveInput {
 pub struct ActorState {
     pub id: WorldId,
     pub position_mm: [i32; 2],
+    pub health: u32,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Change {
@@ -91,6 +103,7 @@ pub struct Change {
     pub position_mm: [i32; 2],
 }
 #[derive(Clone, Copy, Debug)]
+/// Authoritative processing watermark; a blocked/rejected action is not a successful effect.
 pub struct Applied {
     pub id: WorldId,
     pub sequence: u64,
@@ -100,6 +113,18 @@ pub struct Frame {
     pub changes: Vec<Change>,
     pub applied: Vec<Applied>,
     pub blocked: Vec<WorldId>,
+    pub attacks: Vec<AttackOutcome>,
+    pub health_changes: Vec<HealthChange>,
+}
+#[derive(Clone, Copy)]
+enum Action {
+    Move([i16; 2]),
+    Attack(WorldId),
+}
+struct Queued {
+    session: Session,
+    sequence: u64,
+    action: Action,
 }
 struct Client {
     actor: WorldId,
@@ -119,9 +144,11 @@ pub struct World {
     intents: Vec<[i16; 2]>,
     expires: Vec<u64>,
     controllers: Vec<Session>,
+    health: Vec<u32>,
+    next_attack: Vec<u64>,
     rows: BTreeMap<WorldId, usize>,
     clients: BTreeMap<Session, Client>,
-    pending: Vec<(Session, MoveInput)>,
+    pending: Vec<Queued>,
 }
 impl World {
     pub fn new(scene: Scene, rules: Rules) -> Result<Self> {
@@ -133,6 +160,10 @@ impl World {
             || !(1..=4096).contains(&rules.max_actors)
             || !(1..=4096).contains(&rules.max_inputs)
             || !(1..=16).contains(&rules.max_inputs_per_session)
+            || !(1..=1_000_000).contains(&rules.max_health)
+            || !(1..=1_000_000).contains(&rules.attack_damage)
+            || !(1..=100_000).contains(&rules.attack_range_mm)
+            || !(1..=600).contains(&rules.attack_cooldown_ticks)
             || step == 0
         {
             return Err(Error::InvalidRules);
@@ -153,6 +184,8 @@ impl World {
             intents: Vec::with_capacity(rules.max_actors),
             expires: Vec::with_capacity(rules.max_actors),
             controllers: Vec::with_capacity(rules.max_actors),
+            health: Vec::with_capacity(rules.max_actors),
+            next_attack: Vec::with_capacity(rules.max_actors),
             rows: BTreeMap::new(),
             clients: BTreeMap::new(),
             pending: Vec::with_capacity(rules.max_inputs),
@@ -165,6 +198,7 @@ impl World {
         self.rows.get(&id).map(|&row| ActorState {
             id,
             position_mm: self.positions[row],
+            health: self.health[row],
         })
     }
     pub fn snapshot(&self) -> Vec<ActorState> {
@@ -174,6 +208,7 @@ impl World {
             .map(|(i, &id)| ActorState {
                 id,
                 position_mm: self.positions[i],
+                health: self.health[i],
             })
             .collect()
     }
@@ -203,6 +238,8 @@ impl World {
         self.intents.push([0; 2]);
         self.expires.push(0);
         self.controllers.push(session);
+        self.health.push(self.rules.max_health);
+        self.next_attack.push(0);
         self.clients.insert(
             session,
             Client {
@@ -217,12 +254,14 @@ impl World {
         let row = self.rows.remove(&id).ok_or(Error::UnknownActor)?;
         let session = self.controllers[row];
         self.clients.remove(&session);
-        self.pending.retain(|(s, _)| *s != session);
+        self.pending.retain(|input| input.session != session);
         self.ids.swap_remove(row);
         self.positions.swap_remove(row);
         self.intents.swap_remove(row);
         self.expires.swap_remove(row);
         self.controllers.swap_remove(row);
+        self.health.swap_remove(row);
+        self.next_attack.swap_remove(row);
         if row < self.ids.len() {
             self.rows.insert(self.ids[row], row);
         }
@@ -231,14 +270,25 @@ impl World {
     /// Bind session from trusted server transport context. Client submits direction/sequence only.
     /// Admission is queued, not an acknowledgement that movement has been applied.
     pub fn submit(&mut self, session: Session, input: MoveInput) -> Result<()> {
+        self.admit(session, input.sequence, Action::Move(input.axes))
+    }
+    pub fn submit_attack(&mut self, session: Session, input: AttackInput) -> Result<()> {
+        self.admit(session, input.sequence, Action::Attack(input.target))
+    }
+    fn admit(&mut self, session: Session, sequence: u64, action: Action) -> Result<()> {
         let client = self
             .clients
             .get_mut(&session)
             .ok_or(Error::UnknownSession)?;
-        if input.axes.iter().any(|v| !(-1000..=1000).contains(v)) {
+        if self.health[self.rows[&client.actor]] == 0 {
+            return Err(Error::DeadActor);
+        }
+        if let Action::Move(axes) = action
+            && axes.iter().any(|v| !(-1000..=1000).contains(v))
+        {
             return Err(Error::InvalidIntent);
         }
-        if client.last_sequence.is_some_and(|v| input.sequence <= v) {
+        if client.last_sequence.is_some_and(|v| sequence <= v) {
             return Err(Error::Sequence);
         }
         if client.queued >= self.rules.max_inputs_per_session
@@ -246,31 +296,55 @@ impl World {
         {
             return Err(Error::InputBudget);
         }
-        client.last_sequence = Some(input.sequence);
+        client.last_sequence = Some(sequence);
         client.queued += 1;
-        self.pending.push((session, input));
+        self.pending.push(Queued {
+            session,
+            sequence,
+            action,
+        });
         Ok(())
     }
     /// Fixed simulation step, independent of client time/render/network cadence.
     /// Every actor moves at most once, regardless of inputs admitted this tick.
     pub fn step(&mut self) -> Result<Frame> {
         let tick = self.tick.checked_add(1).ok_or(Error::CounterExhausted)?;
-        let expiry = if self.pending.is_empty() {
+        let expiry = if !self
+            .pending
+            .iter()
+            .any(|v| matches!(v.action, Action::Move(_)))
+        {
             0
         } else {
             tick.checked_add(self.rules.intent_hold_ticks - 1)
                 .ok_or(Error::CounterExhausted)?
         };
+        let ready_tick = if self
+            .pending
+            .iter()
+            .any(|v| matches!(v.action, Action::Attack(_)))
+        {
+            tick.checked_add(self.rules.attack_cooldown_ticks)
+                .ok_or(Error::CounterExhausted)?
+        } else {
+            0
+        };
         let mut applied = Vec::with_capacity(self.pending.len());
-        for (session, input) in self.pending.drain(..) {
+        let mut requests = Vec::with_capacity(self.pending.len());
+        for input in self.pending.drain(..) {
             let client = self
                 .clients
-                .get_mut(&session)
+                .get_mut(&input.session)
                 .expect("lifecycle cancels stale queued inputs");
             let row = self.rows[&client.actor];
-            self.intents[row] = input.axes;
-            self.expires[row] = expiry;
             client.queued = 0;
+            match input.action {
+                Action::Move(axes) => {
+                    self.intents[row] = axes;
+                    self.expires[row] = expiry;
+                }
+                Action::Attack(target) => requests.push((client.actor, target, input.sequence)),
+            }
             applied.push(Applied {
                 id: client.actor,
                 sequence: input.sequence,
@@ -279,6 +353,9 @@ impl World {
         let mut changes = Vec::with_capacity(self.ids.len());
         let mut blocked = Vec::with_capacity(self.ids.len());
         for row in 0..self.ids.len() {
+            if self.health[row] == 0 {
+                continue;
+            }
             if tick > self.expires[row] {
                 self.intents[row] = [0; 2];
             }
@@ -298,12 +375,34 @@ impl World {
                 blocked.push(self.ids[row]);
             }
         }
+        let mut attacks = Vec::with_capacity(requests.len());
+        let mut dirty = vec![false; self.ids.len()];
+        for (attacker, target, sequence) in requests {
+            let result = self.resolve_attack(attacker, target, tick, ready_tick, &mut dirty);
+            attacks.push(AttackOutcome {
+                attacker,
+                target,
+                sequence,
+                result,
+            });
+        }
+        let health_changes = dirty
+            .iter()
+            .enumerate()
+            .filter(|(_, v)| **v)
+            .map(|(row, _)| HealthChange {
+                id: self.ids[row],
+                health: self.health[row],
+            })
+            .collect();
         self.tick = tick;
         Ok(Frame {
             tick,
             changes,
             applied,
             blocked,
+            attacks,
+            health_changes,
         })
     }
 }
