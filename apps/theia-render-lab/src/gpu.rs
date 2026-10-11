@@ -238,11 +238,12 @@ impl Context {
                 RenderMode::Asset
                     | RenderMode::AssetCamera
                     | RenderMode::AssetCull
+                    | RenderMode::AssetLod
                     | RenderMode::AssetResolve
             ),
             matches!(
                 options.render_mode(),
-                RenderMode::AssetCull | RenderMode::AssetResolve
+                RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
             ),
         )?;
         // SAFETY: Features were queried on the selected device; all queue indices support the intended
@@ -715,7 +716,10 @@ impl Swapchain {
                 depth: None,
             };
             if let Some(shader_dir) = shader_dir {
-                if matches!(mode, RenderMode::AssetCamera | RenderMode::AssetCull) {
+                if matches!(
+                    mode,
+                    RenderMode::AssetCamera | RenderMode::AssetCull | RenderMode::AssetLod
+                ) {
                     let instance = ctx.instance.as_ref().unwrap();
                     if !instance
                         .get_physical_device_format_properties(ctx.physical, vk::Format::D32_SFLOAT)
@@ -850,6 +854,7 @@ pub struct Renderer {
     stream: Option<crate::streaming::Stream>,
     bundle_stream: Option<crate::bundle_streaming::Stream>,
     work: Option<IndirectWork>,
+    lod: Option<crate::indirect::Lod>,
     materials: Option<crate::asset::Buffer>,
     uvs: Option<crate::asset::Buffer>,
     texture: Option<crate::texture::ResidentTexture>,
@@ -882,6 +887,7 @@ impl Renderer {
             generations: 0,
             mode: options.render_mode(),
             work: None,
+            lod: None,
             materials: None,
             uvs: None,
             texture: None,
@@ -906,6 +912,7 @@ impl Renderer {
                 | RenderMode::Asset
                 | RenderMode::AssetCamera
                 | RenderMode::AssetCull
+                | RenderMode::AssetLod
                 | RenderMode::AssetResolve
         ) {
             // SAFETY: The selected physical device belongs to the retained live instance.
@@ -917,6 +924,19 @@ impl Renderer {
                     .unwrap()
                     .get_physical_device_memory_properties(renderer.ctx.physical)
             };
+            let lod_pair = options
+                .lod
+                .as_ref()
+                .map(|(fine, coarse)| crate::lod_reference::load(fine, coarse))
+                .transpose()?;
+            if let Some(pair) = &lod_pair {
+                renderer.lod = Some(crate::indirect::Lod {
+                    bounds: pair.bounds,
+                    error: pair.error,
+                    pixels: options.lod_pixels.unwrap_or(6.),
+                    extent: [0; 2],
+                });
+            }
             let cell_asset = if let Some(path) = &options.cell {
                 let (stream, bytes) = crate::streaming::Stream::new(
                     path,
@@ -927,18 +947,22 @@ impl Renderer {
             } else {
                 None
             };
-            let asset = options
-                .asset
-                .as_deref()
-                .map(|path| {
-                    crate::asset::select(
-                        path,
-                        options.fallback.as_deref(),
-                        options.asset_budget.unwrap_or(theia_assets::DEFAULT_BUDGET),
-                    )
-                })
-                .transpose()?
-                .or(cell_asset);
+            let asset = if let Some(pair) = &lod_pair {
+                Some(pair.fine.clone())
+            } else {
+                options
+                    .asset
+                    .as_deref()
+                    .map(|path| {
+                        crate::asset::select(
+                            path,
+                            options.fallback.as_deref(),
+                            options.asset_budget.unwrap_or(theia_assets::DEFAULT_BUDGET),
+                        )
+                    })
+                    .transpose()?
+                    .or(cell_asset)
+            };
             if let Some(bytes) = &asset {
                 // SAFETY: Selected physical device belongs to the retained live instance.
                 let limits = unsafe {
@@ -950,12 +974,23 @@ impl Renderer {
                         .get_physical_device_properties(renderer.ctx.physical)
                         .limits
                 };
+                if let Some(pair) = &lod_pair
+                    && (pair.coarse.len() > limits.max_storage_buffer_range as usize
+                        || limits.max_push_constants_size < 112
+                        || limits.max_per_stage_descriptor_storage_buffers < 3
+                        || limits.max_descriptor_set_storage_buffers < 3)
+                {
+                    return Err("GPU LOD requires 112 compute push bytes and three storage descriptors within device ranges".into());
+                }
                 if bytes.len() > limits.max_storage_buffer_range as usize {
                     return Err("Cooked asset exceeds selected GPU storage-buffer range".into());
                 }
                 if matches!(
                     renderer.mode,
-                    RenderMode::AssetCamera | RenderMode::AssetCull | RenderMode::AssetResolve
+                    RenderMode::AssetCamera
+                        | RenderMode::AssetCull
+                        | RenderMode::AssetLod
+                        | RenderMode::AssetResolve
                 ) && limits.max_push_constants_size < 64
                 {
                     return Err("Camera mode requires 64 mesh-stage push constant bytes".into());
@@ -1197,12 +1232,15 @@ impl Renderer {
                 (
                     renderer.ctx.graphics_family,
                     renderer.ctx.graphics,
-                    if renderer.stream.is_some() {
+                    if renderer.lod.is_some() {
+                        options.lod_budget.unwrap_or(4 * 1024 * 1024)
+                    } else if renderer.stream.is_some() {
                         options.resident_budget.unwrap_or(16 * 1024 * 1024)
                     } else {
                         u64::MAX
                     },
                 ),
+                lod_pair.as_ref().map(|v| v.coarse.as_slice()),
             )?);
         }
         if let Some(path) = &options.stream_bundle {
@@ -1368,7 +1406,10 @@ impl Renderer {
             self.work_items
         };
         if self.work.is_some() && self.last_input != Some(input) {
-            if matches!(self.mode, RenderMode::AssetCull | RenderMode::AssetResolve) {
+            if matches!(
+                self.mode,
+                RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
+            ) {
                 println!(
                     "GPU frustum qualification view: {input} (0 translated empty, 1 narrow left, 2 full; compute selects meshlet IDs/counts)"
                 );
@@ -1377,6 +1418,7 @@ impl Renderer {
                 RenderMode::Asset
                     | RenderMode::AssetCamera
                     | RenderMode::AssetCull
+                    | RenderMode::AssetLod
                     | RenderMode::AssetResolve
             ) {
                 println!(
@@ -1427,7 +1469,10 @@ impl Renderer {
         let chain = self.chain.as_mut().unwrap();
         let ctx = &self.ctx;
         let device = ctx.device.as_ref().unwrap();
-        let camera_rows = if matches!(self.mode, RenderMode::AssetCull | RenderMode::AssetResolve) {
+        let camera_rows = if matches!(
+            self.mode,
+            RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
+        ) {
             Some(crate::camera::view_rows(
                 chain.extent.width,
                 chain.extent.height,
@@ -1486,7 +1531,15 @@ impl Renderer {
                     .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?;
             if let Some(work) = &self.work {
-                work.generate(ctx.command, input, camera_rows);
+                work.generate(
+                    ctx.command,
+                    input,
+                    camera_rows,
+                    self.lod.map(|mut lod| {
+                        lod.extent = [chain.extent.width, chain.extent.height];
+                        lod
+                    }),
+                );
             }
             if let Some(depth) = &chain.depth {
                 let barriers = [vk::ImageMemoryBarrier2::default()
@@ -1604,7 +1657,10 @@ impl Renderer {
                     }],
                 );
                 let commands = ctx.mesh_commands.as_ref().unwrap();
-                if matches!(self.mode, RenderMode::AssetCamera | RenderMode::AssetCull) {
+                if matches!(
+                    self.mode,
+                    RenderMode::AssetCamera | RenderMode::AssetCull | RenderMode::AssetLod
+                ) {
                     let rows = camera_rows.unwrap();
                     let mut bytes = [0u8; 64];
                     for (i, value) in rows.iter().flatten().enumerate() {

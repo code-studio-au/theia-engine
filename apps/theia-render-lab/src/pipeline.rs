@@ -68,8 +68,11 @@ impl Pipeline {
                 | RenderMode::Asset
                 | RenderMode::AssetCamera
                 | RenderMode::AssetCull
+                | RenderMode::AssetLod
         );
-        let mesh_file = if mode == RenderMode::AssetCull {
+        let mesh_file = if mode == RenderMode::AssetLod {
+            "asset.lod.mesh.spv"
+        } else if mode == RenderMode::AssetCull {
             "asset.cull.mesh.spv"
         } else if mode == RenderMode::AssetCamera {
             "asset.camera.mesh.spv"
@@ -86,7 +89,10 @@ impl Pipeline {
             Some(
                 if matches!(
                     mode,
-                    RenderMode::Asset | RenderMode::AssetCamera | RenderMode::AssetCull
+                    RenderMode::Asset
+                        | RenderMode::AssetCamera
+                        | RenderMode::AssetCull
+                        | RenderMode::AssetLod
                 ) {
                     "asset.task.spv"
                 } else if mode == RenderMode::Spatial {
@@ -109,10 +115,16 @@ impl Pipeline {
                 mesh: mesh_file,
                 task: task_file,
                 fragment: "triangle.frag.spv",
-                depth: matches!(mode, RenderMode::AssetCamera | RenderMode::AssetCull)
-                    .then_some(vk::Format::D32_SFLOAT),
-                push: matches!(mode, RenderMode::AssetCamera | RenderMode::AssetCull)
-                    .then_some(vk::ShaderStageFlags::MESH_EXT),
+                depth: matches!(
+                    mode,
+                    RenderMode::AssetCamera | RenderMode::AssetCull | RenderMode::AssetLod
+                )
+                .then_some(vk::Format::D32_SFLOAT),
+                push: matches!(
+                    mode,
+                    RenderMode::AssetCamera | RenderMode::AssetCull | RenderMode::AssetLod
+                )
+                .then_some(vk::ShaderStageFlags::MESH_EXT),
             },
         )?;
         println!("Graphics pipeline ready for {mode:?}");

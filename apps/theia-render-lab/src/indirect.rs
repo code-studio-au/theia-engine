@@ -6,6 +6,13 @@ const BUFFER_BYTES: vk::DeviceSize = 64;
 const COUNT_OFFSET: vk::DeviceSize = 12;
 const COMMAND_STRIDE: u32 = 12;
 
+#[derive(Clone, Copy)]
+pub struct Lod {
+    pub bounds: [[f32; 3]; 2],
+    pub error: f32,
+    pub pixels: f32,
+    pub extent: [u32; 2],
+}
 pub struct IndirectWork {
     device: ash::Device,
     buffer: vk::Buffer,
@@ -17,6 +24,8 @@ pub struct IndirectWork {
     compute: vk::Pipeline,
     bytes: vk::DeviceSize,
     asset: Option<crate::asset::Buffer>,
+    coarse: Option<crate::asset::Buffer>,
+    lod: bool,
     cull: bool,
 }
 impl IndirectWork {
@@ -27,9 +36,17 @@ impl IndirectWork {
         mode: RenderMode,
         asset: Option<(&[u8], Option<&crate::asset::GeometryArena>)>,
         queue: (u32, vk::Queue, u64),
+        coarse: Option<&[u8]>,
     ) -> Result<Self> {
         let spatial = mode == RenderMode::Spatial;
-        let cull = matches!(mode, RenderMode::AssetCull | RenderMode::AssetResolve);
+        let lod = mode == RenderMode::AssetLod;
+        if lod && (coarse.is_none() || asset.is_none()) {
+            return Err("GPU LOD requires both geometry buffers".into());
+        }
+        let cull = matches!(
+            mode,
+            RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
+        );
         let bytes = if spatial {
             9728
         } else if cull {
@@ -39,7 +56,9 @@ impl IndirectWork {
         };
         let shader = ShaderModule::load(
             device,
-            &shader_dir.join(if cull {
+            &shader_dir.join(if lod {
+                "asset.lod.compute.spv"
+            } else if cull {
                 "asset.cull.compute.spv"
             } else if asset.is_some() {
                 "asset.compute.spv"
@@ -60,6 +79,8 @@ impl IndirectWork {
             compute: vk::Pipeline::null(),
             bytes,
             asset: None,
+            coarse: None,
+            lod,
             cull,
         };
         // SAFETY: All create-info backing arrays remain live through calls. Every successful handle
@@ -126,13 +147,43 @@ impl IndirectWork {
                         ),
                 );
             }
+            if let Some(bytes) = coarse {
+                let remaining = queue
+                    .2
+                    .checked_sub(work.asset.as_ref().map_or(0, |v| v.reserved_bytes))
+                    .ok_or(crate::asset::AllocationBudgetExceeded)?;
+                work.coarse = Some(crate::asset::Buffer::upload(
+                    device,
+                    memory_properties,
+                    bytes,
+                    queue.0,
+                    queue.1,
+                    remaining,
+                    None,
+                )?);
+                bindings.push(
+                    vk::DescriptorSetLayoutBinding::default()
+                        .binding(2)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .descriptor_count(1)
+                        .stage_flags(
+                            vk::ShaderStageFlags::COMPUTE | vk::ShaderStageFlags::MESH_EXT,
+                        ),
+                );
+            }
             work.descriptor_layout = device.create_descriptor_set_layout(
                 &vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings),
                 None,
             )?;
             let sizes = [vk::DescriptorPoolSize::default()
                 .ty(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(if asset.is_some() { 2 } else { 1 })];
+                .descriptor_count(if coarse.is_some() {
+                    3
+                } else if asset.is_some() {
+                    2
+                } else {
+                    1
+                })];
             work.pool = device.create_descriptor_pool(
                 &vk::DescriptorPoolCreateInfo::default()
                     .max_sets(1)
@@ -171,10 +222,30 @@ impl IndirectWork {
                     &[],
                 );
             }
+            if let Some(coarse) = &work.coarse {
+                let info = [vk::DescriptorBufferInfo::default()
+                    .buffer(coarse.handle)
+                    .offset(coarse.offset)
+                    .range(coarse.bytes)];
+                device.update_descriptor_sets(
+                    &[vk::WriteDescriptorSet::default()
+                        .dst_set(work.set)
+                        .dst_binding(2)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .buffer_info(&info)],
+                    &[],
+                );
+            }
             let push = [vk::PushConstantRange::default()
                 .stage_flags(vk::ShaderStageFlags::COMPUTE)
                 .offset(0)
-                .size(if cull { 64 } else { 4 })];
+                .size(if lod {
+                    112
+                } else if cull {
+                    64
+                } else {
+                    4
+                })];
             work.compute_layout = device.create_pipeline_layout(
                 &vk::PipelineLayoutCreateInfo::default()
                     .set_layouts(&layouts)
@@ -203,7 +274,12 @@ impl IndirectWork {
                 }
             }
         }
-        if cull {
+        if lod {
+            println!(
+                "GPU LOD work initialized: two fixed resident geometry bindings; selected page at 44, projected pixel bounds at 48, reason at 56; geometry physical allocation bytes {}; no selection/count readback",
+                work.resident_bytes()
+            );
+        } else if cull {
             println!(
                 "GPU meshlet frustum work initialized: 256-byte device-local command/count; visible count at 36, mask at 40, IDs at 64; no readback"
             );
@@ -227,6 +303,7 @@ impl IndirectWork {
         command: vk::CommandBuffer,
         requested_items: u32,
         rows: Option<[[f32; 4]; 4]>,
+        lod: Option<Lod>,
     ) {
         // SAFETY: Caller has begun recording a graphics+compute command buffer and waited its frame
         // fence. Work handles/descriptor set remain live; explicit barriers order reuse, compute writes,
@@ -265,7 +342,7 @@ impl IndirectWork {
                 &[self.set],
                 &[],
             );
-            let mut camera_bytes = [0u8; 64];
+            let mut camera_bytes = [0u8; 112];
             if self.cull {
                 for (i, value) in rows
                     .expect("Culling requires camera rows")
@@ -276,14 +353,36 @@ impl IndirectWork {
                     camera_bytes[i * 4..i * 4 + 4].copy_from_slice(&value.to_ne_bytes());
                 }
             }
+            if self.lod {
+                let lod = lod.expect("LOD generation requires its bounded config");
+                let values = [
+                    lod.bounds[0][0],
+                    lod.bounds[0][1],
+                    lod.bounds[0][2],
+                    lod.error,
+                    lod.bounds[1][0],
+                    lod.bounds[1][1],
+                    lod.bounds[1][2],
+                    lod.pixels,
+                    lod.extent[0] as f32,
+                    lod.extent[1] as f32,
+                    0.,
+                    0.,
+                ];
+                for (i, value) in values.iter().enumerate() {
+                    camera_bytes[64 + i * 4..68 + i * 4].copy_from_slice(&value.to_ne_bytes());
+                }
+            }
             let scenario_bytes = requested_items.to_ne_bytes();
             self.device.cmd_push_constants(
                 command,
                 self.compute_layout,
                 vk::ShaderStageFlags::COMPUTE,
                 0,
-                if self.cull {
+                if self.lod {
                     &camera_bytes
+                } else if self.cull {
+                    &camera_bytes[..64]
                 } else {
                     &scenario_bytes
                 },
@@ -313,6 +412,7 @@ impl IndirectWork {
     }
     pub fn resident_bytes(&self) -> u64 {
         self.asset.as_ref().map_or(0, |asset| asset.reserved_bytes)
+            + self.coarse.as_ref().map_or(0, |v| v.reserved_bytes)
     }
     pub fn geometry_descriptor(&self) -> vk::DescriptorBufferInfo {
         let asset = self

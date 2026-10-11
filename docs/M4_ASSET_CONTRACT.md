@@ -677,3 +677,41 @@ after asset diagnostics. Arbitrary metadata is not authenticated or proved.
 This is CPU oracle selection only: no GPU page choice, shader-rounding guarantee,
 LOD hysteresis, depth/disocclusion, silhouette/material error, general 3D
 hierarchy or texture LOD contract is implied. Geometry streaming remains separate.
+
+### GPU resident heightfield LOD selection
+
+`--lod-test <fine coarse>` uses the preceding source-link/common-position/profile
+admission, additionally limiting positions to 2048 and meshlets to 32 per page.
+Both immutable buffers upload once to fixed storage bindings 1/2.
+`--lod-budget` (default 4 MiB) caps their combined actual physical allocation
+bytes; work, staging, targets, descriptors and command pools remain separate.
+Failure to admit/upload both pages terminates initialization safely; this path
+is independent of geometry/bundle streaming and has no runtime fallback loader.
+
+`--lod-pixels` (default 6) supplies the visual projected-error budget. Compute
+uses 112 push bytes (camera rows/common bounds/error/budget/extent); the mesh
+module is separately compiled with a 64-byte camera block. Three storage
+descriptors, push sizes and both buffer ranges are device-checked. Compute
+writes selection at work byte 44, float2 pixel bounds at 48, reason at 56 and
+minimum W at 60, then culls the selected page and emits counts/masks/compact IDs.
+Selected page meshlet count is at 32. A group memory barrier publishes lane-0
+selection before per-meshlet loads; existing scoped compute-to-indirect/task/mesh
+barriers publish all work to raster consumers. The CPU passes one configuration,
+not a per-object draw list or count readback.
+
+The bounded f32 policy admits matrix/common-bound magnitudes <=64, extent
+1..16384 and errors exactly zero or 1e-6..1. It adds absolute/relative arithmetic
+margins, keeps fine at positive-W/near/far boundaries and unsupported profiles,
+and chooses coarse only when both padded pixel bounds fit. Reasons: 0 coarse,
+1 clip boundary, 2 pixel budget, 3 unsupported numeric profile. GPU choices may
+be more conservative than the mathematical CPU oracle. Executed cases verify
+GPU bounds are not below that oracle and never choose CPU-forbidden coarse.
+This is qualification of the tested numerical profile; it is not a proof of
+all shader arithmetic, rasterization error or cross-vendor behavior.
+
+The mesh stage uses the same GPU selector for header/ref/triangle loads; task
+counts and culling IDs belong to that page. No shader array indexing feature is
+added: each load branches between two fixed descriptor bindings. Existing
+single-page camera/cull/identity/material paths and headless test remain intact.
+General hierarchy/page demand, LOD hysteresis/morphing, 3D/silhouette/material
+errors, allocation reuse and multi-frame retirement remain open.

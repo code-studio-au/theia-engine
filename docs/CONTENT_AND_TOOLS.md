@@ -86,3 +86,9 @@ exact rational triangle overlay after native simplification. It admits continuou
 rectangular XY heightfields, verifies coverage/shared-boundary continuity and
 records the exact fraction plus a conservative floating upper bound. General
 3D error/seams and projected-error selection remain open.
+
+Two resident heightfield LOD pages now feed GPU projected-error selection,
+selected-page culling and indirect task/mesh rendering. The offline guard
+fixture builder recomputes continuous error after represented translations;
+its native provenance is nested rather than claiming new native simplification.
+General streaming LOD/hierarchies and virtual texture pages remain open.

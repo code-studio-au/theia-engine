@@ -37,6 +37,8 @@ def main():
                ('asset.slang', 'assetTask', 'amplification', 'asset.task.spv'),
                ('asset.slang', 'assetMesh', 'mesh', 'asset.mesh.spv'),
                ('asset_camera.slang', 'assetCameraMesh', 'mesh', 'asset.camera.mesh.spv'),
+               ('asset_lod.slang', 'assetLodCompute', 'compute', 'asset.lod.compute.spv'),
+               ('asset_lod.slang', 'assetLodMesh', 'mesh', 'asset.lod.mesh.spv'),
                ('asset_cull.slang', 'assetCullCompute', 'compute', 'asset.cull.compute.spv'),
                ('asset_cull.slang', 'assetCulledMesh', 'mesh', 'asset.cull.mesh.spv'),
                ('asset_visibility.slang', 'assetVisibilityMesh', 'mesh', 'asset.visibility.mesh.spv'),
@@ -64,6 +66,8 @@ def main():
                 command = [args.slangc, str(ROOT / 'shaders/render' / source),
                            '-entry', entry, '-stage', stage, '-target', 'spirv',
                            '-profile', 'spirv_1_6', '-o', str(output)]
+                if filename == 'asset.lod.mesh.spv':
+                    command += ['-D', 'THEIA_LOD_MESH=1']
                 if stage in ('mesh', 'amplification'):
                     command += ['-capability', 'spvMeshShadingEXT']
                 subprocess.run(command, check=True)

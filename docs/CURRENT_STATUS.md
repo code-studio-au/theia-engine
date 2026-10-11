@@ -4,6 +4,31 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 GPU heightfield LOD selection — independently executed (2026-10-11)
+
+Separate `--lod-test <fine coarse>` keeps two source-linked geometry pages
+resident. Compute selects the page from projected vertical error, culls its
+meshlets and generates indirect task/mesh work; the mesh stage reads that same
+selection. There is no frame-time host selection/count readback. Two fixed
+storage bindings avoid a new descriptor-array requirement. Compute/mesh push
+blocks are 112/64 bytes, explicitly separated and device-checked.
+
+Nine LOD configurations pass 120-frame/ten-generation synchronization validation
+with zero diagnostics; 16 legacy renderer configurations also pass. Twelve
+captures verify GPU page choice, both encoded buffers and culling/work; eleven
+pass 81 depth/colour samples each. The near-plane case verifies work/choice
+only because the CPU raster oracle cannot clip triangles. CPU-forbidden coarse
+choices never occur in the tested cases; a threshold case correctly keeps fine
+because of GPU numerical margins. The two-page physical charge is 13232 bytes;
+exact budget passes, 13231 safely rejects the second allocation. Missing shader
+and malformed source/options clean up or fail before Vulkan as appropriate.
+
+Both shader variants compile/SPIR-V validate 29 outputs. Renderer/assets tests
+pass 14/39, formatting/Clippy pass, bundle-stream replay passes 85 samples and
+headless compute verifies 256 values. This is a bounded, resident two-level
+heightfield slice, not a general hierarchy/streamed LOD or material-error system.
+M4 remains open. [GPU LOD evidence](validation/M4_GPU_LOD_SELECTION.md).
+
 ## M4 projected heightfield LOD CPU selection — independently executed (2026-10-11)
 
 A separate pure Rust oracle bounds projected correspondence error for two

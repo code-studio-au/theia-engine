@@ -45,6 +45,10 @@ def qualify(report):
     visibility = os.environ.get('THEIA_CAPTURE_VISIBILITY') == '1'
     asset_path = os.environ.get('THEIA_CAPTURE_ASSET')
     cell_path = os.environ.get('THEIA_CAPTURE_CELL')
+    lod_fine=os.environ.get('THEIA_CAPTURE_LOD_FINE')
+    lod_coarse=os.environ.get('THEIA_CAPTURE_LOD_COARSE')
+    lod_pixels=os.environ.get('THEIA_CAPTURE_LOD_PIXELS','6')
+    if bool(lod_fine)!=bool(lod_coarse): raise RuntimeError('LOD capture needs both pages')
     uv_page = os.environ.get('THEIA_CAPTURE_UV_PAGE')
     authored = os.environ.get('THEIA_CAPTURE_MATERIAL_PAGE')
     texture_page = os.environ.get('THEIA_CAPTURE_TEXTURE_PAGE')
@@ -53,7 +57,7 @@ def qualify(report):
     if (texture_page or texture_table) and not (authored and uv_page): raise RuntimeError('Texture capture requires factor and UV pages')
     if authored and uv_page and not (texture_page or texture_table): raise RuntimeError('Choose authored factors or UV diagnostic capture')
     material = os.environ.get('THEIA_CAPTURE_MATERIAL') == '1' or bool(authored) or bool(uv_page)
-    cull = os.environ.get('THEIA_CAPTURE_CULL') == '1' or material
+    cull = os.environ.get('THEIA_CAPTURE_CULL') == '1' or material or bool(lod_fine)
     camera = os.environ.get('THEIA_CAPTURE_CAMERA') == '1' or cull
     if camera and not asset_path:
         raise RuntimeError('Camera capture requires expected mesh page')
@@ -151,6 +155,14 @@ def qualify(report):
         if shader_dir: arguments+=f' --shader-dir {quoted_dir}'
         report['bundle_dependencies_verified']=True
         report['bundle_content_id']=Path(bundle_path).stem
+    if lod_fine:
+        if cell_path or bundle_path or authored or uv_page or material:
+            raise RuntimeError('LOD capture is a separate two-page gradient/depth path')
+        lod_fine=str(Path(lod_fine).resolve());lod_coarse=str(Path(lod_coarse).resolve())
+        if asset_path not in [lod_fine,lod_coarse]: raise RuntimeError('Expected LOD asset must be one of the two pages')
+        quote=lambda path: subprocess.list2cmdline([path]) if os.name=='nt' else shlex.quote(path)
+        arguments=f'--frames 180 --gpu 7900 --no-validation --lod-test {quote(lod_fine)} {quote(lod_coarse)} --lod-pixels {float(lod_pixels)} --work-items {scenario}'
+        if shader_dir: arguments+=f' --shader-dir {quoted_dir}'
     result = rd.ExecuteAndInject(
         str(executable), str(root), arguments, [],
         str(output / 'theia-indirect'), options, False)
@@ -187,8 +199,8 @@ def qualify(report):
         if cull:
             present_action = next(action for action in actions if action.flags & rd.ActionFlags.Present)
             color = next(texture for texture in controller.GetTextures() if texture.resourceId == present_action.copyDestination)
-            cull_reference = json.loads(subprocess.check_output([str(executable), '--frustum-reference', asset_path,
-                                        '0','0',str(color.width),str(color.height),str(scenario)],cwd=root))
+            cull_reference = json.loads(subprocess.check_output([str(executable), '--frustum-ids', asset_path,
+                                        str(color.width),str(color.height),str(scenario)],cwd=root).splitlines()[-1])
         report['actions'] = [
             {'event': action.eventId, 'name': action.GetName(controller.GetStructuredFile()),
              'flags': str(action.flags)} for action in actions]
@@ -262,6 +274,30 @@ def qualify(report):
             geometry = [buffer for buffer in controller.GetBuffers() if buffer.length == geometry_size]
             if len(geometry) != 1 or controller.GetBufferData(geometry[0].resourceId,arena_offset,len(source)) != source:
                 raise RuntimeError('Immutable GPU asset bytes differ from cooked source')
+            if lod_fine:
+                selected=struct.unpack_from('<I',data,44)[0]
+                gpu_pixels=struct.unpack_from('<2f',data,48)
+                reason=struct.unpack_from('<I',data,56)[0]
+                if selected not in (0,1) or [lod_fine,lod_coarse][selected]!=asset_path:
+                    raise RuntimeError('GPU LOD selection differs from expected resident page')
+                if struct.unpack_from('<I',data,32)[0]!=meshlets:
+                    raise RuntimeError('GPU selected page meshlet count differs from header')
+                oracle=json.loads(subprocess.check_output([str(executable),'--lod-reference',lod_fine,lod_coarse,
+                    str(color.width),str(color.height),str(scenario),str(float(lod_pixels))],cwd=root).splitlines()[-1])
+                if selected==1 and oracle['level']!='Coarse':
+                    raise RuntimeError('GPU chose coarse while conservative CPU model requires fine')
+                if oracle['bound_pixels'] is not None and reason in (0,2):
+                    if any(not math.isfinite(v) or v+1e-6<want for v,want in zip(gpu_pixels,oracle['bound_pixels'])):
+                        raise RuntimeError('GPU projected bound falls below CPU model')
+                if (selected==1)!=(reason==0) or (selected==1 and any(v>float(lod_pixels) for v in gpu_pixels)):
+                    raise RuntimeError('GPU LOD reason/budget inconsistent')
+                for path in [lod_fine,lod_coarse]:
+                    encoded=Path(path).read_bytes()
+                    candidates=[b for b in controller.GetBuffers() if b.length==len(encoded)]
+                    if not any(controller.GetBufferData(b.resourceId,0,len(encoded))==encoded for b in candidates):
+                        raise RuntimeError('One resident LOD GPU page differs from encoded source')
+                report.update(lod_gpu_verified=True,lod_selected=selected,lod_reason=reason,
+                    lod_gpu_bound_pixels=gpu_pixels,lod_cpu=oracle,lod_both_pages_gpu_verified=True)
             report.update(scenario=scenario, meshlet_count=count, immutable_asset_bytes_verified=True)
             if cell_path:
                 report.update(cell_manifest=cell_path, expected_page=asset_path, capture_frame=capture_frame)
@@ -279,7 +315,12 @@ def qualify(report):
         if visibility:
             verify_surface(controller, executable, root, present.copyDestination, scenario, report)
         if asset_path:
-            if camera:
+            if camera and os.environ.get('THEIA_CAPTURE_LOD_GUARD_ONLY')=='1':
+                if not lod_fine or report.get('lod_reason')!=1:
+                    raise RuntimeError('Guard-only capture requires a verified clip-boundary LOD case')
+                report['lod_framebuffer_verified']=False
+                report['lod_guard_only']=True
+            elif camera:
                 verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material, authored, uv_page, texture_page, texture_table)
             else:
                 verify_asset(controller, present.copyDestination, source, count, report)

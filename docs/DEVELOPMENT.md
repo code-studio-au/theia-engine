@@ -475,3 +475,29 @@ source IDs, represented error, per-axis pixel bounds, chosen level/reason and
 `proof_recomputed=false`. At ratio .25 a budget 10 chooses coarse at 960x540,
 fine at 1920x1080 or view 1 (narrow); budget 1 keeps fine. This is a CPU oracle
 and does not change the viewer's GPU page selection.
+
+## GPU resident LOD qualification
+
+Launch `--lod-test <full terrain page> <continuous-qualified coarse page>
+--lod-pixels 6 --gpu 7900 --wsi-smoke-test`. Both pages remain resident; GPU
+compute chooses a page, culls it and feeds indirect task/mesh draws.
+`--lod-budget 13232` qualifies exact geometry allocation on the reference
+128-triangle pair; 13231 fails safely after the fine upload. Default is 4 MiB.
+
+For capture set `THEIA_CAPTURE_LOD_FINE`, `THEIA_CAPTURE_LOD_COARSE`,
+`THEIA_CAPTURE_LOD_PIXELS` and `THEIA_CAPTURE_ASSET` to the expected selected
+page. Set scenario 2/budget 6 for coarse, scenario 2/budget 1 or scenario 1/budget
+6 for fine. Replay verifies both buffers, selected header/work, CPU bounds and
+framebuffer. Static LOD captures can use frame 10/30. Streaming bundle captures
+must explicitly choose the correct epoch frame (e.g. alias at frame 30).
+
+`tools/qualify_lod_guards.py --fine <page> --coarse <page> --translation-y 32
+--output-dir <ignored directory>` makes test-only far-plane fixtures. Use -1.5
+for the near-crossing case; exact continuous/boundary verification is recomputed
+after represented position rewriting. Original native topology/provenance are
+retained as nested evidence, without claiming a new native simplification.
+`--small-flat-bound` on the flat pair supplies a conservative 1e-8 bound over
+true zero error, exercising unsupported-numeric fallback. For near-only work
+replay set `THEIA_CAPTURE_LOD_GUARD_ONLY=1`; its report explicitly leaves
+framebuffer verification false. `--frustum-ids <mesh width height view>` permits
+CPU culling-ID checks without the unclipped raster oracle.

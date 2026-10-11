@@ -10,15 +10,37 @@ pub fn run(args: &mut impl Iterator<Item = String>) -> Result<()> {
         .next()
         .ok_or("LOD reference needs pixel budget")?
         .parse()?;
-    let decode = |path: &str| -> Result<theia_assets::Mesh> {
-        Ok(theia_assets::Mesh::decode(
-            &asset::load(std::path::Path::new(path))?,
-            None,
-            theia_assets::DEFAULT_BUDGET,
-        )?)
-    };
-    let fine = decode(&fine_path)?;
-    let coarse = decode(&coarse_path)?;
+    let pair = load(
+        std::path::Path::new(&fine_path),
+        std::path::Path::new(&coarse_path),
+    )?;
+    let selection = theia_assets::lod::select(
+        pair.bounds,
+        pair.error,
+        camera::view_rows(width, height, view)?,
+        [width, height],
+        budget,
+    )?;
+    println!(
+        "{}",
+        serde_json::json!({"fine_id":theia_assets::content_id(&pair.fine).iter().map(|v|format!("{v:02x}")).collect::<String>(),"coarse_id":theia_assets::content_id(&pair.coarse).iter().map(|v|format!("{v:02x}")).collect::<String>(),
+    "geometry_bindings_verified":true,"proof_recomputed":false,"represented_vertical_error":pair.error,
+    "bound_pixels":selection.bound_pixels,"pixel_budget":budget,"level":format!("{:?}",selection.level),"reason":selection.reason.map(|v|format!("{v:?}"))})
+    );
+    Ok(())
+}
+
+pub struct Pair {
+    pub fine: Vec<u8>,
+    pub coarse: Vec<u8>,
+    pub bounds: [[f32; 3]; 2],
+    pub error: f32,
+}
+pub fn load(fine_path: &std::path::Path, coarse_path: &std::path::Path) -> Result<Pair> {
+    let fine_bytes = asset::load(fine_path)?;
+    let coarse_bytes = asset::load(coarse_path)?;
+    let fine = theia_assets::Mesh::decode(&fine_bytes, None, theia_assets::DEFAULT_BUDGET)?;
+    let coarse = theia_assets::Mesh::decode(&coarse_bytes, None, theia_assets::DEFAULT_BUDGET)?;
     let source: serde_json::Value = serde_json::from_str(&fine.provenance)?;
     let metadata: serde_json::Value = serde_json::from_str(&coarse.provenance)?;
     let proof = &metadata["lod_qualification"];
@@ -60,18 +82,13 @@ pub fn run(args: &mut impl Iterator<Item = String>) -> Result<()> {
             bounds[1][axis] = bounds[1][axis].max(p[axis]);
         }
     }
-    let selection = theia_assets::lod::select(
+    if fine.positions.len() > 2048 || fine.meshlets.len() > 32 || coarse.meshlets.len() > 32 {
+        return Err("LOD pair exceeds 2048 positions or 32 meshlets per page".into());
+    }
+    Ok(Pair {
+        fine: fine_bytes,
+        coarse: coarse_bytes,
         bounds,
         error,
-        camera::view_rows(width, height, view)?,
-        [width, height],
-        budget,
-    )?;
-    println!(
-        "{}",
-        serde_json::json!({"fine_id":fine.content_id.iter().map(|v|format!("{v:02x}")).collect::<String>(),"coarse_id":coarse.content_id.iter().map(|v|format!("{v:02x}")).collect::<String>(),
-    "geometry_bindings_verified":true,"proof_recomputed":false,"represented_vertical_error":error,
-    "bound_pixels":selection.bound_pixels,"pixel_budget":budget,"level":format!("{:?}",selection.level),"reason":selection.reason.map(|v|format!("{v:?}"))})
-    );
-    Ok(())
+    })
 }

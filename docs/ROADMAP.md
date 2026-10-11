@@ -137,3 +137,11 @@ Bounded projected vertical-error CPU selection now passes source-link/profile
 checks, perspective-denominator bounds, clip/numeric guards and real terrain
 threshold/extent/camera cases. Next qualify GPU LOD selection against this oracle;
 general hierarchy, hysteresis and 3D/material errors remain open.
+
+GPU resident two-level heightfield selection now passes the CPU projected-error
+oracle, culling/indirect draws, page-byte/framebuffer checks and clip/profile
+fallback qualification. General hierarchy, streamed LOD, hysteresis and virtual
+textures remain open; this does not close M4. Stable authority/presentation and
+resource contracts now support starting a bounded M7 authoritative movement
+slice in parallel, as the roadmap's early-playable-slice priority permits.
+Advanced GI remains deferred.
