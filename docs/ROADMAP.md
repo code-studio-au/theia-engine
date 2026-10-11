@@ -87,6 +87,9 @@ with qualified source/tool provenance. Conservative GPU meshlet frustum selectio
 now feeds indirect task/mesh work and passes CPU/replay checks. Cooked identity,
 depth and deferred diagnostic material resolve now connect those slices. Next
 qualify authored image import and material/dependency contracts.
+Fixed four-role immutable bundle admission now checks geometry/factors/UV/texture
+as a complete set before Vulkan initialization; asynchronous dependency residency
+and per-material texture assignment remain open.
 The bounded opaque single-mip KTX2 offline producer and Rust reader now pass
 independent checks. One resident nearest-repeat mip-zero texture now uploads and
 samples with perspective UVs and unlit factors against CPU/replay checks;

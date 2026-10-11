@@ -58,6 +58,36 @@ image destruction. Renderer retains image/sampler across swapchain generations
 and retires frame/descriptor users before teardown. Binding 7 is the sampled
 image, binding 8 its sampler; UV/material storage bindings remain 6/5.
 
+### Immutable fixed textured bundle
+
+THEIABND v1 is exactly 176 bytes: eight-byte magic, u32 version 1, u32 role count
+4, then four 40-byte records (SHA-256/u64 encoded length), ordered geometry,
+material factors, UVs, texture. Full-file SHA-256 names the manifest. Lengths
+respect each reader's header minimum and existing encoded budget; duplicate
+hashes, extra/truncated records and unknown versions/counts fail. This format
+does not change THEIACEL or other asset formats.
+
+`Bundle::decode` checks manifest structure; `Bundle::validate` requires all four
+exact child lengths/hashes, decodes every container, validates material/UV binding
+to geometry, and requires cooked texture provenance. Validation returns owned
+decoded mesh/material/UV values and a borrowed immutable texture view. It does
+not reserve storage or publish GPU resources. Reader budgets exclude aggregate
+decoded memory, I/O buffers and Vulkan allocations.
+
+`tools/package_texture_bundle.py` packages existing hash-named, colocated files;
+it checks filename/role/size, while Rust performs semantic admission. No implicit
+copying or overwrite of child assets occurs. `--bundle <manifest>` validates the
+complete set before Vulkan initialization and derives sibling paths from fixed
+hash/extension roles. Explicit asset/cell/fallback/material/UV/texture paths are
+mutually exclusive with bundle selection. Existing loaders recheck immutable
+bytes before upload; admission does not make later file mutation trusted.
+
+The viewer retains the admitted fixed resource set through swapchain recreation
+using preceding upload/frame retirement contracts. This is one geometry and one
+shared resident texture, not a general dependency DAG, atomic multi-resource
+streaming publication, budget reservation/deduplication, world instance database
+or per-material image assignment. Missing children fail; no silent fallback.
+
 ## Version 1 byte layout
 
 All integer/float words are little-endian. The 76-byte header is:

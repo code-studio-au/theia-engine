@@ -4,6 +4,24 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-11.
 
+## M4 immutable textured bundle admission — independently executed (2026-10-11)
+
+THEIABND v1 records four ordered content hashes/lengths: geometry, material
+factors, UVs and one shared texture. Pure Rust admission validates every child
+container, both geometry bindings and cooked opaque texture provenance. The
+viewer `--bundle` admits the complete set before Vulkan initialization; missing,
+truncated, corrupted, foreign-UV and malformed-manifest cases fail at that stage.
+Three new tests bring the asset suite to 24; renderer tests remain 14. Formatting
+and denied-warning Clippy pass. Packaging twice produces identical bytes.
+
+RX 7900 XTX default/shared bundle WSI tests each pass 120 frames/ten generations
+with zero diagnostics. Separate default/shared captures each verify all four
+dependencies, GPU bytes/texels, identities/work, depth and 85 sampled colours.
+The bundle selects the preceding resident texture path; shaders are unchanged.
+This is fixed-set admission, not asynchronous dependency graph publication or
+per-material texture selection. Authored image import remains the next task.
+[Contract](M4_ASSET_CONTRACT.md), [evidence](validation/M4_TEXTURES.md).
+
 ## M4 resident texture sampling — independently executed (2026-10-11)
 
 `--texture-test <ktx2>` connects one immutable opaque RGBA8 sRGB texture to fixed

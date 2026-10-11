@@ -365,3 +365,21 @@ Capture uses `THEIA_CAPTURE_TEXTURE_PAGE` together with `THEIA_CAPTURE_ASSET`,
 `THEIA_CAPTURE_UV_PAGE` and `THEIA_CAPTURE_MATERIAL_PAGE`; select default/shared
 identity shaders as before. Texture replay checks exact GPU texels, both sidecar
 buffers, identities, depth and sampled colours against the CPU reference.
+
+## Fixed textured dependency bundle
+
+```bash
+python3 tools/package_texture_bundle.py --mesh <mesh> --materials <materials> \
+  --uvs <uvs> --texture <ktx2>
+cargo run --locked --manifest-path crates/theia-assets/Cargo.toml --example bundle -- <hash.theia-bundle>
+apps/theia-render-lab/target/debug/theia-render-lab --bundle <hash.theia-bundle> \
+  --gpu 7900 --wsi-smoke-test
+```
+
+Children must be colocated in the output directory; no automatic copying occurs.
+Bundle admission checks all four children before Vulkan initialization and derives
+their sibling paths. Explicit asset/cell/material/UV/texture paths are mutually
+exclusive with `--bundle`. For replay set `THEIA_CAPTURE_BUNDLE` plus all four
+expected child variables; the helper verifies the manifest matches those expected
+resources and launches the bundle entry path. Physical texture budget and shader
+directory options remain available.

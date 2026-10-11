@@ -134,3 +134,12 @@ jobs:
           texture = json.load(open('build/texture-report.json'))['path']
           subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'texture', '--', texture], check=True)
           PY
+      - name: Qualify complete immutable textured bundle admission
+        run: |
+          python3 - <<'PY'
+          import json, subprocess, sys
+          mesh = json.load(open('build/assets/imported-report.json'))
+          texture = json.load(open('build/texture-report.json'))
+          bundle = json.loads(subprocess.check_output([sys.executable, 'tools/package_texture_bundle.py', '--mesh', mesh['path'], '--materials', mesh['materials']['path'], '--uvs', mesh['uv']['path'], '--texture', texture['path']], text=True))
+          subprocess.run(['cargo', 'run', '--locked', '--manifest-path', 'crates/theia-assets/Cargo.toml', '--example', 'bundle', '--', bundle['path']], check=True)
+          PY

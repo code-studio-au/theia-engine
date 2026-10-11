@@ -25,6 +25,49 @@ pub fn load(path: &Path) -> Result<Vec<u8>> {
     }
     Ok(data)
 }
+pub fn load_bundle(path: &Path) -> Result<[std::path::PathBuf; 4]> {
+    use theia_assets::bundle::{BYTES, Bundle};
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)?
+        .take(BYTES as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    let hex = |id: [u8; 32]| id.iter().map(|v| format!("{v:02x}")).collect::<String>();
+    if path.file_stem().and_then(|v| v.to_str()) != Some(&hex(theia_assets::content_id(&bytes))) {
+        return Err("Bundle hash filename mismatch".into());
+    }
+    let bundle = Bundle::decode(&bytes, None)?;
+    let extensions = ["theia-mesh", "theia-material", "theia-uv", "ktx2"];
+    let paths = std::array::from_fn(|i| {
+        path.parent().unwrap().join(format!(
+            "{}.{}",
+            hex(bundle.dependencies[i].content_id),
+            extensions[i]
+        ))
+    });
+    let mut children = Vec::new();
+    for (path, dep) in paths.iter().zip(bundle.dependencies) {
+        let mut data = Vec::new();
+        std::fs::File::open(path)?
+            .take(dep.bytes + 1)
+            .read_to_end(&mut data)?;
+        children.push(data);
+    }
+    let checked = bundle.validate(std::array::from_fn(|i| children[i].as_slice()))?;
+    if checked.mesh.meshlets.len() > 32
+        || checked
+            .uvs
+            .texcoords
+            .iter()
+            .flatten()
+            .any(|v| v.abs() > 64.)
+    {
+        return Err("Bundle exceeds renderer meshlet/UV qualification profile".into());
+    }
+    println!(
+        "Complete immutable texture bundle admitted: four dependency hashes/lengths, geometry bindings and opaque texture verified before Vulkan initialization"
+    );
+    Ok(paths)
+}
 pub struct ResidentTexture {
     pub image: Image,
     pub sampler: vk::Sampler,

@@ -124,3 +124,41 @@ smoke.log,terrain-smoke.log,allocation.log,missing-shader.log}`,
 m3-regression}/report.json` with captures/images. No hosted CI, push, benchmark
 or Windows GPU claim. Next: bounded authored image import/material dependencies;
 general mip/derivative/filtering, compression and virtual textures remain open.
+
+## Immutable fixed dependency admission (2026-10-11)
+
+THEIABND v1 records the existing geometry, material, UV and resident texture
+content hashes/encoded lengths in four ordered roles. The 176-byte manifest
+SHA-256 is `b664b76433f155aa558d3ad2c8f9e60269ebd826696c5a2d2dcde0b728f8e3c7`.
+All child hashes are unchanged from the preceding UV/texture qualification.
+Repeated packaging produces identical bytes. An independent Rust example admits
+all four containers and both exact geometry bindings.
+
+Three new Rust tests bring the asset suite to 24. They verify complete admission,
+missing/swapped roles, all manifest truncations, unknown role/version/counts,
+duplicate hashes/role budgets, and freshly hashed foreign-UV/non-opaque children.
+Renderer's 14 tests and both affected packages' formatting/denied-warning
+Clippy pass. No shader or GPU upload/resolve code changes for this unit.
+
+`--bundle` validates all child bytes before Vulkan initialization, then uses the
+existing immutable loaders/uploads. Five isolated malformed file sets (missing
+texture, truncated material, corrupt texture, freshly hashed foreign UV,
+invalid manifest role count) exit unsuccessfully before validation-layer/GPU
+initialization. Existing assets are preserved; negative copies stay under
+`build/qualification/m4-bundle-negative/`.
+
+RX 7900 XTX standalone default/shared bundle WSI tests each present 120 frames
+and ten swapchain generations with zero diagnostics through teardown. Separate
+RenderDoc captures (capture validation disabled) each present 180 frames, verify
+expected manifest dependencies and exact GPU geometry/material/UV/texture bytes,
+work/identity/depth, and all four visible triangle probes plus 81 grid colour
+samples. They use the preceding CPU perspective/sRGB/nearest-repeat oracle and
+existing 2e-6 depth/two RGB-byte tolerances.
+
+Artifacts: `build/qualification/m4-bundle-{package.json,reader.log,tests.log,
+renderer-tests.log,smoke-default.log,smoke-shared.log}`, five negative logs,
+and `{full,shared}/report.json` with captures/images. CI adds packaging/Rust
+admission after native cooking; hosted execution is untested. No push/benchmark
+claim. This fixed set does not implement asynchronous DAG publication,
+residency reservation/deduplication or authored per-material texture selection.
+Next is bounded authored image import; M4 remains open.
