@@ -137,6 +137,14 @@ Postwar societies preserved partial, conflicting accounts. Distinct ancient ance
 
 **Distinctions:** The Unmade are a deliberate organization working toward Nhal's emergence. The transformed remnants of the seventh people within the Shroud are **not automatically all Unmade members**; many are corrupted victims with fractured memories and independent or instinctive behaviours, including reclamation of ancient strongholds. Continuous corrupting influence **does not imply continuous clear verbal communication or orders from Nhal**; the Unmade's long loss of reliable direct contact after The Binding remains compatible with this clarification. The degree of surviving seventh-people intelligence, hierarchy of Unmade sanctuaries and exact corruption mechanics remain open.
 
+## The Seventh's surviving enclaves [USER-LOCKED · 2026-10-12]
+
+**The Seventh did not entirely perish.** Uncorrupted survivors of the seventh people remain within the Shrouded Lands, living in **multiple small, separate fortified enclaves**, not one surviving unified kingdom or centrally ruled nation. Their continuing struggle against The Unmade and Nhal's corruption makes the Shroud a contested homeland, not simply a monster-filled ruin. Enclaves survive through limited protected territory, ancient wards, maintenance, resources and defensive efforts; survival is not proof of immortality, immunity or exceptional combat superiority. Their precise populations, leadership, names and relationships with one another remain open.
+
+**PvP connection (working implementation):** Some surviving Seventh outposts near ancient gateways may eventually become the first distinct Covenant and Dominion entrance footholds for the Shrouded Lands campaign, negotiated independently with different enclaves. The Seventh remain a separate people, not a third player allegiance. The exact alliances, gateways and outpost ownership mechanics remain proposals.
+
+**Guardians origin (NOT YET APPROVED):** It has been proposed that the Guardians' founding during the Divine War involved Seventh scholars/resisters who opposed Nhal's influence, later recruiting members of other races. This would give Guardians and Unmade opposing roots within the seventh civilization, without equating all Seventh survivors with Guardians or requiring all Guardians to be seventh people. This remains an open proposal awaiting user confirmation.
+
 ## 5. Magic [CONFIRMED]
 
 Fundamental magic permeates existence. A practitioner channels it through **intent and learned techniques**, spending a **finite personal/internal reserve** shared across disciplines. Natural aptitude, bloodlines and training affect potential, capacity and efficiency. Recovery via natural regeneration, ambient magic and trained meditation. Running out normally prevents casting safely; overreaching complex techniques risks loss of control and mental overload. Skill and precision matter more than raw reserve.
