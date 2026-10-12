@@ -385,7 +385,7 @@ These were presented as selectable questions, but there is no subsequent user su
 
 # 12 — Canon risk review and unresolved editorial issues
 
-1. **Full prior transcript gap:** The initial stages up to Q375 are not available here in their full raw form. Their recoverable outcomes appear in the master bible and this archive; verbatim question wording, rejected options and conversational reasoning beyond the available summaries cannot be certified.
+1. **Full prior transcript gap:** The original 403-page PDF now contains Stages 1 onward and Q1–444, including earlier user selections and rejected alternatives. This archive still only gives a detailed summary of Q376 onward; consult the source decision recovery and original PDF for the full earlier rounds.
 2. **The Second Sundering:** A very detailed Guardian/Keeper sacrifice narrative was drafted repeatedly, but user explicitly selected only the primordial Aethyr origin. Distinguish working story from locked ancient betrayal.
 3. **Four order archetypes:** “Understanding / Making / Preservation / Horizons” and naming Preservation the surviving order were proposals; confirmed count is **three or four** and exactly **one surviving**.
 4. **Alliance separation:** Old assistant proposals about normal scholarship exchange, friendly encounters and modern direct friendships across Covenant–Dominion must yield to **strict separation**. The extraordinary failed peace delegation is the exception that reinforces why peace is currently absent.
@@ -409,4 +409,4 @@ This archive is intended to be **searched or referenced**, not mechanically rewr
 - **THEIA_WAR_AND_INCURSIONS.md:** persistent military occupation model, coexisting Guardian/Unmade plot incursions and anti-grief PvP rules.
 - **THEIA_LAUNCH_CAMPAIGN.md:** faction-separate 1–60 act outline and detailed side-story chains.
 
-The highest-value remaining step is to **export the original "MMO Story" chat** and compare it section by section. Until then, treat this as the fullest reconstruction from accessible context, not proof that the entire original conversation has been retrieved.
+The original "Create MMO Story" chat has now been supplied as a 403-page PDF. The remaining work is a systematic question-by-question audit of that source, resolving later revisions and expanding the narrative where confirmed decisions were previously omitted.
