@@ -83,6 +83,14 @@ The Unmade lost the complete seventh-people science, specialists and infrastruct
 
 **The original is unique and remains unresolved:** Destroying modern Anchors is a meaningful victory against the Unmade's network; it does not destroy the First Anchor, close the primordial breach, free the Seven or settle the possible final reunification.
 
+## 1.6b Surviving Passage gates — continuous low-capacity transit [LOCKED · 2026-10-12]
+
+The ancient seventh-people homeland had Passage connections to other civilizations. The Binding and the Shroud reduced the power and throughput of these gates enormously, but **some gates remained continuously operational** in a weakened state across the Age of Silence. They did **not** function only during occasional magical alignments. Surviving links allowed individuals, small groups, limited artifacts and supplies to travel, with far fewer usable routes and no capacity for sustained army movement or military logistics.
+
+The Unmade exploited some surviving gate links to maintain covert movement between the Shrouded Lands and both modern alliance continents. This helped them infiltrate and influence institutions rather than openly invade. Surviving Unmade cells outside the Shroud also had ordinary means of recruitment and movement. **A gate between physical locations does not provide direct communication with Nhal**; the loss of Nhal contact after The Binding remains consistent with these routes being active.
+
+During the modern awakening, improved understanding and restored magical infrastructure can permit major gateways to be opened to organized Covenant and Dominion expeditions for Shrouded Lands PvP, without replacing shipborne overseas incursion outposts. The Shroud's primary containment remains in force until the larger plot challenges it. Small-scale passage of transformed seventh-people creatures is a possible later narrative choice, not established by the user's gate decision. Precise capacity and route map remain open.
+
 ## 1.7 Divine aftermath [CONFIRMED survival; details OPEN]
 
 All Seven persist as distinct consciousnesses with their essences bound into maintaining the Shroud. Their former freedom to act in the Physical Realm is lost or profoundly limited. Religious experiences, patron relationships and subtle divine signs can remain possible, but their exact channels are not decided. Earlier speculative god-by-god fates—including literal deaths, permanent disappearance, or unrelated imprisonment—are superseded where inconsistent with The Binding. Their relationships, memories of the deception, and eventual responses if released are substantial future narrative material.
