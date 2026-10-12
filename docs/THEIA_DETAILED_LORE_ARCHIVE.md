@@ -73,6 +73,16 @@ This overrides the earlier **working** interpretation in which Keeper and Guardi
 
 The idea that the catastrophe damaged ancient magical infrastructure, restricted complex magic and later contributed to the awakening remains useful connective lore. The awakening itself is not evil.
 
+## 1.6a Why players can destroy modern Anchors [LOCKED · 2026-10-12]
+
+The **First Anchor** was created by seventh-people researchers under Nhal's covert influence, ostensibly to connect with their divine creator. Its activation produced a **persistent breach in the Veil**. It became physically/metaphysically entangled with that breach: smashing the artifact would **not** reliably close the connection and could instead eliminate the remaining structure that prevents uncontrolled expansion. The gods chose **The Binding** and the **Shroud** to contain it, not because the First Anchor was immune to physical destruction, but because destroying it was catastrophically unsafe.
+
+The Unmade lost the complete seventh-people science, specialists and infrastructure in the catastrophe. They retain **incomplete designs, notes and artifacts**, allowing only inferior modern derivatives. These do not each create an independent permanent breach. They exploit the **existing connection/damage associated with the First Anchor**, establishing secondary, unstable, locally supported resonances. Such Anchors can be safely disabled or destroyed after identifying and disconnecting their supporting magical structures. Mishandling can cause local catastrophes, but need not trigger another Sundering.
+
+**Progression tiers (story categories, not tuned combat numbers):** early **Minor Resonators** create local anomalies and are often directly destructible; mid-game **Regional Anchors** require multiple supporting structures to be neutralized; rare late-game **Major Anchors** require coordinated multi-stage dungeon/raid operations. Only a **coordinated network of advanced Anchors** seriously strains the Shroud and The Binding. Minor devices are not automatically world-ending. Guardians investigate connections and safe dismantling; The Unmade use distributed Anchors to extend Nhal's influence across both continents and gradually restore the path to the First Anchor. Covenant and Dominion pursue separate faction-loyal questlines, including level-banded overseas incursions.
+
+**The original is unique and remains unresolved:** Destroying modern Anchors is a meaningful victory against the Unmade's network; it does not destroy the First Anchor, close the primordial breach, free the Seven or settle the possible final reunification.
+
 ## 1.7 Divine aftermath [CONFIRMED survival; details OPEN]
 
 All Seven persist as distinct consciousnesses with their essences bound into maintaining the Shroud. Their former freedom to act in the Physical Realm is lost or profoundly limited. Religious experiences, patron relationships and subtle divine signs can remain possible, but their exact channels are not decided. Earlier speculative god-by-god fates—including literal deaths, permanent disappearance, or unrelated imprisonment—are superseded where inconsistent with The Binding. Their relationships, memories of the deception, and eventual responses if released are substantial future narrative material.
