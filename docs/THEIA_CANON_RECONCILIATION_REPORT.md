@@ -64,3 +64,7 @@ The exact Great Betrayal and sealing machinery; which gods fought on which side 
 - **Add** the source decision recovery, verification status and this report, while preserving the 403-page PDF as the authority for disputed question wording.
 
 **Audit integrity:** A full machine-indexed source pass and targeted manual collision/correction review have been completed. A literal human rereading and independent adjudication of all 403 pages word by word is not claimed. This distinction prevents overstating the evidence.
+
+## Later creator clarification: the deliberate two-realm First Sundering (2026-10-12)
+
+The user supplied an expanded **draft**, not final prose, explaining **why** Aethyr shattered itself. Aethyr and Nhal were supreme primordial essences before space, time, laws or realms. Their conflict of creation versus unmaking reached a stalemate. Aethyr realized that **imprisonment through separation**, rather than direct defeat, could protect future creation. Its voluntary shattering **created both the Physical Realm and the Void**, forced Nhal into the latter and its own shards into the former, and **deliberately formed the Veil as a final protective act**. This replaces earlier ambiguity about whether the Void existed before creation or the Veil was incidental. The World Bible, Detailed Lore Archive and Interwoven Chronicle were revised to express this causal sequence. Veil mechanics and the ultimate fate of Nhal remain open.
