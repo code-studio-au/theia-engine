@@ -103,6 +103,14 @@ The seventh people did not entirely disappear. **Multiple small independent encl
 
 **Proposed, not approved:** The Guardians might have originated among Seventh resisters during the Divine War and later become a multiracial secret order. This is compatible with their confirmed founding during the Divine War but must not be promoted to canon until the user selects it.
 
+## 1.6e The Seventh alone can have children across species [LOCKED · 2026-10-12]
+
+**Superseding rule:** The original six mortal species cannot ordinarily have biological children with one another across species boundaries. Elven and troll cultural branches remain compatible within their respective species. **Only the seventh people** have the unique biological/magical compatibility to have children with members of any of the six species. Ascendant's design of an unusually adaptable seventh people provides the in-world explanation; this trait is not exceptional combat power, immortality or guaranteed high magical reserves.
+
+**Historical consequence:** Seventh researchers and other survivors who had reached the outside world before The Binding could form families within the six peoples. Over generations, their descendants integrated culturally, adopted new names, lost language and records, and became largely indistinguishable from their communities. This explains the absence of a recognizable seventh diaspora without requiring an impossible total erasure of its members. **Some modern individuals may unknowingly have direct Seventh ancestry**, usually without distinctive powers; rare unusual magical affinities are possible but not a universal inherited perk. The isolated Seventh enclaves inside the Shroud continue to preserve a distinct culture.
+
+**Not decided:** Precise genetics, whether all possible descendants remain fertile with all six species, appearance and inheritance ratios, who retains genealogical records, and which NPC families carry this ancestry. The proposed mixed founding of the Guardians is compatible with this history but Guardian membership need not be tied to bloodline.
+
 ## 1.7 Divine aftermath [CONFIRMED survival; details OPEN]
 
 All Seven persist as distinct consciousnesses with their essences bound into maintaining the Shroud. Their former freedom to act in the Physical Realm is lost or profoundly limited. Religious experiences, patron relationships and subtle divine signs can remain possible, but their exact channels are not decided. Earlier speculative god-by-god fates—including literal deaths, permanent disappearance, or unrelated imprisonment—are superseded where inconsistent with The Binding. Their relationships, memories of the deception, and eventual responses if released are substantial future narrative material.
