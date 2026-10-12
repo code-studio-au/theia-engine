@@ -7,11 +7,11 @@ Version: 8.9 (consolidated baseline)
 Updated: 2026-10-12
 Project: Custom MMO Engine / Theia
 
-> **SOURCE / RELIABILITY:** Consolidated from the Theia discussions available in this project, including stages 1–63 and World Bible updates through v8.9 as represented in conversation context. This is a **substantial baseline, not a verbatim export of the original “MMO Story” chat**. Earlier granular decisions, especially PvP mechanics, may require validation against that chat. Never silently overwrite approved canon.
+> **SOURCE / RELIABILITY:** Consolidated from the Theia discussions available in this project, including stages 1–63 and World Bible updates through v8.9 as represented in conversation context. This is a **consolidated canon baseline, not a verbatim export of the original “MMO Story” chat**. The original 403-page export has since been supplied and is the primary evidence for source reconciliation. Earlier granular decisions, especially PvP mechanics, may require validation against that chat. Never silently overwrite approved canon.
 >
 > **STATUS KEY:** **CONFIRMED** = explicitly selected/approved by the user or consistently established. **WORKING** = assistant-proposed narrative/design subject to review. **OPEN** = deliberately unresolved. When a confirmed decision conflicts with an earlier proposal, the later confirmed decision wins.
 
-> **DETAILED COMPANION:** [THEIA_DETAILED_LORE_ARCHIVE.md](THEIA_DETAILED_LORE_ARCHIVE.md) expands the creation myth, First/Second Sunderings, complete divine relationships, peoples and institutions, Shattered Delegation, Guardians/Unmade shadow war, cross-continental incursions, launch story, zone catalogues and a reconstructed question-by-question decision register (Q376–Q444, with unanswered questions marked). **Read both files together.** This is not a verbatim export of any original chat that is unavailable to this project context.
+> **DETAILED COMPANION:** [THEIA_DETAILED_LORE_ARCHIVE.md](THEIA_DETAILED_LORE_ARCHIVE.md) expands the creation myth, First/Second Sunderings, complete divine relationships, peoples and institutions, Shattered Delegation, Guardians/Unmade shadow war, cross-continental incursions, launch story, zone catalogues and a reconstructed question-by-question decision register (Q376–Q444, with unanswered questions marked). **Read both files together.** The original 403-page chat export is now available for reconciliation; this file is still a summary, not a verbatim transcript.
 
 > **CURRENT LONG-FORM NARRATIVE:** [THEIA_INTERWOVEN_CHRONICLE.md](THEIA_INTERWOVEN_CHRONICLE.md) is the latest integrated creator-facing story, including the origins of the seventh people, Nhal's contact and the Unmade's long silence, the aftermath for each race, migrations, alliances, contested resource incursions, and launch-era revelation. It expands on the [detailed decision archive](THEIA_DETAILED_LORE_ARCHIVE.md). All new causal connections identified there as **WORKING** remain proposals, not automatically confirmed canon.
 
@@ -235,7 +235,7 @@ Working: Covenant's heartland to west and Dominion's to east; ranges, rivers, cl
 
 ## 15. How to use this bible with Codex or voice
 
-Read this file before inventing lore or writing content. Treat **CONFIRMED** facts as constraints; treat **WORKING** items as drafts and identify them clearly. For any new decision, record its date, status and superseded text. If major details are missing, obtain the full original "MMO Story" transcript or an exported decision log; **do not claim that this document is an exhaustive transcript**.
+Read this file before inventing lore or writing content. Treat **CONFIRMED** facts as constraints; treat **WORKING** items as drafts and identify them clearly. For any new decision, record its date, status and superseded text. If major details are missing, consult the supplied original 403-page "Create MMO Story" PDF and the source decision recovery file; **do not claim that this document is an exhaustive transcript**.
 
 Recommended future companion files:
 - `docs/THEIA_DECISIONS.md` — dated decisions and replacements.
