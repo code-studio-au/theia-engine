@@ -97,6 +97,12 @@ The Shroud's divine containment protects the **rest of the Physical Realm** from
 
 The Unmade arose among the seventh people's compromised researchers and retained an ancient centre of artifacts, knowledge and sanctuaries associated with the First Anchor. Its cells outside the Shroud infiltrated the later alliances, using continuously weakened Passage routes for individuals, artifacts and small groups, not armies. **Corrupted seventh-people inhabitants are not automatically Unmade operatives**: many are transformed victims or fragmented defenders of ancestral structures, potentially including NPC stronghold reclamation. Ongoing corruption is distinct from **clear direct instructions from Nhal**; the long post-Binding silence of reliable communication remains consistent. Exact interior factions and the extent of purposeful direction remain open.
 
+## 1.6d Surviving Seventh enclaves [USER-LOCKED · 2026-10-12]
+
+The seventh people did not entirely disappear. **Multiple small independent enclaves of uncorrupted survivors** endure inside the Shroud, resisting the Unmade and the unrelenting local corruption. They are not a single surviving kingdom with a central monarch or command. Their small fortifications and ancient protected structures offer possible independent entrance outposts for later Covenant and Dominion Shrouded Lands campaigns, but the exact gateway agreements are still working design. Enclaves have not been made immortal or invulnerable.
+
+**Proposed, not approved:** The Guardians might have originated among Seventh resisters during the Divine War and later become a multiracial secret order. This is compatible with their confirmed founding during the Divine War but must not be promoted to canon until the user selects it.
+
 ## 1.7 Divine aftermath [CONFIRMED survival; details OPEN]
 
 All Seven persist as distinct consciousnesses with their essences bound into maintaining the Shroud. Their former freedom to act in the Physical Realm is lost or profoundly limited. Religious experiences, patron relationships and subtle divine signs can remain possible, but their exact channels are not decided. Earlier speculative god-by-god fates—including literal deaths, permanent disappearance, or unrelated imprisonment—are superseded where inconsistent with The Binding. Their relationships, memories of the deception, and eventual responses if released are substantial future narrative material.
