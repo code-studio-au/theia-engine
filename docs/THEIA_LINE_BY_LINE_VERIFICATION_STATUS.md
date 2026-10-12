@@ -1,3 +1,5 @@
+> **FINAL SOURCE-INDEX UPDATE (2026-10-12):** A fresh pass over the entire 403-page original PDF indexed all **444 distinct question identifiers and 471 collaborative numbered prompt occurrences**. It distinguished duplicate prompts rather than merging them. **418 identifiers have source-located answers or a confirmed later variant; 26 remain open/deferred under the source evidence.** These are source-index counts, **not** a claim that all 418 were individually human-adjudicated against every later message. The complete 367 KB register is generated in the ChatGPT file workspace as `THEIA_FULL_SOURCE_VERIFIED_REGISTER.md`, not yet committed to GitHub. The canonical narrative has been rewritten/expanded to reflect Q40 hidden corruption during creation, Q47 mixed divine morality, repeated Q315–317, and the confirmed territorial rules.
+
 # THEIA — LINE-BY-LINE SOURCE VERIFICATION STATUS
 **Source:** 403-page `Create MMO Story.pdf` original conversation · 2026-10-12
 
@@ -5,7 +7,7 @@
 
 All **444 numbered question prompts** were enumerated from the original PDF's extracted text and compared against explicit user answers, subsequent question-specific revisions and assistant summaries. The resulting complete **336 KB** question-and-evidence audit has been generated as `THEIA_LINE_BY_LINE_DECISION_AUDIT.md` in the ChatGPT file workspace; **it has not yet been uploaded into this repository**. The separate `THEIA_SOURCE_DECISION_RECOVERY.md` in this repository remains a compact recovery index, not the full question-by-question audit.
 
-**Corrected preliminary classification: 412 source-located responses, 2 additionally source-verified answers (Q199–200), and 30 unanswered/deferred original numbered entries.** This does not count every reused question occurrence separately. The prior 412/32 tally overlooked explicit PvP answers and therefore was not a completed audit. “Source-located” means the source contains an identifiable user response; it does **not** mean all 412 were manually adjudicated for every possible later revision. Source page numbers are included in the generated full audit.
+**Earlier preliminary classification (superseded): 412 source-located responses, 2 additional verified answers and 30 unanswered/deferred entries.** This does not count every reused question occurrence separately. The prior 412/32 tally overlooked explicit PvP answers and therefore was not a completed audit. “Source-located” means the source contains an identifiable user response; it does **not** mean all 412 were manually adjudicated for every possible later revision. Source page numbers are included in the generated full audit.
 
 ### Important original-source decisions recovered
 
