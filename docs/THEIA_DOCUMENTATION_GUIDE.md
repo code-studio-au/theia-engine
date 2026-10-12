@@ -1,3 +1,5 @@
+> **SOURCE REVIEW COMPLETE (12 October 2026):** Read [THEIA_CANON_RECONCILIATION_REPORT.md](THEIA_CANON_RECONCILIATION_REPORT.md) for the 403-page source-index methodology, 471 separately indexed question prompt occurrences, 418 source-located numbered identifiers, 26 deliberately open/deferred identifiers, and corrections propagated into the current World Bible and chronicle. The complete 367 KB original-question evidence register remains available as a ChatGPT download but is not yet committed to GitHub.
+
 > **VERIFICATION UPDATE (2026-10-12):** See [THEIA_LINE_BY_LINE_VERIFICATION_STATUS.md](THEIA_LINE_BY_LINE_VERIFICATION_STATUS.md) for the source audit covering all 444 question slots: 412 source-located responses, 2 newly source-verified answers and 30 unanswered/deferred original numbered entries. A complete 336 KB Markdown question-by-question evidence register has been generated in the ChatGPT file workspace but is **not yet committed to GitHub**. Full manual adjudication of all later corrections remains open.
 
 # Theia documentation — source of truth and reading order
