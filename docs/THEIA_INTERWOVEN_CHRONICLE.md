@@ -42,7 +42,7 @@ And so creation began with a paradox that would haunt every later age: the first
 
 The exact physics of the Veil, the means by which later extraordinary magic might disturb it, and whether the primordial separation could ever be permanently repaired remain questions for the larger saga. But the reason for its creation was clear: **Aethyr chose sacrifice so that creation could finally have a future.**
 
-The Seven did not know why they had been born. The fragments recognized something familiar in one another, but none retained the entire memory of Aethyr or the primordial war. No one was their king. They discovered their powers gradually, learned magical laws rather than inventing them, and developed independent personalities, ambitions and loyalties.
+In the ages that followed, the Seven felt a strange familiarity with one another but could not explain it. No one was their king. They discovered their powers gradually, learned magical laws rather than inventing them, and developed independent personalities, ambitions and loyalties.
 
 **Guardian** could protect and restore but was too ready to sacrifice, even what was not theirs to sacrifice. **Seeker** was driven to understand and sometimes mistook intellectual confidence for wisdom. **Warrior** could empower will and endurance but could not easily compromise honour. **Shaper** delighted in constructing and transforming creation and possessed an ambition that sometimes outran care. **Judge** understood binding, equilibrium and truth but might apply law inflexibly. **Keeper** could contain and stabilize extraordinarily dangerous powers but withdrew into secrecy. **Ascendant** understood amplification, adaptation and synthesis but envied the accomplishments for which Shaper received praise.
 
