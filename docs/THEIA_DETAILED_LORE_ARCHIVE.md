@@ -1,3 +1,5 @@
+> **2026-10-12 SOURCE RECONCILIATION:** The complete 403-page original `Create MMO Story.pdf` is now available. This archive is a secondary interpretive account, **not** a complete decision register. Use [THEIA_SOURCE_DECISION_RECOVERY.md](THEIA_SOURCE_DECISION_RECOVERY.md) for recovered decisions Q1–435, and the original PDF for exact question/answer language. The current primary chronological narrative is [THEIA_INTERWOVEN_CHRONICLE.md](THEIA_INTERWOVEN_CHRONICLE.md). Prior claims that Q1–375 could not be recovered are superseded. Q35 direct ancestry, Q40 hidden corruption, Q42 divine empowerment and Q420's later D correction are source-backed. Q436–444 remain unanswered.
+
 # THEIA — DETAILED LORE, DECISION AND DESIGN ARCHIVE
 **Companion to:** [THEIA_WORLD_BIBLE.md](THEIA_WORLD_BIBLE.md)
 **Archive revision:** 2026-10-12 · Reconstructed from conversation available to this assistant
