@@ -513,3 +513,9 @@ This archive is intended to be **searched or referenced**, not mechanically rewr
 - **THEIA_LAUNCH_CAMPAIGN.md:** faction-separate 1–60 act outline and detailed side-story chains.
 
 The original "Create MMO Story" chat has now been supplied as a 403-page PDF. The remaining work is a systematic question-by-question audit of that source, resolving later revisions and expanding the narrative where confirmed decisions were previously omitted.
+
+
+### Later creator-locked clarification (12 October 2026): recurrent resonance and continental separation
+The Seventh researchers perceived only an unexpected result of their exceptional six-field experiment; they did not recognize its hidden resonance with the Veil. Continued experiments combining all six magical fields periodically reproduced the particular resonant alignment, each instance giving Nhal a fleeting chance to bias outcomes and thereby encourage further work. The researchers initially mistook the results for their own progress; a minority eventually pursued the suspected intelligence. This influence was entirely subsequent to Ascendant's independent creation of the Seventh.
+
+The First Anchor's activation began the Second Sundering by physically tearing apart once-connected landmasses, creating the separated continental heartlands later occupied by Covenant and Dominion. The Seventh homeland was shattered and isolated, becoming the region later enclosed by the Shroud. The collapse of ancient Passage and civic magical networks spread disaster; the Divine War and The Binding compounded it. Exact geography is still open.
