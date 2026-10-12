@@ -1,3 +1,7 @@
+> **ORIGINAL SOURCE NOW RECOVERED (2026-10-12):** The 403-page exported original conversation `Create MMO Story.pdf` has been provided. The previous assertion that Q1–375 were inaccessible is obsolete. See [THEIA_SOURCE_DECISION_RECOVERY.md](THEIA_SOURCE_DECISION_RECOVERY.md) for recovered decisions and [THEIA_INTERWOVEN_CHRONICLE.md](THEIA_INTERWOVEN_CHRONICLE.md) for the current long-form working narrative. Original question wording is preserved in the PDF; early rejected pitches must not be imported into canon. Q436–444 remain unanswered.
+
+> **CORRECTIONS FROM ORIGINAL USER ANSWERS:** Q35 was **direct magical ancestry**; Q40 selected **hidden corruption of the newly created people** as the cause of the divine creation dispute; Q42 **divine empowerment** of original bloodlines; Q43 magic **uncommon but known**; Q12 some gods fell and others survived (individual identities still open). Q420 was later explicitly revised to **D**: founding divine teachings, occasional direct visits and mortal intermediaries. The Shaper's ambition is a personality flaw, not the superseded god title.
+
 # THEIA — MASTER WORLD BIBLE
 Version: 8.9 (consolidated baseline)
 Updated: 2026-10-12
