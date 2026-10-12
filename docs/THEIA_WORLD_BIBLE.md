@@ -25,17 +25,22 @@ The setting must be rewarding independent of the main quest. Launch progression 
 
 **Hard faction boundary:** Covenant and Dominion are two permanently hostile, politically separate playable alliances. A character's alliance membership is permanent. No ordinary cross-alliance citizenship, trade, friendly quests, public diplomacy, military service, or cooperative gameplay. Exceptions are *deeply clandestine* networks whose agents outwardly retain their native alliance affiliations. The rare historical peace negotiation was a failed exceptional attempt, **not** evidence of ordinary diplomacy.
 
-## 2. Primordial cosmology [CONFIRMED foundations]
+## 2. Primordial cosmology [CONFIRMED foundation; expanded creator draft 2026-10-12]
 
-Before the physical universe there were two primordial energies/consciousnesses:
-- **Aethyr** — primordial potential for existence, creation and becoming.
-- **Nhal** — primordial unmaking, negation and stillness; also called **the Unseen** in limited lore.
+**Primordial status:** Aethyr and Nhal were supreme primordial essences, categorically greater and more fundamental than the Seven. They existed **before space, time, realms or physical laws**. The later descriptions of their struggle lasting “eons” are figurative: time did not yet exist to measure it.
 
-After a primordial struggle that Aethyr could not win directly, **Aethyr deliberately shattered itself in a final desperate act**. The **First Sundering** brought physical existence into being and generated seven distinct, equal divine consciousnesses: **the Seven**. Nhal was blasted outside physical creation into **the Void**, an absolute absence of ordinary matter, space, time, life and physical reality. Nhal survived there.
+- **Aethyr** embodied the power and will of existence, creation, possibility and becoming.
+- **Nhal** embodied negation and unmaking, the power and will to destroy what Aethyr sought to bring into existence.
 
-The Seven began as equals, without a formal supreme god. They inherited power/aspects from Aethyr but became independent individuals and initially lacked full understanding of their origin. Magic itself is more fundamental than the Seven and is not invented by them.
+Their opposed creative and destructive wills produced an immeasurable **stalemate**. Neither could overcome the other by direct force; while Nhal could reach Aethyr's creations, none could be assured of enduring.
 
-**WORKING metaphysics, not final:** A boundary often provisionally called *the Veil* separates reality from the Void. Only extraordinary workings affecting fundamental reality can produce contact/resonance; ordinary magic does not weaken it. Nhal progresses through contact, influence, persistent anchors and attempted incarnation. Nhal cannot simply step into the world. The Second Sundering's sealing may have restricted deeper ambient magic while holding Nhal back, explaining aspects of the modern awakening. Exact mechanisms and ultimate solution are still open.
+**Aethyr's revelation and objective:** Instead of destroying Nhal, Aethyr conceived a means of **confining Nhal apart from creation**. It would establish two separate realms, place Nhal beyond the realm in which creation could develop, and maintain a boundary preventing unmaking from reaching across. The plan would require Aethyr's deliberate self-destruction.
+
+**The First Sundering:** Aethyr shattered itself by choice. The resulting eruption of primordial energy **created both the Physical Realm and the Void**—neither realm existed before this event. The force drove Nhal into the newly created Void and Aethyr's shattered energies into the Physical Realm. In its final act Aethyr established the **Veil between those realms**, deliberately protecting the Physical Realm from Nhal's unmaking. The Physical Realm thereby acquired space, time, matter and fundamental magic. The Void is a realm of negation, **not** an ordinary physical world with its own preexisting geography. Nhal endured within it because of its primordial nature, but was confined by the Veil.
+
+**The Seven:** Seven independent equal divine consciousnesses subsequently awakened from Aethyr's shards within the Physical Realm. They were not Aethyr reborn as a single mind, did not inherit its full memories or understand the primordial sacrifice, and had no supreme ruler. Magic is part of the physical reality made possible by the First Sundering; the Seven learned its laws rather than inventing it.
+
+**Status distinction:** The user's 2026-10-12 clarification explicitly establishes the *intentional imprisonment plan*, the *simultaneous creation of two realms*, Nhal's *forced displacement*, and the Veil's *deliberate creation as Aethyr's final protective act*. The user expressly calls this telling **a draft, not final prose**; narrative phrasing remains revisable. The Veil's name and later technical mechanisms, the precise nature of boundary damage, and how Nhal might eventually cross remain **WORKING/OPEN**, not resolved by this clarification.
 
 ## 3. The Seven Gods [CONFIRMED]
 
