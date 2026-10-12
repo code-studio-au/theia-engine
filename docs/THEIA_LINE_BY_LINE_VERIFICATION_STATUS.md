@@ -5,7 +5,7 @@
 
 All **444 numbered question prompts** were enumerated from the original PDF's extracted text and compared against explicit user answers, subsequent question-specific revisions and assistant summaries. The resulting complete **336 KB** question-and-evidence audit has been generated as `THEIA_LINE_BY_LINE_DECISION_AUDIT.md` in the ChatGPT file workspace; **it has not yet been uploaded into this repository**. The separate `THEIA_SOURCE_DECISION_RECOVERY.md` in this repository remains a compact recovery index, not the full question-by-question audit.
 
-**Current classification: 412 source-located user answers/corrections and 32 unanswered/deferred questions.** “Source-located” means the source contains an identifiable user response; it does **not** mean all 412 were manually adjudicated for every possible later revision. Source page numbers are included in the generated full audit.
+**Corrected preliminary classification: 412 source-located responses, 2 additionally source-verified answers (Q199–200), and 30 unanswered/deferred original numbered entries.** This does not count every reused question occurrence separately. The prior 412/32 tally overlooked explicit PvP answers and therefore was not a completed audit. “Source-located” means the source contains an identifiable user response; it does **not** mean all 412 were manually adjudicated for every possible later revision. Source page numbers are included in the generated full audit.
 
 ### Important original-source decisions recovered
 
@@ -34,7 +34,27 @@ All **444 numbered question prompts** were enumerated from the original PDF's ex
 
 ### Source-unanswered or deferred question groups
 
-The original conversation does not supply an accepted user answer for all of the following original question slots: **Q179–183**, parts of the repeatedly revised **Q191–200** geographic/PvP question rounds, **Q212–219** (the user stopped and returned to lore), and **Q436–444** (Stage 62 form presented but not submitted). Later standalone instructions can still settle a *topic* without answering the originally worded multiple-choice question. Preserve that distinction; never silently infer a choice from a form default or assistant recommendation.
+The original conversation does not supply an accepted user answer for all of the following original question slots: **Q179–183**, the **earlier versions** of some repeatedly numbered **Q191–198** geographic/PvP questions, **Q212–219** (the user stopped and returned to lore), and **Q436–444** (Stage 62 form presented but not submitted). Later standalone instructions can still settle a *topic* without answering the originally worded multiple-choice question. Preserve that distinction; never silently infer a choice from a form default or assistant recommendation.
+
+### Newly verified corrections — repeated PvP question identifiers (PDF pp. 122–131)
+
+**The earlier audit incorrectly called Q199 and Q200 unanswered.** On PDF p. 130 the user explicitly answered **“200 should be a mix of all three”** (NPC reclamation, unclaimed territory and magical events), and subsequently **“Hybrid and yes”** for **Q198** (hybrid influence decay) and **Q199** (more territory means more overextension). These are confirmed selections.
+
+Other question numbers were reused with *different prompts*, not just repeated options:
+
+| Identifier | Earlier question | Later question and source-backed answer |
+|---|---|---|
+| Q191 | Alliance relations, PDF p. 122 | Reissued p. 125; user chose **A**, almost complete separation, p. 126 |
+| Q192 | Third PvP territory, PDF p. 124 | Reissued p. 125; user said **“as stated previously”**: Shrouded Lands confirmed as concept, exact option not selected |
+| Q193 | Why territory matters, PDF p. 124 | Reissued p. 125 for **primary PvP type**; user chose **E**, combination, p. 126 |
+| Q194–197 | PvP and entry questions, PDF p. 124 | Reused for geography, access and encounters, p. 127; **not confirmed by prior choices** |
+| Q198 | Persistent/seasonal ownership model, PDF p. 128 | Reused for **influence decay**, PDF p. 129; user chose hybrid, p. 130 |
+| Q199 | Overextension, PDF p. 129 | User chose yes, p. 130 |
+| Q200 | Neutralization, PDF p. 129 | User chose mix of all three, p. 130 |
+
+**Worldbuilding consequence:** The Shrouded Lands PvP model already has confirmed hybrid influence decay, overextension and multiple neutralization outcomes. Do not describe these as undecided. The exact geography and route choices in the later Q194–197 round remain open. **The original Q193 about why the territory matters was not answered by the later “193 E”** because the question had changed.
+
+The downloadable 335 KB full audit has been amended to distinguish the repeated prompts. It remains available as a ChatGPT file, **not yet uploaded to GitHub**.
 
 ### Source complications
 
