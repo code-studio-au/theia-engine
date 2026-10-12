@@ -1,0 +1,66 @@
+# THEIA — SOURCE REVIEW AND CANON RECONCILIATION (12 October 2026)
+
+**Primary evidence:** the original 403-page `Create MMO Story.pdf`, supplied by the user. **Story reference:** [THEIA_INTERWOVEN_CHRONICLE.md](THEIA_INTERWOVEN_CHRONICLE.md). **Short canon reference:** [THEIA_WORLD_BIBLE.md](THEIA_WORLD_BIBLE.md).
+
+## Scope and verification method
+
+The original conversation was reviewed from the rejected initial pitches through the 62-stage collaborative question process and subsequent long-form narrative/voice discussions. The first approximately 40 PDF pages contain abandoned pitches and **must not be imported as canon**. All 444 distinct numbered question identifiers were indexed, including **471 separately identifiable collaborative question-prompt occurrences** where numbers were reused.
+
+Answers were associated with explicit user replies and later corrections, not form defaults or assistant recommendations. The previous 412-response candidate audit was tested against its assigned PDF-page neighbourhood; **411 matched**, and Q60 was manually verified on PDF p72 as the user’s explicit correction to **all six races**. Reused question variants and later overrides were then adjudicated. **418 numbered identifiers have a source-located answer or a confirmed later variant; 26 remain open/deferred.** These are identifier-level source-index counts, not a guarantee that every later unnumbered suggestion was approved.
+
+The complete source register (approximately 367 KB) is available as `THEIA_FULL_SOURCE_VERIFIED_REGISTER.md` in the ChatGPT file workspace; it is **not yet in this GitHub repository**. The original PDF is also not in this repository. The repo contains a reproducible [question-extraction script](../tools/extract_theia_questions.py), the [compact decision recovery](THEIA_SOURCE_DECISION_RECOVERY.md), and the [verification status](THEIA_LINE_BY_LINE_VERIFICATION_STATUS.md).
+
+## Exact open/deferred question identifiers
+
+**Q179–183**, **Q194–197** (reissued geographical/access prompts), **Q212–219**, and **Q436–444**: 26 distinct identifiers. The original PDF also contains unanswered earlier variants of some reused numbers. The final group Q436–444 explicitly leaves the surviving original great magical order’s purpose, archives, survival method, Guardian relationship and the distribution/authenticity of ancient records unresolved.
+
+## Important decisions restored from the original source
+
+| Source | User-approved choice | Historical consequence |
+|---|---|---|
+| Q35 | **Direct ancestry** | Magical inheritance has genealogical roots; later rare empowered lineages are consistent |
+| Q40 | **Hidden corruption of the seventh people's creation** | Nhal's subtle influence must be causally present in the creation project, not only in research centuries later |
+| Q42 | **Divine empowerment** | Original exceptional bloodlines arise through the gods' deliberate acts |
+| Q47 | **Mixed morality** | The Seven have divergent ethical characters, not uniformly benevolent intentions |
+| Q55 → Q60 | Four races **superseded by six** | Six species and eight playable civilizations are the later model |
+| Q309 | Keeper's knowledge + Ascendant's ambition | Their joint troll creation need not imply close friendship |
+| Q315–317 (Stage 47) | Magical stability; unauthorized experimentation; shared halfling–troll resilience | Explains Keeper's distrust and troll/halfling magical ancestry |
+| Q315–317 (Stage 49) | Different divine specialties; limitations through laws/understanding/consequences; gradual discovery | **Different prompts sharing the same numbers**; both sets matter |
+| Q382 | Revised to **D**, all three | Halfling combat engineering, precision and defensive mastery |
+| Q420 | Revised to **D**, all three | Founding divine teachings, occasional direct visits and mortal intermediaries |
+| Q191–193 (reissued) | Almost complete separation; Shrouded Lands concept; combined PvP | Hostile faction divide and varied territorial warfare |
+| Q198–200 (reissued) | Hybrid decay; yes to overextension; all three neutralization outcomes | Prevents permanent domination of the Shrouded Lands |
+| Q201–202 | Moderate overextension; dynamic neutralization | Territory type, magical instability and activity determine outcomes |
+| Q203–211 | Logistics, defensive NPC support, underdog incentives; siege limits/windows; shared upkeep; persistent ownership with seasonal objectives | Source-confirmed fairness principles, **not** final numerical balancing |
+| Q427–435 | Three or four great independent interconnected orders, exactly one secret survivor | Institutional history must not invent the survivor's identity as approved canon |
+
+**Original naming and design supersessions:** The Ascendant, Covenant, Dominion, Aelari, Vaelari, Korrath, Vorrath, The Unmade, Queen Seralyth, First Elder Dromak and First Archon Selrion. The Shaper's ambition remains a valid character flaw despite the seventh god's renaming.
+
+## Narrative rewrite and historical causation
+
+The [current interwoven chronicle](THEIA_INTERWOVEN_CHRONICLE.md) was substantially expanded and reordered to keep related histories together rather than isolate gods, races, hidden orders and modern politics in disconnected entries. Its continuous causal sequence now covers:
+
+- Aethyr's **deliberate desperate First Sundering** and the Seven's independent awakening; the gods' mixed morality, emerging friendships, rivalries, creative philosophies and relationships to mortals.
+- The six species, Keeper and Ascendant's cooperation/distrust during troll creation, divine empowerment of mortal bloodlines and the growth of complex independent magical institutions.
+- The **three-or-four-order** Age of Wonders, knowledge sharing, Passage infrastructure and the social dependencies that made its destruction devastating.
+- The creation of the exceptional seventh people and **proposed** preliminary Nhal influence during design, followed by stronger boundary contact through advanced research; hidden evidence manipulation and the Divine Schism.
+- Keeper's **working** discovery of an intelligence outside creation, Guardian's protective dilemma and a **working** Great Betrayal/Second Sundering mechanism. The user has not ratified the exact actors, divine wartime sides or individual god fates.
+- Guardians founded during Divine War; The Unmade rooted in Nhal-influenced ancient research; the **working** loss of Unmade contact after the sealing and renewed contact during the awakening.
+- Distinct postwar survival of the dwarf and Korrath ancestral capitals, destruction of the original elven capital, migrations of all six peoples, halfling refuge among orcs, Covenant's human–dwarf treaty and Dominion's trial-based leadership.
+- Aelari–Vaelari responsibility schism and Korrath–Vorrath religious exile, including Queen Seralyth, First Archon Selrion and First Elder Dromak; other proposed modern rulers remain marked as working names.
+- Generations of resource warfare and naval expeditions, exceptional peace negotiations sabotaged by The Unmade, Guardian investigation and the expansion of hostile overseas outposts.
+- Level-banded military, Guardian and Unmade incursions on both continents, the later Shrouded Lands PvP theatre and two permanently separate launch campaigns toward a working level-60 cap.
+
+## Still open by deliberate design, not by failure to extract
+
+The exact Great Betrayal and sealing machinery; which gods fought on which side and survived in which condition; the vanished seventh people's name, physical form and ultimate fate; the one original surviving magical order's purpose, method, archives and relationship to Guardians; exact NPC biographies beyond user-confirmed names; world-map coordinates and definitive PvP numerical balance; the final fate of Nhal and the Seven. The chronicle contains **working** dramatic interpretations of some of these to create a readable full saga; they must not be promoted to confirmed canon without a user decision.
+
+## Repository decisions
+
+- **Keep and update** `THEIA_WORLD_BIBLE.md` as the canonical constraint reference.
+- **Keep and update** `THEIA_INTERWOVEN_CHRONICLE.md` as the primary continuous, creator-facing history.
+- **Keep** `THEIA_DETAILED_LORE_ARCHIVE.md` as secondary detail/reference, with source correction notices.
+- **Delete from current branch** the redundant `THEIA_TRUE_CHRONICLE.md`; its older text remains recoverable through Git history.
+- **Add** the source decision recovery, verification status and this report, while preserving the 403-page PDF as the authority for disputed question wording.
+
+**Audit integrity:** A full machine-indexed source pass and targeted manual collision/correction review have been completed. A literal human rereading and independent adjudication of all 403 pages word by word is not claimed. This distinction prevents overstating the evidence.
