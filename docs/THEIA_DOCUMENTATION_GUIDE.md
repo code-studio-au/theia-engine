@@ -1,4 +1,4 @@
-> **VERIFICATION UPDATE (2026-10-12):** See [THEIA_LINE_BY_LINE_VERIFICATION_STATUS.md](THEIA_LINE_BY_LINE_VERIFICATION_STATUS.md) for the source audit covering all 444 question slots: 412 source-located responses and 32 unanswered/deferred. A complete 336 KB Markdown question-by-question evidence register has been generated in the ChatGPT file workspace but is **not yet committed to GitHub**. Full manual adjudication of all later corrections remains open.
+> **VERIFICATION UPDATE (2026-10-12):** See [THEIA_LINE_BY_LINE_VERIFICATION_STATUS.md](THEIA_LINE_BY_LINE_VERIFICATION_STATUS.md) for the source audit covering all 444 question slots: 412 source-located responses, 2 newly source-verified answers and 30 unanswered/deferred original numbered entries. A complete 336 KB Markdown question-by-question evidence register has been generated in the ChatGPT file workspace but is **not yet committed to GitHub**. Full manual adjudication of all later corrections remains open.
 
 # Theia documentation — source of truth and reading order
 
