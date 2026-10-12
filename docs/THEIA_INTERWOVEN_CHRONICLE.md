@@ -2,19 +2,45 @@
 ### Creator's historical narrative, revised to integrate the decisions and their consequences
 **Expanded chronological edition · 12 October 2026 · Spoilers for the whole saga**
 
+> **CREATOR'S PRIMORDIAL DRAFT (2026-10-12):** The opening now explicitly follows Aethyr's plan to confine Nhal by creating **both** realms and the Veil through deliberate self-sacrifice. This is a polished working narrative of the user's draft, not a final lock on metaphysical details.
+
 > **Editorial status.** This is a continuous dramatic account, told from the creator's omniscient perspective, not a sequence of standalone question answers. It integrates the recoverable decisions through Stage 61 (Q376–435) and subsequent explicit decisions concerning Aethyr, Nhal, the Seven's titles, the peoples, Covenant, Dominion, The Unmade, the Shattered Delegation and cross-continental incursions. Established decisions are preserved. Where exact origin events, divine wartime allegiance and fate, the seventh people's name, the Great Betrayal's machinery, individual officials or the ultimate ending have not been decided, coherent narrative links are **WORKING INTERPRETATIONS**, not newly confirmed canon. See [Master Bible](THEIA_WORLD_BIBLE.md) and [Decision Archive](THEIA_DETAILED_LORE_ARCHIVE.md). Questions Q436–444 were asked but not answered and MUST NOT be treated as resolved. This is not a verbatim transcript of the earlier “MMO Story” chat.
 
 > **SOURCE RECONCILIATION (2026-10-12):** This narrative has been expanded using the original 403-page “Create MMO Story” conversation PDF, not merely the earlier assistant summary. For the complete recovered decision index see [THEIA_SOURCE_DECISION_RECOVERY.md](THEIA_SOURCE_DECISION_RECOVERY.md). The exact ancient betrayal, surviving original order and individual divine fates remain proposed/open; early rejected alternate pitches are excluded. **This is a working creator narrative, not a verbatim historical transcript.**
 
 > **FULL SOURCE AUDIT NOTE (12 October 2026):** The original 403-page conversation was re-indexed across all 444 question numbers, including separately reused prompts. The downloadable full register records 471 distinct numbered prompt occurrences from the collaborative pages. The source decisions Q35 (direct ancestry), Q40 (hidden corruption during creation), Q42 (divine empowerment), Q47 (mixed divine morality), Q382 and Q420 (later revisions), and Q198–202 (territorial rules) take precedence over earlier summaries. Specific mechanics of Nhal's first contact, the Great Betrayal, the surviving original magical order and unapproved modern NPC biographies remain **WORKING**.
 
-Before the world there was no first hour to measure. There was only a conflict between two primordial wills who were not yet gods in any sense mortals could have understood. **Aethyr** was the potential for things to become; **Nhal** the denial of that potential, the principle that something could be unmade. The long struggle was not a war fought across stars, since stars had not yet been born. It was a battle over whether there could be a world at all.
+Before there was a world, there was no sky to divide above from below, no distance to cross, and no moment by which one event could be measured against another. Neither the Physical Realm nor the Void existed. There were no realms at all, no established laws of nature, and no boundary separating what could exist from what could not. Yet two primordial essences endured beyond every condition that later beings would call reality.
 
-Aethyr could not win through force. Nhal could not wholly extinguish possibility. Yet Aethyr understood that continuing the old struggle would eventually permit Nhal to prevail. There remained only a terrible alternative. Aethyr could change the conditions of the conflict by ceasing to be the single consciousness that fought it.
+**Aethyr** was the supreme creative will: not merely a god of life or light, but the potential for existence itself, the power by which something might arise where nothing had been. **Nhal** was its opposite: not a creature of darkness dwelling in some already formed abyss, but the supreme will to negate, to undo whatever might be made, until even the possibility of its existence was extinguished. Their power was older and more fundamental than the gods who would one day emerge. Where Aethyr sought to bring forth creation, Nhal sought to unmake it.
 
-It deliberately shattered itself.
+Their struggle had no battlefield, because space did not yet exist. It had no beginning that could be recorded, because time had not yet begun. Later minds might describe it as lasting eons, but even that word borrows a measure from a universe that had not been born. Every expression of Aethyr's creative purpose met Nhal's opposing will; every act of unmaking was resisted by the possibility of becoming. Neither could overcome the other. Their contest settled into an immeasurable stalemate, and no creation could be assured of enduring while its destruction remained within Nhal's reach.
 
-The **First Sundering** released the creative force from which time, matter, space and fundamental magic emerged. Seven independent conscious inheritors awoke from the shards of Aethyr. Nhal was blasted beyond the newborn physical realm into the **Void**, which contained no ordinary space, life, matter, time or magical ambience. Nhal persisted because its existence was primordial, but the new laws of physical reality excluded it. This was not a conventional prison with bars and a gate. The separation later nicknamed **the Veil** was a property of existence itself. Magic would not be a gift granted by the Seven: it was the foundation of the realm in which they awoke.
+In that impasse Aethyr conceived a different kind of victory. To defeat Nhal outright had proved impossible. But perhaps Nhal did not need to be destroyed. If creation could be given a realm of its own, and Nhal confined to another realm from which it could not freely reach what Aethyr made, existence might finally be allowed to unfold. The answer was not greater force in the old struggle; it was to establish the very conditions under which that struggle could no longer proceed as before.
+
+The cost was Aethyr itself.
+
+Aethyr understood that creating such a separation would require an act beyond ordinary creation: the breaking of its own primordial unity. The power that had resisted Nhal for an immeasurable existence would be spent in a single deliberate sacrifice. Aethyr would not remain whole to govern the result, to witness its future, or to defend each new life personally. Yet if the plan succeeded, what came afterward would have something Aethyr had never been able to guarantee—**the chance to exist without being immediately unmade**.
+
+And so Aethyr chose.
+
+In an instant beyond the measure of any clock, Aethyr shattered itself.
+
+This was the **First Sundering**. The eruption of primordial energy did not merely fill an empty universe; it **brought two distinct realms into existence**. One was the **Physical Realm**, in which space, time, matter and the fundamental laws of magic could arise and endure. The other was the **Void**, not a second world of mountains and cities, but a realm of negation beyond the conditions of ordinary physical existence.
+
+The force of the shattering drove Nhal into the newly formed Void. Aethyr's own shattered energies passed into the Physical Realm. In its final creative act, Aethyr established a **Veil between the two realms**—a fundamental separation intended to prevent Nhal from reaching across and unmaking the existence now taking shape.
+
+It was not a prison built around an existing abyss. The prison, the world it protected, and the boundary between them were consequences of the same sacrifice. **Aethyr had changed the terms of the primordial conflict by creating the separation that neither essence had previously possessed.**
+
+Nhal survived. Its nature was primordial and could not be extinguished merely by being cast beyond the new physical order. But survival was not freedom. Nhal was confined beyond the Veil, unable simply to reach into the Physical Realm and erase whatever emerged there. Aethyr's purpose had been achieved, at a price no later god could fully comprehend.
+
+Aethyr, as a single consciousness, was gone.
+
+Within the Physical Realm, seven great concentrations of its shattered essence awakened as independent beings. They inherited extraordinary power, but not the whole mind, memory or intention of the one who had sacrificed itself. They did not know the long struggle, the revelation that had ended it, or the reason the Veil existed. None was appointed to rule the others. These seven would become known as **the Seven**.
+
+And so creation began with a paradox that would haunt every later age: the first act that made lasting life possible was an act of self-destruction, undertaken to prevent a still-living enemy from destroying all that might follow. The gods would inherit the world made by that choice without understanding its price. Nhal, beyond the Veil, would remember what they had forgotten.
+
+The exact physics of the Veil, the means by which later extraordinary magic might disturb it, and whether the primordial separation could ever be permanently repaired remain questions for the larger saga. But the reason for its creation was clear: **Aethyr chose sacrifice so that creation could finally have a future.**
 
 The Seven did not know why they had been born. The fragments recognized something familiar in one another, but none retained the entire memory of Aethyr or the primordial war. No one was their king. They discovered their powers gradually, learned magical laws rather than inventing them, and developed independent personalities, ambitions and loyalties.
 
