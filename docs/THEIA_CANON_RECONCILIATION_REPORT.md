@@ -43,7 +43,7 @@ The [current interwoven chronicle](THEIA_INTERWOVEN_CHRONICLE.md) was substantia
 - Aethyr's **deliberate desperate First Sundering** and the Seven's independent awakening; the gods' mixed morality, emerging friendships, rivalries, creative philosophies and relationships to mortals.
 - The six species, Keeper and Ascendant's cooperation/distrust during troll creation, divine empowerment of mortal bloodlines and the growth of complex independent magical institutions.
 - The **three-or-four-order** Age of Wonders, knowledge sharing, Passage infrastructure and the social dependencies that made its destruction devastating.
-- Ascendant's **sole** Seventh creation using Keeper's restricted knowledge beyond permission, hidden Nhal influence during design, the seventh civilization's First Anchor and the initial Second Sundering catastrophe, followed by the Divine Schism and War.
+- Ascendant's **sole** Seventh creation using Keeper's restricted knowledge beyond permission, Nhal's later influence only after the Seventh researchers' accidental resonance, the seventh civilization's First Anchor and the initial Second Sundering catastrophe, followed by the Divine Schism and War.
 - Keeper's investigation of the intelligence outside creation and **The Binding**, in which Keeper knowingly conceals the indefinite binding of all Seven. The moral betrayer and the gods' survival are now locked; wartime sides and the exact magical mechanism remain open.
 - Guardians founded during Divine War; The Unmade rooted in Nhal-influenced ancient research; the **working** loss of Unmade contact after the sealing and renewed contact during the awakening.
 - Distinct postwar survival of the dwarf and Korrath ancestral capitals, destruction of the original elven capital, migrations of all six races, halfling refuge among orcs, Covenant's human–dwarf treaty and Dominion's trial-based leadership.
@@ -126,3 +126,9 @@ Nhal remained imprisoned behind the Veil but could **observe** the Physical Real
 The first opening for influence arose **generations later**, when exceptional Seventh researchers, unaware of the Veil or Nhal, accidentally achieved a configuration of the six fields that **resonated with** the Veil without breaching it. Only thereafter could Nhal subtly influence similar experiments, eventually steering the project intended to connect with Ascendant into the **First Anchor** and its catastrophic breach. The **First Resonance** is distinct from the First Anchor, Second Sundering and The Binding. The exact resonance physics remain open; the chronological and causal constraints are locked.
 
 Updated: World Bible, Interwoven Chronicle, Detailed Lore Archive and Source Decision Recovery. Future reconciliation should not silently restore the earlier “corruption at birth” mechanism.
+
+
+### Later creator decisions (12 October 2026): resonance and continental fracture
+The Seventh's first six-field experiment produced an unexpected observable result, while the underlying Veil resonance was wholly unknown to its researchers. Continued six-field synthesis unknowingly reproduced the specific resonant alignment; each occurrence gave Nhal a limited opportunity to influence results, gradually directing research. This was **after** Ascendant independently created the Seventh, with no Nhal influence during creation.
+
+The First Anchor's breach physically split once-connected landmasses into the future Covenant and Dominion continental heartlands. The Seventh homeland was devastated and isolated, later enclosed within the Shrouded Lands. The subsequent Divine War and The Binding compounded the destruction. Precise continental geometry remains open.
