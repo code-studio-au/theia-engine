@@ -40,7 +40,7 @@ Their opposed creative and destructive wills produced an immeasurable **stalemat
 
 **The Seven:** Seven independent equal divine consciousnesses subsequently awakened from Aethyr's shards within the Physical Realm. They were not Aethyr reborn as a single mind, did not inherit its full memories or understand the primordial sacrifice, and had no supreme ruler. Magic is part of the physical reality made possible by the First Sundering; the Seven learned its laws rather than inventing it.
 
-**Status distinction:** The user's 2026-10-12 clarification explicitly establishes the *intentional imprisonment plan*, the *simultaneous creation of two realms*, Nhal's *forced displacement*, and the Veil's *deliberate creation as Aethyr's final protective act*. The user expressly calls this telling **a draft, not final prose**; narrative phrasing remains revisable. The Veil's name and later technical mechanisms, the precise nature of boundary damage, and how Nhal might eventually cross remain **WORKING/OPEN**, not resolved by this clarification.
+**Status distinction:** The user's 2026-10-12 clarification explicitly establishes the *intentional imprisonment plan*, the *simultaneous creation of two realms*, Nhal's *forced displacement*, and the Veil's *deliberate creation as Aethyr's final protective act*. The user expressly calls this telling **a draft, not final prose**; narrative phrasing remains revisable. The Veil's existence and intended protective purpose are now part of the draft's established direction; its technical mechanisms, the precise nature of boundary damage, and how Nhal might eventually cross remain **WORKING/OPEN**, not resolved by this clarification.
 
 ## 3. The Seven Gods [CONFIRMED]
 
