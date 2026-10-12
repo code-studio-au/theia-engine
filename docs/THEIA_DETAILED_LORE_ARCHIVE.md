@@ -40,7 +40,7 @@ The user approved the **Seeker–Shaper discovery-first** model and explicitly c
 
 Guardian and Warrior, already bonded through an initial philosophical disagreement over preservation versus resilience, take that research further and successfully create **the first two mortal peoples: Guardian's elves, then Warrior's orcs**. Their creations express different but equally legitimate visions of independent life. Shaper, inspired by mortals who can themselves create and transform, **then creates dwarves**. Seeker remains investigator/teacher, **not** creator of any of the six original species. Judge **then creates humans** in response to questions of free will, law and social responsibility; Keeper **then creates halflings** with magical stability and resilience in mind.
 
-**Ascendant independently awakened earlier but joins the community only after these five peoples exist.** This is now an explicit chronological lock, superseding the earlier open question about how many peoples had been made before his arrival. He finds established friendships and creations and experiences outsider status, although deliberate exclusion is not established. Ascendant later seeks Keeper's knowledge and they **jointly create trolls as the sixth people**, before Ascendant's unauthorized alterations damage trust. The **seventh people** arise later through several gods' collaborative research, with Ascendant a passionate advocate rather than confirmed sole initiator. Nhal's hidden corruption of that creation remains a confirmed underlying cause.
+**Ascendant independently awakened earlier but joins the community only after these five peoples exist.** This is now an explicit chronological lock, superseding the earlier open question about how many peoples had been made before his arrival. He finds established friendships and creations and experiences outsider status, although deliberate exclusion is not established. Ascendant later seeks Keeper's knowledge and they **jointly create trolls as the sixth people**, before Ascendant's unauthorized alterations damage trust. The **seventh people** arise later through **Ascendant's sole divine creation**, using Keeper's research beyond the limited permission he had been granted. Nhal's hidden corruption of that creation remains a confirmed underlying cause.
 
 The **precise awakening order of the first six gods**, their first conversations, and the details of Seeker and Shaper's original discovery remain open as dramatic particulars. The structural order above is confirmed, and must not be undone by an older speculative draft.
 
@@ -107,7 +107,7 @@ The Unmade arose among the seventh people's compromised researchers and retained
 
 The seventh people did not entirely disappear. **Multiple small independent enclaves of uncorrupted survivors** endure inside the Shroud, resisting the Unmade and the unrelenting local corruption. They are not a single surviving kingdom with a central monarch or command. Their small fortifications and ancient protected structures offer possible independent entrance outposts for later Covenant and Dominion Shrouded Lands campaigns, but the exact gateway agreements are still working design. Enclaves have not been made immortal or invulnerable.
 
-**Proposed, not approved:** The Guardians might have originated among Seventh resisters during the Divine War and later become a multiracial secret order. This is compatible with their confirmed founding during the Divine War but must not be promoted to canon until the user selects it.
+**Proposed, not approved:** The Guardians might have originated among Seventh resisters during the Divine War and later become a multiracial secret order. This founding proposal was subsequently approved: the Guardians were a multiracial coalition including Seventh researchers and trusted members of the six peoples.
 
 ## 1.6e The Seventh alone can have children across species [LOCKED · 2026-10-12]
 
@@ -220,10 +220,13 @@ Surviving masters initially suppressed individual dangerous advanced workings (n
 
 The Guardians, founded during Divine War, are **not automatically the same** as the one surviving older magical order.
 
-## 5.2 The Divine War [historical constraints]
-The creator-facing true history may include: escalating restrictions, altered evidence against Ascendant, disagreements over the vanished people, gods splitting over differing duties, mortal cities choosing different divine patrons, damaged magical passages, devastating battles and a final sealing catastrophe. Only the broad schism, divine war, lost people, hidden Nhal influence, ruin and a pivotal betrayal are solidly established; exact wartime sides, first attacker, council wording, chronology and acts of betrayal are not ratified.
+## 5.2 The First Anchor, Divine War and Binding [latest creator chronology]
 
-The postwar world preserves irreconcilable *myths*, not reliable eyewitness history. A handful of researchers and hidden custodians have fragments of truth. The dying/transforming creator deity's descendants still carry altered divine inheritance.
+The **First Anchor** was built by seventh-people researchers seeking contact with Ascendant; Nhal-influenced investigators secretly redirected it into a breach in the Veil. Its activation **began the Second Sundering catastrophe**, devastating the seventh homeland and destabilizing ancient magical and Passage infrastructure. The **Divine War followed**, worsening the catastrophe as gods and mortals fought over responsibility, dangerous research and how to contain the breach. The conflict was not the modern Covenant–Dominion war. During it, before The Binding, Seventh investigators and trusted members of the six peoples founded the Guardians, initially knowing only that an unknown influence manipulated magical research.
+
+**The Binding** was the final containment. Keeper knew with certainty that all Seven would be bound indefinitely to maintaining the Shroud and deliberately withheld this from the others, who believed they were contributing only limited essence. The First Anchor could not be **safely** destroyed once entangled with the breach. The Shroud protects the wider world but does not remove the relentless corruption inside. All Seven survive as bound, conscious essences. The Seventh survive in multiple independent enclaves and through assimilated descendants beyond the Shroud.
+
+The postwar world preserves competing myths, not one reliable eyewitness account. Exact divine wartime allegiances, the geographical sequence of ruptures and the eventual resolution of The Binding remain open.
 
 ## 5.3 Recovery and alliance formation
 Postwar migrations used now-mostly-failed magical passageways. Ancient surviving dwarf and ancestral troll centres retain genuine fragments of Divine Age infrastructure and scholarship, but authenticity and interpretations vary.
