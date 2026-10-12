@@ -9,10 +9,19 @@
 
 # 1 — Cosmic mythology: the complete causal chain
 
-## 1.1 The two primordial powers [CONFIRMED]
-Before the physical universe, **Aethyr** (existence, possibility, becoming) and **Nhal** (negation, unmaking, stillness) contended over reality. They are not the same as the Seven. Aethyr could not defeat Nhal through direct force. In a final desperate **deliberate sacrifice**, Aethyr shattered itself, and the First Sundering made ordinary existence possible: space, time, matter, the structure of fundamental magic, and seven conscious fragments. The fragments awoke as independent, equal gods. Nhal was cast into the **Void**, absolute absence of ordinary physical existence. Its primordial nature allows it to persist there.
+## 1.1 The two primordial powers [CONFIRMED foundation; creator's expanded draft 2026-10-12]
 
-The explicit user selection was **“Aethyr made a final desperate choice to shatter itself when victory over Nhal became impossible”**, not accidental destruction, not a simple cosmological creation ritual. Aethyr and Nhal were selected from the originally proposed first pair; discarded alternatives included Vaelith/Morvane, Eryndor/Thael'Vorn, Ilyr/Vhor, Aelun/Ulthar and Saelith/Nharoth. No “light” and “dark” as canonical proper names.
+**Aethyr and Nhal were primordial essences, not gods in the later sense.** Their creative and destructive energies were more fundamental than any laws or realms. Before the First Sundering there was no Physical Realm, no Void, no Veil, no space and no time. Thus “eons” describes an immeasurable conflict using a later metaphor, not an actual pre-creation calendar.
+
+Aethyr sought to bring forth and sustain existence. Nhal sought to unmake anything that might be brought forth. Their struggle settled into a stalemate that direct force could not break. Aethyr eventually **conceived a new strategy**: it did not need to annihilate Nhal if it could **imprison Nhal apart from what Aethyr created**. Such a separation required making the very realms and boundary that did not yet exist.
+
+Aethyr deliberately **shattered its own primordial unity**. In the resulting **First Sundering**, the eruption of primordial energy simultaneously brought into being **the Physical Realm** and **the Void**. The force propelled Nhal into the newly formed Void and dispersed Aethyr's shards into the Physical Realm. As its last protective act Aethyr formed **the Veil between the two realms**, so that Nhal could no longer freely unmake physical creation. This was Aethyr's purpose, not an accidental byproduct of a desperate explosion.
+
+The Physical Realm became the place where space, time, matter and the fundamental laws of magic could exist. The Void is a realm of negation rather than a physical demon kingdom. Nhal survived there as a primordial essence but was **confined**. Aethyr's unified consciousness did not survive; from its shattered energies seven equal, distinct divine beings awakened within the Physical Realm, lacking full knowledge of their origin.
+
+**Authorial causation:** stalemate → Aethyr's revelation that confinement could succeed where destruction could not → conscious decision to pay the cost of self-shattering → creation of both realms → displacement of Nhal and Aethyr's shards → deliberate Veil → protected creation → the Seven awakening without memory of the plan. This is the chain that all later histories should preserve.
+
+**Editorial qualification:** This expansion comes from the user's explicit 2026-10-12 **draft clarification**. The causal foundations are intentional creative direction, while the final wording and the Veil's precise mechanics remain open to revision. The earlier confirmed choice that Aethyr shattered itself deliberately is preserved. No older names or discarded light-versus-dark mythology are restored.
 
 ## 1.2 The Seven are successors, not servants [CONFIRMED concept; metaphysical specifics WORKING]
 The Seven emerged from Aethyr and are independent persons, not puppets or seven full copies. The original primordial struggle is largely unknown to them, while Nhal remembers more. They begin as equals with no high god. Magic was not invented by gods; they learned its laws. Rare acts combine several gods' powers. The seven primordial correspondences considered were continuity/Guardian, understanding/Seeker, will/Warrior, making/Shaper, order/Judge, boundary/Keeper, potential/Ascendant. These are interpretive correspondences, not seven mortal magical disciplines.
