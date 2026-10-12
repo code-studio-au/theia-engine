@@ -107,3 +107,7 @@ The user explicitly selected **continuous low-capacity operation** for the survi
 ## 2026-10-12 user-locked: multiple surviving Seventh enclaves
 
 The user chose **multiple small independent enclaves** of surviving, uncorrupted seventh people within the Shrouded Lands, **not** a centrally governed surviving kingdom. These enclaves resist The Unmade and may offer independent entrance outposts for Covenant and Dominion through restored PvP gateways (outpost arrangements still working). The proposal that the Guardians were originally seventh-people resisters and later recruited across races remains **OPEN**, not yet user-approved.
+
+## 2026-10-12 Guardian knowledge clarification
+
+**User confirmed:** At the beginning, the Guardians knew **an unknown influence was manipulating magical research**; they did **not** know its identity as Nhal or its primordial origin. That discovery must be a later development. **Not yet confirmed:** the proposed mixed Seventh-and-six-peoples founding coalition, the escape of seventh researchers before The Binding, and descendants assimilating through interbreeding into other populations. These remain options for resolving why seventh-people ancestry is hidden outside the Shroud.
