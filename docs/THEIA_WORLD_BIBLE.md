@@ -42,6 +42,14 @@ Their opposed creative and destructive wills produced an immeasurable **stalemat
 
 **Status distinction:** The user's 2026-10-12 clarification explicitly establishes the *intentional imprisonment plan*, the *simultaneous creation of two realms*, Nhal's *forced displacement*, and the Veil's *deliberate creation as Aethyr's final protective act*. The user expressly calls this telling **a draft, not final prose**; narrative phrasing remains revisable. The Veil's existence and intended protective purpose are now part of the draft's established direction; its technical mechanisms, the precise nature of boundary damage, and how Nhal might eventually cross remain **WORKING/OPEN**, not resolved by this clarification.
 
+## 2.1 The staggered awakening and Ascendant's late arrival [NEW USER DECISION · 2026-10-12]
+
+**CONFIRMED DIRECTION:** The Seven did **not** all awaken together. **Ascendant awakened independently, before joining the other gods**, and spent a meaningful period discovering his powers and developing his own philosophy in isolation. By the time he encountered the other six, they had already begun building relationships, cooperating and undertaking the creation of mortal peoples. Thus Ascendant was **late to the divine community**, not simply a being who had only just come into existence after everyone else had finished creating.
+
+This explains his outsider perspective without making deliberate exclusion by the other gods a settled fact. Their established bonds and celebrated creations intensified Ascendant's need to contribute and be recognized. The later collaboration with Keeper on the trolls is particularly significant: Ascendant needed Keeper's knowledge, and their joint work offered him a lasting legacy before the unauthorized experimentation damaged trust. The prospect of the seventh people can subsequently become a powerful opportunity for recognition and an expression of Ascendant's philosophy, **without** making him the sole initiator or automatically responsible for Nhal's corruption.
+
+**OPEN:** Exact order of awakening for the other six, the elapsed time between awakenings, exactly which peoples existed when Ascendant joined, and whether his initial solitude was chosen or circumstantial. The suggested Guardian–Warrior and Seeker–Shaper early sequences remain proposals, not separately approved chronological facts.
+
 ## 3. The Seven Gods [CONFIRMED]
 
 These are **canonical divine titles**; individual personal names proposed in earlier chats were **not approved**.
