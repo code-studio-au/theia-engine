@@ -258,11 +258,87 @@ What they knew was that the First Anchor had been deliberately altered, that the
 
 They began seeking allies among the scholars, witnesses and protectors of the six older races, whose own civilizations were struggling with the consequences of the disaster. Their evidence became increasingly important as the gods and mortal peoples attempted to understand the catastrophe and determine who bore responsibility.
 
-**The Divine Schism grew in the wake of the rupture.** Keeper recognized the forbidden stability principles used in Ascendant's creation and demanded the full research. Ascendant, grieving for the people whose homeland lay ruined, believed the other gods were using the disaster to condemn his greatest achievement. Judge sought accountability; Guardian insisted on the rights of surviving innocents; Warrior opposed collective punishment and demanded honest judgment. Seeker believed the cause must be understood before knowledge was suppressed. Shaper feared that destroying every surviving advanced structure would destroy what little remained of civilization. These were not neat factions of good gods and evil gods. Each position carried genuine obligations and genuine dangers.
+The devastation left the gods confronting a catastrophe unlike anything they had previously witnessed. Across Theia, their mortal creations suffered amid ruined cities, fractured lands and the collapse of magical structures that had sustained civilizations for generations.
 
-Nhal's willing followers took advantage of the conflict. They mixed authentic evidence of Ascendant's deception with forged claims that he had intentionally designed a weapon for unmaking. They presented incomplete records to gods already suspicious of one another. Ascendant concealed more of his work, thereby making honest scrutiny harder. Keeper withheld dangerous technical details for fear of enabling another Anchor. Seeker demanded access precisely because secrecy prevented verification. The first acts of repression produced resistance, and resistance seemed to vindicate repression. Mortal kingdoms, academies and orders took sides for reasons that included belief, survival, land, honour and the control of resources.
+As the scale of the destruction became clear, attention turned towards the Kel'vari and the research that had brought about the disaster.
 
-It was **during the Divine War, before The Binding**, that the first Guardians formally emerged. **Oth'varen**, who had survived the activation and witnessed the five scholars' transformation, joined the surviving Kel'vari investigators in seeking trusted allies. Together, they brought the preserved evidence to trusted scholars, witnesses and protectors from **the other six races**, formally establishing the multiracial Guardians. Some Kel'vari founders had been abroad at the time of the Anchor's activation; others had escaped while the homeland remained accessible. Their coalition agreed to protect the evidence, investigate the influence without widely reproducing dangerous techniques, and prevent any god or state from monopolizing the truth. They did **not** yet know Nhal's identity. The Guardians were multiracial from their founding, and membership was defined by mission and trust rather than bloodline. They established cells and hidden repositories both inside and outside the region that would later become the Shroud.
+Keeper recognised elements of the forbidden stability principles Ascendant had used in creating the Kel'vari. The discovery deepened his suspicions, and he demanded access to the research behind the First Anchor, determined to understand how such a catastrophic working had been constructed.
+
+Ascendant resisted.
+
+He had watched his greatest creation suffer devastation on an unimaginable scale. His people were being blamed for a disaster most had played no part in causing, and he feared that surrendering their knowledge would expose the survivors to further persecution.
+
+To Ascendant, Keeper's demands seemed less an attempt to uncover the truth than another effort to condemn the achievement he had never fully accepted.
+
+The other gods were divided over how to respond.
+
+Judge demanded accountability for those responsible, but insisted that judgement must rest upon evidence. Guardian opposed the persecution of innocent Kel'vari and sought to protect the displaced. Warrior condemned the destruction and demanded that those responsible answer for it, while refusing to treat an entire people as guilty.
+
+Seeker argued that the First Anchor's workings must be understood before their knowledge was suppressed or destroyed. Shaper, witnessing the collapse of the ancient world's infrastructure, feared that indiscriminately dismantling advanced magical structures would condemn even more mortals to suffering.
+
+None of these positions was without merit. Yet each god increasingly regarded the others' priorities as a threat to the people and principles they had sworn to protect.
+
+Their disagreements deepened as the surviving Kel'vari research was examined.
+
+Records were incomplete. Experimental results contradicted established theory, and evidence emerged that the First Anchor's construction had differed from its approved design.
+
+Among those who possessed such evidence was Oth'varen.
+
+Having survived the destruction of the Anchor complex, he sought out the Kel'vari investigators who had questioned the project before its activation. Together, they gathered surviving records, reconstructed the concealed alterations and attempted to establish how their colleagues had been led towards the disastrous working.
+
+Oth'varen knew more than any of them about the final moments of the activation. He had witnessed the transformation of his five colleagues and experienced the same primordial influence attempting to claim him.
+
+Yet even he could not explain its true nature.
+
+He knew that an intelligence had manipulated their research and that the five had willingly pursued it. He did not know its name, its origin or the full extent of its purpose.
+
+As the investigation continued, those responsible for the First Anchor's secret alterations began working to prevent the truth from emerging.
+
+The surviving followers of the hidden intelligence exploited the growing distrust among the gods. They circulated selected records alongside forged evidence, mixing genuine accounts of Ascendant's concealed methods with false claims that he had deliberately designed the Kel'vari as instruments of destruction.
+
+Other documents suggested that Keeper had known more about the dangers of the research than he had admitted, while conflicting testimony cast doubt upon the intentions of those demanding access to the surviving magical knowledge.
+
+The accusations found willing audiences.
+
+Ascendant, already distrustful of Keeper's motives, withheld further details of his creation of the Kel'vari. Keeper restricted access to dangerous stability principles, fearing that their disclosure might enable another catastrophic working.
+
+Seeker challenged those restrictions, arguing that concealed evidence could neither be tested nor trusted. Judge's attempts to establish responsibility were frustrated by contradictory accounts, while Guardian and Warrior increasingly found themselves protecting communities threatened by reprisals and the seizure of their knowledge.
+
+Each act of concealment strengthened suspicion. Each demand for disclosure seemed to threaten another god's responsibilities.
+
+What had begun as a disagreement over the cause of the catastrophe became a struggle over who could be trusted with the knowledge and power necessary to prevent another.
+
+Mortal rulers, academies and magical orders were drawn into the conflict. Some supported the gods whose principles they shared. Others sought protection for their people, access to surviving infrastructure or control of knowledge that might determine whether their civilizations recovered.
+
+The first attempts to seize forbidden research provoked resistance. Resistance brought harsher measures, and the resulting confrontations deepened the divisions among gods and mortals alike.
+
+**The Divine Schism had become the Divine War.**
+
+Amid the spreading conflict, Oth'varen and the surviving Kel'vari investigators recognised that their evidence could no longer be entrusted to any single divine authority, kingdom or magical institution.
+
+They had already witnessed how respected scholars could be manipulated and how dangerous knowledge could be concealed beneath apparently legitimate research. Now they saw the same pattern of secrecy, accusation and mistrust spreading through the wider world.
+
+They began seeking trusted allies among scholars, witnesses and protectors of the six older races.
+
+Some had already questioned the accounts used to justify the war. Others had protected Kel'vari refugees, preserved records of the catastrophe or resisted attempts to seize dangerous magical knowledge.
+
+Together, they established **the Guardians**.
+
+From their founding, the Guardians were a multiracial organisation, united not by ancestry or allegiance to a particular god, but by a shared purpose: to preserve evidence of the manipulation behind the First Anchor, investigate the unknown intelligence responsible and prevent another catastrophe.
+
+They established hidden repositories and independent cells throughout the surviving civilizations, including within the devastated Kel'vari homeland.
+
+Their members sought to safeguard knowledge without allowing it to be exploited, protect surviving witnesses and preserve the truth against those who would destroy or distort it.
+
+Oth'varen became one of their principal founders and their most important living witness to the First Anchor's activation.
+
+But the Guardians were not his personal order. Their strength came from the different peoples and disciplines brought together by a common mission.
+
+As the Divine War spread, their work became increasingly dangerous.
+
+The followers of the hidden intelligence continued manipulating the conflict, while the gods' own decisions brought further destruction to a world already struggling to survive.
+
+And despite everything Oth'varen had witnessed, the true nature of the power behind the First Anchor remained unknown.
 
 The Unmade and Guardians therefore shared a historical crisis but not an identity. The Unmade grew from researchers who chose to follow the influence behind the Anchor. The Guardians grew from Oth'varen and those who tried to expose and contain it, together with allies among the older races. The Seventh remained a **race**, not an organization: most of its survivors belonged to neither order. The Guardians' future secrecy and The Unmade's infiltration would become competing legacies of the same broken age.
 
