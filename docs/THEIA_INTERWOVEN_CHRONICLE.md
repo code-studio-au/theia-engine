@@ -154,7 +154,7 @@ As generations passed, Kel'vari researchers explored the apparent unity beneath 
 
 Encouraged by their results, the researchers continued combining the six fields in increasingly complex experiments. Whenever they reproduced the particular alignment, the Veil resonated again. Nhal could not command minds, control all magic or speak openly as a god, but through those fleeting opportunities it could favour possible outcomes, help unstable patterns settle and encourage discoveries that seemed to justify further investigation.
 
-The research eventually supported a publicly authorised undertaking: a permanent connection with Ascendant. The Kel'vari federation and its scholarly authorities approved the legitimate objective after debate over cost, safety and the limits of existing knowledge. The undertaking became known as **the First Anchor**. Its public purpose was divine communication, not a breach of the Veil.
+The research eventually supported a publicly authorised undertaking: a permanent connection with Ascendant. The Kel'vari federation and its scholarly authorities approved the legitimate objective after debate over cost, safety and the limits of existing knowledge. The undertaking became known as **the First Anchor**.
 
 Six principal scholars guided the project. **Vaer'uun** led resonance and communication research; **Thes'var** designed its complex structures; **Su'vareth** coordinated restricted records and external relationships; **Oma'vira** studied consciousness and perception; **Khor'vun** directed protective workings and containment; and **Oth'varen** independently verified the stability of the combined six fields. They were celebrated colleagues, and Oth'varen counted the other five among his closest friends.
 
