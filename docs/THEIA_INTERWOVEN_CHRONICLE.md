@@ -406,39 +406,145 @@ These particular reactions are dramatic interpretations, but Keeper's certainty 
 
 ### The Immediate Aftermath of The Binding
 
-The Binding preserved the world beyond the Kel'vari's shattered homeland, but it did not restore what had existed before the First Anchor. The Second Sundering had torn once-connected landmasses apart, and the Divine War had deepened the devastation. Across Theia, cities were cut off from fields, mines from workshops and settlements from the ancient Passage routes that sustained them. Some ancestral centres had been destroyed; others survived with irreplaceable knowledge and infrastructure lost.
+The Binding had contained the breach, but the world beyond the Shroud remained devastated.
 
-The Kel'vari's homeland had once been a centre of the Passage network. The catastrophe ruined many connections, and The Binding weakened those that remained. Great thoroughfares fell silent, but **a few gates continued operating at very low capacity**. Individuals, small groups and limited supplies could pass where armies and great caravans could not. These routes would become lifelines, secrets and eventually instruments of infiltration.
+The Second Sundering had fractured the continents, and the Divine War had brought further destruction to civilizations already struggling to survive. The gods who had once guided their mortal creations were now bound within the great magical barrier surrounding the ruined Kel'vari homeland.
 
-**Within the Shroud**, the First Anchor remained entangled with the breach. The barrier prevented Nhal's corruption from spreading freely into the wider world but did not purify the land it enclosed. Surviving Kel'vari gathered in defended refuges near wards, springs, gate chambers and ancient buildings that still provided shelter. Their extraordinary magical understanding could not replace ruined harvests, lost craftspeople or the ordinary labour needed to survive. The Guardians' cells, founded during the Divine War, attempted to protect these people and preserve evidence that an **unknown influence** had manipulated the First Anchor. They did not yet know that influence was Nhal.
+Across Theia, survivors faced a world profoundly changed. Cities that had endured the catastrophe were separated from their former territories. The great Passage network that had connected distant peoples was largely broken, and much of the knowledge needed to restore it had been lost.
 
-The Unmade suffered a catastrophe of their own. Their founding researchers had knowingly pursued the intelligence behind the Kel'vari's experiments, and some had redirected the First Anchor toward the Veil. Laboratories were destroyed, records scattered and the practitioners who understood their greatest workings killed or isolated. The Second Sundering and The Binding disrupted the ancient arrangements through which they had received guidance. **Their reliable communication with Nhal ceased.** The corruption near the Anchor endured, but relentless pressure was not direct instruction.
+Yet not every connection had failed.
 
-The five transformed scholars survived The Binding, retaining their memories, intelligence and devotion even after reliable communication with Nhal ceased. Gathering surviving researchers and willing followers, they established **the Corrupted Conclave**. They were Nhal's deliberately transformed champions, but the council and its authority to govern the Unmade arose from their own decision to continue without its voice—not from a later appointment. Five leadership offices took shape. **Vaer'uun, the First Voice**, devoted and authoritative, interpreted the remembered will of Nhal; he had led resonance and divine-communication research. **Thes'var, the Architect**, brilliant and obsessive, guarded forbidden research and sought the lost Anchor workings he had helped design. **Su'vareth, the Veiled Hand**, patient and calculating, cultivated hidden contacts, drawing on experience overseeing restricted research and external relationships. **Oma'vira, the Harbinger**, charismatic and fervent, maintained devotion and recruitment after studying consciousness and perception. **Khor'vun, the Warden**, disciplined and relentless, defended the First Anchor's approaches and surviving Unmade strongholds, building on expertise in protective structures and containment. Before the catastrophe, all five had been celebrated Kel'vari scholars; their secret willing allegiance to Nhal had been concealed beneath legitimate reputations. Their deliberate allegiance distinguished them from the many transformed Seventh inhabitants who were victims rather than conspirators.
+A small number of ancient Passage gates remained operational, though at greatly reduced capacity. Where vast numbers of travellers and supplies had once moved between cities, only individuals, small groups or limited consignments could now pass.
 
-### The First Reunion
+These surviving routes provided rare connections between otherwise isolated regions, but their limited capacity made them incapable of restoring the trade and movement upon which the ancient world had depended.
 
-The full dramatic account is preserved separately as **Memory I — The Six Reunited** in [Theia Memory Scenes](THEIA_MEMORY_SCENES.md). The following account records its historical consequences.
+#### Within the Shroud
 
-After The Binding, Oth'varen traced familiar but distorted protective workings to a ruined Kel'vari research sanctuary. Thes'var's unmistakable designs remained beneath the alterations. In the central chamber he found all five former colleagues alive, profoundly changed by the primordial energies Nhal had directed into them.
+The Kel'vari homeland lay enclosed within the barrier, its ancient cities shattered and its landscape scarred by the forces unleashed through the First Anchor.
 
-Vaer'uun greeted him as a fellow survivor of an unprecedented revelation. Oth'varen confronted them with the destruction of their homeland and the suffering of the Kel'vari. The five did not simply deny the catastrophe. Years of Nhal's influence, followed by their transformation, had twisted their reasoning until each could justify it through the very convictions that had once defined them.
+The Shroud restrained the spread of corruption beyond its boundaries, but it did not cleanse the land within.
 
-Thes'var called the catastrophe a failure of the Anchor's structure rather than its principle, and still sought to perfect the design. Su'vareth defended their deception as necessary to protect discoveries from fearful authorities. Oma'vira interpreted their transformation as proof they had been chosen, and saw resistance as a refusal of enlightenment. Khor'vun, once the project's most careful protector, now defined protection as defending the five and their followers against everyone who feared them. Vaer'uun claimed the gods had imposed the Shroud because they could not master what the scholars had discovered.
+Around the First Anchor, primordial influence continued to distort magical structures and the surrounding environment. Regions of the homeland remained dangerous or inaccessible, and many surviving settlements were separated by corrupted territory and ruined infrastructure.
 
-Oth'varen appealed to their memories of the people they had been. For an instant he glimpsed his old friend in Vaer'uun, but the scholar replied, "Perhaps what we were needed to be destroyed." Oth'varen understood that the five had not merely made a mistake they could admit and repair. Their judgement had become rooted in Nhal's purpose.
+The Kel'vari who had survived the catastrophe gathered wherever protection remained possible.
 
-Vaer'uun invited Oth'varen to join them. Their combined presence awakened the corruption still lodged within his transformed body. The pull was powerful: not a fresh command from Nhal, whose reliable communication had ceased, but a resonance between six beings altered by the same breach. Oma'vira offered to end his suffering if he accepted what he had become. Oth'varen resisted by forcing his own magical structure into a stabilising configuration, at considerable pain.
+Some found shelter within fortified research complexes, ancient defensive structures or settlements whose protective wards had survived. Others occupied damaged cities or established small refuges around sources of water, cultivable land and surviving magical infrastructure.
 
-When he refused, the chamber's wards stirred and Khor'vun barred the exit. Thes'var attempted to control the workings as Oth'varen disrupted them. Oth'varen knew he could not defeat all five. He broke the ward configuration long enough to escape through the ruined sanctuary.
+Their extraordinary knowledge offered advantages, but it could not replace destroyed food supplies, lost craftspeople or the countless ordinary activities required to sustain a community.
 
-"You cannot escape what you are, Oth'varen," Vaer'uun called after him.
+The Guardians maintained cells within the devastated homeland, protecting survivors, recovering evidence and attempting to prevent the dangerous research that had caused the catastrophe from being repeated.
 
-The corruption had not left him and might never leave him. Yet Oth'varen would not surrender to it, and he would not allow his former colleagues to bring about another Sundering.
+Their work was increasingly difficult. The Shroud had restricted access to the wider world, while corrupted territories and unstable passages made movement between surviving communities hazardous.
 
-**Beyond the Shroud**, the six older races struggled with unequal devastation. Human communities endured across their ancestral inland plains, but their settlements and routes were disrupted. The dwarves' ancient mountain and subterranean capital survived the Divine War, although much of its infrastructure and specialist knowledge had been damaged. Orc Great Clans gathered displaced kin across the grasslands. Halfling communities in underground valleys faced broken passages, water systems and isolated settlements. The ancient elven and troll civilizations had not yet become their later separate political peoples; the ancestral troll highland capital survived, while the precise cause and timing of the original elven capital's destruction remain unresolved.
+Not all Kel'vari within the Shroud were aligned with the Unmade. Most were ordinary survivors, struggling to preserve their families and what remained of their civilization.
 
-A smaller number of Kel'vari researchers had been abroad when the First Anchor activated or escaped before The Binding. Suspicion followed them into the devastated lands of the older races. Some joined the Guardians, preserving evidence of manipulation and seeking protection for survivors. Unmade adherents also remained outside the containment, stranded among distant institutions or able to traverse the weakened gates. They too had lost dependable contact with Nhal, and began hiding their loyalties and records.
+#### Beyond the Shroud
+
+Outside the containment, the six older races faced the consequences of the Second Sundering and Divine War without the direct guidance of their creators.
+
+The human communities of the inland plains began restoring their settlements and agricultural lands. The dwarves retained their ancient mountain and subterranean capital, though its surviving infrastructure required extensive repair.
+
+Across the grasslands, the orc Great Clans gathered displaced families and defended the territories that remained habitable. Halfling communities struggled with damaged passages and failing systems within their ancestral underground valleys.
+
+The elves and trolls likewise confronted the destruction of their ancient world. Their civilizations remained culturally connected, though religious and political disagreements were becoming increasingly difficult to reconcile.
+
+The ancestral troll highland capital had survived. Elsewhere, settlements and institutions faced different degrees of destruction, isolation and displacement.
+
+Among the populations beyond the Shroud were Kel'vari who had been travelling, studying or living among the older races when the catastrophe occurred, together with those who had escaped their homeland before The Binding.
+
+Their circumstances varied.
+
+Some found protection among former colleagues and trusted communities. Others faced suspicion or persecution from those who associated their people with the destruction of the ancient world.
+
+The Guardians' cells beyond the Shroud sought to protect vulnerable Kel'vari, preserve surviving evidence and maintain contact with their counterparts inside the containment wherever possible.
+
+The followers of the hidden intelligence had also been scattered.
+
+Some remained within the Shroud, while others had been operating among distant institutions when the catastrophe occurred. Those outside the barrier retained fragments of research, concealed loyalties and whatever contacts they had established before the war.
+
+But the surviving Unmade faced a crisis that none of their preparations had anticipated.
+
+#### The Silence of Nhal
+
+The Second Sundering had destroyed much of the sophisticated research upon which the Unmade depended. Laboratories lay ruined, records were scattered, and many practitioners capable of reproducing their greatest workings had been killed or isolated.
+
+The Binding further disrupted the magical arrangements through which Nhal's influence had reached its followers.
+
+The corruption surrounding the First Anchor remained, but its persistent pressure was not the same as direct communication.
+
+**The Unmade could no longer reliably hear the intelligence they served.**
+
+Their surviving members possessed fragments of earlier instructions and records of extraordinary discoveries, but the source that had guided their research no longer answered.
+
+For some, the silence brought uncertainty. Others regarded it as proof that the gods' containment had succeeded in separating them from their patron.
+
+### The First Years of Silence
+
+The five transformed scholars, however, had survived.
+
+Scattered by the destruction of the First Anchor complex, they had endured the Divine War and the devastation of their homeland. In the years following The Binding, they began gathering the remaining followers of the intelligence they had served.
+
+Their extraordinary longevity, magical power and knowledge of the original research placed them beyond the authority of ordinary Unmade practitioners.
+
+Yet the corruption that had transformed them had also become deeply rooted in their thoughts and ambitions.
+
+They did not interpret the destruction of their civilization as a reason to abandon their pursuit. Instead, they saw the catastrophe as evidence that their greatest undertaking had been incomplete.
+
+The loss of Nhal's guidance made their continued work more difficult, but it did not diminish their conviction.
+
+From the surviving followers and fragments of their former research, they established **the Corrupted Conclave**.
+
+Vaer'uun assumed the role of **the First Voice**, interpreting the remembered intentions of the intelligence they served.
+
+Thes'var became **the Architect**, determined to recover the lost workings of the First Anchor.
+
+Su'vareth, **the Veiled Hand**, began restoring covert connections with followers beyond the Shroud.
+
+Oma'vira, **the Harbinger**, preserved devotion and recruited new adherents.
+
+Khor'vun, **the Warden**, secured the remaining strongholds and protected the approaches to the First Anchor.
+
+Together, the five assumed leadership of the Unmade.
+
+Their authority did not come from a new instruction from Nhal. It arose from their surviving knowledge, extraordinary abilities and shared determination to continue the work they had begun.
+
+#### The First Reunion
+
+Oth'varen had also survived the catastrophe and The Binding.
+
+During the Divine War, he had helped establish the Guardians and worked to preserve the evidence of the First Anchor's manipulation. Yet he had never learned with certainty what had become of the five colleagues who had stood beside him during its activation.
+
+Several years after The Binding, he discovered traces of familiar magical structures within a ruined Kel'vari research sanctuary.
+
+He recognised Thes'var's work.
+
+Following those traces, he entered the sanctuary and encountered all five of his former colleagues.
+
+They had survived, but the corruption that had transformed them had continued to shape their judgement.
+
+Their reunion offered no reconciliation.
+
+The five regarded their transformation as evidence of extraordinary achievement, interpreting the destruction of their civilization through beliefs that Nhal's influence had profoundly distorted.
+
+Oth'varen confronted them with the suffering their actions had caused, but they defended their pursuit and attempted to draw him towards the same influence he had resisted during the First Anchor's activation.
+
+Their combined presence awakened the corruption within his own transformed body.
+
+For a moment, he felt the terrible attraction of the power they had embraced.
+
+He resisted.
+
+When the five attempted to prevent his departure, Oth'varen disrupted the sanctuary's protective workings and escaped into the surrounding ruins.
+
+The encounter confirmed his worst fears.
+
+His former colleagues had not abandoned their pursuit of the hidden intelligence. They had organised its surviving followers and intended to continue their work despite the destruction it had already caused.
+
+For Oth'varen, the struggle against the Unmade was no longer solely an effort to preserve the truth of the First Anchor.
+
+It had become a struggle to prevent the five from repeating the catastrophe.
+
+The full dramatic account of this encounter is preserved separately as **Memory I — The Six Reunited** in [Theia Memory Scenes](THEIA_MEMORY_SCENES.md).
 
 ### The First Generations — Survival Becomes Inheritance
 
