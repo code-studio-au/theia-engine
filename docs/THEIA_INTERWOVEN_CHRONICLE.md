@@ -340,6 +340,16 @@ The followers of the hidden intelligence continued manipulating the conflict, wh
 
 And despite everything Oth'varen had witnessed, the true nature of the power behind the First Anchor remained unknown.
 
+The rupture of the Veil had changed more than the physical world. Before the First Anchor's activation, Nhal could influence only particular magical experiments through fleeting resonances. With the breach open, its influence reached those who had willingly followed it with greater clarity.
+
+The five transformed scholars experienced this most strongly. What had once appeared as unexpected insight now took the form of thoughts not wholly their own, impressions that arrived with sudden meaning and, at times, whispers that seemed to speak from beyond their minds. **Nhal had found a means to communicate with its chosen followers.**
+
+The guidance was neither constant nor absolute control. Through the corruption within them, Nhal offered direction, fragments of knowledge and interpretations that reinforced convictions already distorted by years of influence. The five increasingly understood even the destruction of their homeland through the explanations it provided, treating the catastrophe as an incomplete achievement rather than a betrayal.
+
+Other willing followers received weaker impressions, particularly near corrupted structures or during forbidden workings. Their experiences varied, but the communications helped them recover research, conceal evidence and exploit the gods' growing distrust. Nhal did not direct every action. Its followers remained capable of choices, even as their judgement and ambitions grew more closely aligned with its purpose.
+
+Oth'varen also sensed the intelligence through the corruption that had reached him. Sometimes its presence came as a faint whisper or an invitation to stop resisting, particularly when he drew deeply upon his altered power. He never accepted it as an authority. The five, by contrast, increasingly treated the guiding presence as inseparable from their own purpose.
+
 The Divine War brought further destruction to a world already struggling to recover from the Second Sundering.
 
 Surviving Passage routes became strategic objectives, fought over by forces seeking to move armies and supplies through the fractured continents. Fortified cities were besieged for their remaining protective structures, while magical institutions were attacked for the knowledge and artifacts they possessed.
@@ -466,17 +476,19 @@ But the surviving Unmade faced a crisis that none of their preparations had anti
 
 #### The Silence of Nhal
 
-The Second Sundering had destroyed much of the sophisticated research upon which the Unmade depended. Laboratories lay ruined, records were scattered, and many practitioners capable of reproducing their greatest workings had been killed or isolated.
+The Binding did more than restrain the corruption spreading from the First Anchor. By enclosing the breach within the Shroud, the Seven disrupted the channels through which the intelligence beyond the Veil had communicated with its followers.
 
-The Binding further disrupted the magical arrangements through which Nhal's influence had reached its followers.
+For the five transformed scholars, the change was immediate. The whispers and guiding impressions that had accompanied them through the Divine War ceased. No further instructions came. The presence they had learned to trust was suddenly silent.
 
-The corruption surrounding the First Anchor remained, but its persistent pressure was not the same as direct communication.
+They attempted to recover the connection through surviving Anchor workings and familiar configurations. Nothing answered. Their transformation, extraordinary power and distorted convictions remained, but the voice that had reinforced them was gone.
 
-**The Unmade could no longer reliably hear the intelligence they served.**
+**The voice was gone, but its influence had become part of who they were.**
 
-Their surviving members possessed fragments of earlier instructions and records of extraordinary discoveries, but the source that had guided their research no longer answered.
+Across the Unmade, within and beyond the Shroud, dependable communication ceased. Corruption still pressed upon the land around the First Anchor, but pressure was not instruction. Their laboratories and records had already been devastated by the Sundering and war, leaving them with fragments of knowledge and remembered guidance whose source no longer answered.
 
-For some, the silence brought uncertainty. Others regarded it as proof that the gods' containment had succeeded in separating them from their patron.
+Oth'varen felt the silence too. For him it brought relief rather than abandonment, although the corruption within him remained and he knew that the intelligence had not been destroyed.
+
+For some followers the silence brought uncertainty; others believed the gods had separated them from their patron. None could know how long it would last.
 
 ### The First Years of Silence
 
