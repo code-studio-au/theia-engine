@@ -292,6 +292,16 @@ Yet even he could not explain its true nature.
 
 He knew that an intelligence had manipulated their research and that the five had willingly pursued it. He did not know its name, its origin or the full extent of its purpose.
 
+The rupture of the Veil had changed more than the physical world. Before the First Anchor's activation, Nhal could influence only particular magical experiments through fleeting resonances. With the breach open, its influence reached those who had willingly followed it with greater clarity.
+
+The five transformed scholars experienced this most strongly. What had once appeared as unexpected insight now took the form of thoughts not wholly their own, impressions that arrived with sudden meaning and, at times, whispers that seemed to speak from beyond their minds. **Nhal had found a means to communicate with its chosen followers.**
+
+The guidance was neither constant nor absolute control. Through the corruption within them, Nhal offered direction, fragments of knowledge and interpretations that reinforced convictions already distorted by years of influence. The five increasingly understood even the destruction of their homeland through the explanations it provided, treating the catastrophe as an incomplete achievement rather than a betrayal.
+
+Other willing followers received weaker impressions, particularly near corrupted structures or during forbidden workings. Their experiences varied, but the communications helped them recover research, conceal evidence and exploit the gods' growing distrust. Nhal did not direct every action. Its followers remained capable of choices, even as their judgement and ambitions grew more closely aligned with its purpose.
+
+Oth'varen also sensed the intelligence through the corruption that had reached him. Sometimes its presence came as a faint whisper or an invitation to stop resisting, particularly when he drew deeply upon his altered power. He never accepted it as an authority. The five, by contrast, increasingly treated the guiding presence as inseparable from their own purpose.
+
 As the investigation continued, those responsible for the First Anchor's secret alterations began working to prevent the truth from emerging.
 
 The surviving followers of the hidden intelligence exploited the growing distrust among the gods. They circulated selected records alongside forged evidence, mixing genuine accounts of Ascendant's concealed methods with false claims that he had deliberately designed the Kel'vari as instruments of destruction.
@@ -339,16 +349,6 @@ As the Divine War spread, their work became increasingly dangerous.
 The followers of the hidden intelligence continued manipulating the conflict, while the gods' own decisions brought further destruction to a world already struggling to survive.
 
 And despite everything Oth'varen had witnessed, the true nature of the power behind the First Anchor remained unknown.
-
-The rupture of the Veil had changed more than the physical world. Before the First Anchor's activation, Nhal could influence only particular magical experiments through fleeting resonances. With the breach open, its influence reached those who had willingly followed it with greater clarity.
-
-The five transformed scholars experienced this most strongly. What had once appeared as unexpected insight now took the form of thoughts not wholly their own, impressions that arrived with sudden meaning and, at times, whispers that seemed to speak from beyond their minds. **Nhal had found a means to communicate with its chosen followers.**
-
-The guidance was neither constant nor absolute control. Through the corruption within them, Nhal offered direction, fragments of knowledge and interpretations that reinforced convictions already distorted by years of influence. The five increasingly understood even the destruction of their homeland through the explanations it provided, treating the catastrophe as an incomplete achievement rather than a betrayal.
-
-Other willing followers received weaker impressions, particularly near corrupted structures or during forbidden workings. Their experiences varied, but the communications helped them recover research, conceal evidence and exploit the gods' growing distrust. Nhal did not direct every action. Its followers remained capable of choices, even as their judgement and ambitions grew more closely aligned with its purpose.
-
-Oth'varen also sensed the intelligence through the corruption that had reached him. Sometimes its presence came as a faint whisper or an invitation to stop resisting, particularly when he drew deeply upon his altered power. He never accepted it as an authority. The five, by contrast, increasingly treated the guiding presence as inseparable from their own purpose.
 
 The Divine War brought further destruction to a world already struggling to recover from the Second Sundering.
 
