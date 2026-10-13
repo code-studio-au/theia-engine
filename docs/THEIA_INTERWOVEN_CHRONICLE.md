@@ -160,7 +160,11 @@ Over years of repeated resonance, five of the scholars came to suspect an intell
 
 Oth'varen noticed discrepancies between approved designs and operational configurations. Other Kel'vari investigators also uncovered missing records, inconsistent results and evidence of unauthorised alterations. They preserved copies and demanded further scrutiny, though they could neither identify Nhal nor demonstrate the ultimate danger. Oth'varen increasingly feared that his friends were following an influence they did not understand.
 
-As the final activation approached, the investigators' concerns reached the scholarly assemblies and federal authorities. The five defended their changes as necessary refinements. Despite unresolved warnings, the project received final authorisation **on the understanding that it remained the approved means of reaching Ascendant**. The authorities did not knowingly consent to the concealed design.
+As the First Anchor neared completion, the five presented their final findings to the scholarly assemblies and federal authorities. Years of successful experiments, independently celebrated discoveries and the extraordinary reputation of the project's leading researchers gave the assembly confidence in their work.
+
+Concerns had been raised by Oth'varen and a small number of investigators, but the evidence remained incomplete. Discrepancies in the research records and unexplained alterations had been attributed to the complexity of the undertaking, while the five carefully concealed the true extent of their modifications.
+
+The final authorisation was granted. Across the Kel'vari federation, anticipation grew for what promised to be the greatest achievement of their civilization: a lasting connection with Ascendant.
 
 Oth'varen continued his examination. In the activation chamber, with the six principal scholars present, he recognised that the actual configuration was directed towards an unknown destination rather than the promised stable channel to Ascendant. He confronted his five colleagues and pleaded with them to stop. He appealed to their shared work, their friendship and the lives depending on their judgement. They refused. They believed the hidden intelligence had led them to a discovery greater than the original project, and their years of exposure had made them increasingly able to justify what they concealed.
 
