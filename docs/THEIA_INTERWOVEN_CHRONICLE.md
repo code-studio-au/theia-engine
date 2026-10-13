@@ -204,15 +204,25 @@ Like the five, Oth'varen emerged fundamentally changed. His mortal body possesse
 
 The rupture continued to widen.
 
-The immense energies flowing through the First Anchor overwhelmed its protective structures. Magical patterns that had once operated in harmony fractured, sending violent disturbances through the surrounding research complex and the networks connected to it. The chamber convulsed. Ancient instruments shattered, protective wards collapsed, and the great structures supporting the Anchor began to tear themselves apart.
+The energies flowing through the First Anchor overwhelmed its protective structures. The six magical fields fell out of balance, and the containment wards surrounding the central chamber failed in succession.
 
-But the destruction did not end with the failure of the device.
+**A tremendous discharge of primordial energy erupted from the heart of the First Anchor.**
 
-The breach had opened a wound in the boundary separating the Physical Realm from the Void. Primordial unmaking poured through it, spreading beyond the Anchor and into the surrounding land.
+The shockwave shattered the chamber and devastated the surrounding research complex. Towers fell, laboratories collapsed and the conduits linking the complex to its supporting structures were torn apart. Yet at the centre of the devastation, the First Anchor remained. Its outer mechanisms were ruined, but its core continued to resonate with the breach.
 
-The Kel'vari homeland was the first to suffer.
+All six transformed scholars were caught in the discharge. Their extraordinary resilience allowed them to survive forces that would have killed ordinary mortals, but they were injured and scattered. Some disappeared into the collapsing galleries; others were thrown into the surrounding devastation. Oth'varen lost sight of his former colleagues as the chamber fell around him. Their precise destinations remained unknown.
 
-Cities that had stood for generations were struck by forces their greatest scholars could neither predict nor contain. Buildings collapsed as the magical structures sustaining them failed. Protective wards twisted into dangerous configurations, while great Passage connections broke apart or became violently unstable. Across the homeland, the earth convulsed. Mountains fractured, valleys collapsed and immense stretches of land were torn apart.
+When the discharge subsided, the research complex was gone. The six were separated by ruined structures, unstable passages and a landscape beginning to break apart.
+
+None knew which of the others had survived.
+
+Yet the First Anchor continued to operate.
+
+The breach remained open, and the primordial energies flowing through it spread beyond the ruined complex.
+
+**The Kel'vari homeland was the first to suffer.**
+
+Cities were struck by forces their scholars could neither predict nor contain. Buildings collapsed as the magical structures sustaining them failed. Protective wards twisted into dangerous configurations, and great Passage connections broke apart or became unstable. Across the homeland, mountains fractured, valleys collapsed and immense stretches of land were torn apart.
 
 The catastrophe spread beyond the Kel'vari's borders.
 
