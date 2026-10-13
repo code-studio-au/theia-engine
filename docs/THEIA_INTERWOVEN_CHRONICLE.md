@@ -340,11 +340,35 @@ The followers of the hidden intelligence continued manipulating the conflict, wh
 
 And despite everything Oth'varen had witnessed, the true nature of the power behind the First Anchor remained unknown.
 
-The Unmade and Guardians therefore shared a historical crisis but not an identity. The Unmade grew from researchers who chose to follow the influence behind the Anchor. The Guardians grew from Oth'varen and those who tried to expose and contain it, together with allies among the older races. The Seventh remained a **race**, not an organization: most of its survivors belonged to neither order. The Guardians' future secrecy and The Unmade's infiltration would become competing legacies of the same broken age.
+The Divine War brought further destruction to a world already struggling to recover from the Second Sundering.
 
-The **Divine War** unfolded through shifting allegiances, not two neat sides corresponding to modern Covenant and Dominion. Passage networks used for scholarship and trade became military roads. Ancient protective structures were attacked to capture cities. Fragile infrastructure broke; food failed to arrive; underground systems collapsed; whole populations fled. The war killed practitioners who carried irreplaceable skills and destroyed libraries before records could be duplicated. Mortals entered fights for religious principles, strategic land, retaliation or survival, often without knowing the gods' real arguments.
+Surviving Passage routes became strategic objectives, fought over by forces seeking to move armies and supplies through the fractured continents. Fortified cities were besieged for their remaining protective structures, while magical institutions were attacked for the knowledge and artifacts they possessed.
 
-Keeper gradually recognized a pattern that ordinary damage could not explain: certain failures were being driven by pressure originating **outside creation**. Keeper did not possess a complete memory of Aethyr or know every detail of Nhal, but came to understand that a persistent alien intelligence was exploiting the war and that a sufficiently large breach might permit its lasting incarnation.
+As the war continued, the loss of skilled practitioners and irreplaceable records made the surviving infrastructure increasingly difficult to maintain. Entire communities were forced to abandon settlements that had survived the original catastrophe, while others became isolated as the last dependable routes between them were destroyed.
+
+The Guardians attempted to preserve what knowledge and evidence they could, but their hidden repositories and independent cells could not prevent the wider destruction. Meanwhile, followers of the unknown intelligence continued exploiting the conflict, recovering fragments of the First Anchor's research and pursuing experiments whose true purpose remained concealed.
+
+Amid the devastation, Keeper began noticing disturbances that could not be explained by warfare or the failure of damaged magical structures.
+
+Some protective workings collapsed despite remaining structurally sound. Others behaved unpredictably only when particular magical configurations were attempted. Accounts from distant regions described similar anomalies, even where no direct connection between the affected structures could be established.
+
+Keeper began comparing these incidents with surviving records of the First Anchor's research.
+
+He recognised a troubling similarity. Certain configurations appeared to produce results that favoured further instability or encouraged repeated experimentation, much as the unexplained discoveries preceding the First Anchor's activation had done.
+
+At first, he considered whether the anomalies reflected an undiscovered interaction between the six magical fields. Yet the pattern persisted across different workings and circumstances, and some disturbances appeared to respond to the actions of those investigating them.
+
+The evidence increasingly suggested something beyond ordinary magical instability.
+
+Keeper extended his investigation towards the devastated Kel'vari homeland, where the most severe disturbances continued to originate.
+
+There, studying the corruption surrounding the First Anchor, he recognised that the rupture had created more than a passage for destructive energies.
+
+**Something beyond the Physical Realm was exerting influence through it.**
+
+Keeper could not identify the intelligence or reconstruct the primordial history of Aethyr and Nhal. But he recognised deliberate behaviour in the disturbances, and understood that the breach offered an opportunity for that influence to grow.
+
+The possibility that it might eventually establish a lasting presence within the Physical Realm became his greatest concern.
 
 As Keeper investigated the damage surrounding the First Anchor, a terrible possibility emerged. The breach could not simply be abandoned, nor could the Anchor be safely destroyed. It had become entangled with the rupture in the Veil, and removing it risked tearing away what little still constrained the intrusion. The damaged region would have to be isolated from the rest of the Physical Realm.
 
