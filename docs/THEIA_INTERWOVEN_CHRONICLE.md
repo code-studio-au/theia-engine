@@ -168,19 +168,85 @@ The final authorisation was granted. Across the Kel'vari federation, anticipatio
 
 Oth'varen continued his examination. In the activation chamber, with the six principal scholars present, he recognised that the actual configuration was directed towards an unknown destination rather than the promised stable channel to Ascendant. He confronted his five colleagues and pleaded with them to stop. He appealed to their shared work, their friendship and the lives depending on their judgement. They refused. They believed the hidden intelligence had led them to a discovery greater than the original project, and their years of exposure had made them increasingly able to justify what they concealed.
 
-The First Anchor activated. Instead of reaching Ascendant, it **breached Aethyr's Veil**. Primordial unmaking surged through the working. Nhal deliberately channelled escaping energies into the five willing scholars, transforming their bodies and magical structures and granting extraordinary longevity, magical capacity and resilience without making them divine or unkillable.
+The First Anchor activated.
 
-Nhal also reached for **Oth'varen**, seeking to claim the leading witness against its manipulation. The same energies entered him and permanently changed his mortal form, but his will resisted the attempted corruption of his allegiance. He emerged extraordinarily long-lived and powerful, still vulnerable to death and burdened by a persistent pull towards the influence he had refused. **Six scholars were transformed. Five followed Nhal. One resisted.**
+For a fleeting moment, the six magical fields converged in a configuration of extraordinary precision. The immense structure responded as its creators had anticipated, drawing together energies that no mortal working had ever sustained on such a scale.
 
-The Anchor became entangled with the rupture. Breaking its visible mechanism would not reliably close the breach and might remove what little still constrained it.
+Then something changed.
 
-**The first catastrophe of the Second Sundering began in the Kel'vari homeland.** As the First Anchor breached the Veil, immense forces tore through the Physical Realm, unleashing a cataclysm that would forever reshape Theia. The land surrounding the Anchor convulsed, mountains fractured, and vast stretches of the ancient world began to break apart. Entire landmasses were torn asunder, separating once-connected territories and giving rise to the great continents that would eventually become the homelands of Covenant and Dominion. At the heart of the devastation, the Kel'vari homeland was shattered and isolated, becoming the ruined region that would later be enclosed within the Shrouded Lands.
+The convergence shifted beyond the boundaries of its intended design. The six fields, brought together through the concealed alterations, began to resonate with something the scholars had never understood. The Anchor reached beyond the Physical Realm.
 
-The destruction extended far beyond the physical landscape. Ancient Passage routes collapsed or became unpredictable, while the magical structures sustaining cities, agriculture, transportation and protection began to fail. Civilizations across Theia suffered cascading disasters as the interconnected systems upon which they depended unravelled. Yet this was only the beginning of the Second Sundering's devastation. The Divine War that followed, and the desperate act of The Binding that eventually ended it, would compound the destruction and transform the world beyond recognition.
+And **Aethyr's Veil ruptured.**
 
-The catastrophe did not destroy the entire Kel'vari people. Some survivors remained in the devastated homeland, while others had been abroad or escaped before The Binding. Their very different fates would unfold after the war.
+Through the breach surged a primordial force unlike anything the Kel'vari had encountered. The carefully balanced magical fields convulsed as the power of unmaking entered the working, overwhelming its protective structures and spreading through the vast network of energies sustaining the Anchor.
 
-Outside the homeland, surviving Kel'vari researchers faced a different danger. As stories spread that their civilization had broken the world, rulers and survivors sought culprits. Some wanted Kel'vari knowledge seized, others destroyed. The surviving scholars who had questioned the Anchor carried evidence that the research had been deliberately manipulated, but still did not know **Nhal's name or primordial origin**. They sought allies among the six older races, whose cities and magical institutions had also been wounded by the catastrophe.
+Within the central chamber, the six scholars stood at the heart of the rupture.
+
+Beyond the Veil, Nhal recognised the opportunity it had cultivated through years of subtle influence. The five who had willingly pursued its guidance were exposed to the immense primordial energies pouring through the breach. Nhal seized upon them, deliberately directing those energies into their living forms.
+
+Vaer'uun, Thes'var, Su'vareth, Oma'vira and Khor'vun were transformed. Their bodies and magical structures were altered beyond the limits of ordinary mortal existence. They gained extraordinary longevity, immense magical capacity and resilience far beyond what any Kel'vari could naturally survive. Yet they had not become gods. Their transformation did not render them invulnerable or incapable of death.
+
+Nhal's attention then turned to the sixth.
+
+Oth'varen had resisted the hidden influence behind the Anchor's research. He had recognised the manipulation and desperately attempted to prevent the activation. Now Nhal sought to claim him as well.
+
+The primordial energies entered his body, altering his physical form and magical structures just as they had transformed his colleagues. But where the five had willingly embraced the influence that guided them, Oth'varen resisted. The power threatened to overwhelm him. His perceptions expanded, his body changed, and within the transformation he felt the same terrible invitation that had drawn the others towards Nhal.
+
+For a moment, he understood the temptation. The power offered possibilities beyond anything he had imagined, an understanding of magic that seemed to transcend the limitations of mortal existence. But beneath that promise, he recognised the same influence that had manipulated their research.
+
+He refused it.
+
+Drawing upon everything he understood about the stability of magical structures, Oth'varen fought to preserve the independence of his own consciousness. He could not prevent the primordial energies from transforming him, but he resisted their attempt to claim his will. The struggle nearly destroyed him. Yet his resistance held.
+
+Like the five, Oth'varen emerged fundamentally changed. His mortal body possessed extraordinary longevity, resilience and magical capacity. But Nhal had failed to secure his allegiance. The corruption remained within him, a persistent influence that would test his resolve throughout his long existence.
+
+**All six had been transformed. Only five had surrendered to Nhal.**
+
+The rupture continued to widen.
+
+The immense energies flowing through the First Anchor overwhelmed its protective structures. Magical patterns that had once operated in harmony fractured, sending violent disturbances through the surrounding research complex and the networks connected to it. The chamber convulsed. Ancient instruments shattered, protective wards collapsed, and the great structures supporting the Anchor began to tear themselves apart.
+
+But the destruction did not end with the failure of the device.
+
+The breach had opened a wound in the boundary separating the Physical Realm from the Void. Primordial unmaking poured through it, spreading beyond the Anchor and into the surrounding land.
+
+The Kel'vari homeland was the first to suffer.
+
+Cities that had stood for generations were struck by forces their greatest scholars could neither predict nor contain. Buildings collapsed as the magical structures sustaining them failed. Protective wards twisted into dangerous configurations, while great Passage connections broke apart or became violently unstable. Across the homeland, the earth convulsed. Mountains fractured, valleys collapsed and immense stretches of land were torn apart.
+
+The catastrophe spread beyond the Kel'vari's borders.
+
+The interconnected magical infrastructure of the ancient world carried disturbances far beyond the original breach. Passage networks failed, protective structures collapsed, and systems upon which entire cities depended ceased to function.
+
+Yet the destruction was not confined to magic.
+
+Immense forces tore through the Physical Realm, reshaping the land itself. Great fractures opened across the ancient world. Regions that had once been joined were separated by widening seas, while mountains rose or collapsed and entire coastlines were transformed.
+
+**The continents of the ancient world were breaking apart.**
+
+Civilizations that had flourished through centuries of cooperation found themselves divided by distances that had not previously existed. Ancient roads ended at shattered coastlines. Cities lost access to their surrounding settlements, agricultural regions and distant trading partners.
+
+The devastation was uneven.
+
+Some ancestral cities were destroyed outright. Others survived the immediate catastrophe but lost the infrastructure, resources or knowledge upon which their continued existence depended. Communities that had once relied upon the Passage network for food, trade, protection and scholarship were suddenly isolated.
+
+Across Theia, survivors struggled to understand what had happened. The Kel'vari, whose extraordinary discoveries had once been celebrated throughout the ancient world, now found their homeland devastated and their greatest achievement associated with a catastrophe of unimaginable scale.
+
+But the Kel'vari had not been extinguished.
+
+Some survived among the ruins of their homeland, sheltered by ancient wards, fortified structures or the few places that had escaped the worst destruction. Others had been travelling, studying or living among the six older races when the catastrophe struck.
+
+Those beyond the homeland faced growing suspicion.
+
+As reports of the disaster spread, rulers and communities searched for explanations and someone to hold responsible. Some demanded access to surviving Kel'vari research, believing it might explain the destruction or provide the means to repair it. Others regarded the Kel'vari themselves as dangerous and sought to drive them from their lands.
+
+Among the survivors were scholars who had questioned the First Anchor's research before its activation. They carried records of unexplained experimental results, concealed modifications and discrepancies between the approved designs and the workings that had ultimately been constructed.
+
+The catastrophe had confirmed the danger they feared, but it had not revealed the full nature of the intelligence behind the manipulation. They did not know its name or primordial origin. Nor did they understand the full extent of what had been unleashed.
+
+What they knew was that the First Anchor had been deliberately altered, that their warnings had gone unheeded, and that the resulting catastrophe had devastated the world.
+
+They began seeking allies among the scholars, witnesses and protectors of the six older races, whose own civilizations were struggling with the consequences of the disaster. Their evidence became increasingly important as the gods and mortal peoples attempted to understand the catastrophe and determine who bore responsibility.
 
 **The Divine Schism grew in the wake of the rupture.** Keeper recognized the forbidden stability principles used in Ascendant's creation and demanded the full research. Ascendant, grieving for the people whose homeland lay ruined, believed the other gods were using the disaster to condemn his greatest achievement. Judge sought accountability; Guardian insisted on the rights of surviving innocents; Warrior opposed collective punishment and demanded honest judgment. Seeker believed the cause must be understood before knowledge was suppressed. Shaper feared that destroying every surviving advanced structure would destroy what little remained of civilization. These were not neat factions of good gods and evil gods. Each position carried genuine obligations and genuine dangers.
 
