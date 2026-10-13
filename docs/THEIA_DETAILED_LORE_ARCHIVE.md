@@ -537,3 +537,23 @@ The First Anchor's activation began the Second Sundering by physically tearing a
 ## 2026-10-13 creator LOCK — Kel'vari race and Oth'vaeri language
 
 The formerly unnamed seventh mortal race is officially **Kel'vari** (both singular and plural: one Kel'vari scholar; the Kel'vari people). Their ancestral language is **Oth'vaeri**. The ancient homeland may be called the Kel'vari homeland; its devastated territory was later enclosed within the Shrouded Lands. Oth'vaeri naming convention uses **apostrophes**, not hyphens, for meaningful sound boundaries in joined names; the intended sound is melodic, elegant and subtly unfamiliar, distinct from elven naming. These names supersede any earlier statement that the Seventh's race name remains undecided. Individual enclave names, Conclave founders' personal names, and a complete language grammar remain **proposed, not locked**.
+
+## 2026-10-13 creator LOCK — Kel'vari names and original scholarly status
+
+**Five original Corrupted Conclave founders (personal name — title — original specialty):**
+- **Vaer'uun — The First Voice:** Led First Anchor resonance and divine-communication research; authoritative, persuasive and devoted to interpreting Nhal's will.
+- **Thes'var — The Architect:** Principal designer of the First Anchor's complex magical structures; brilliant, exacting and obsessive.
+- **Su'vareth — The Veiled Hand:** Oversaw restricted research and external relationships; patient, calculating and skilled at covert influence.
+- **Oma'vira — The Harbinger:** Studied consciousness, perception and magical influence; charismatic, fervent and a powerful recruiter.
+- **Khor'vun — The Warden:** Directed protective structures, wards and containment; disciplined, pragmatic and formidable.
+
+The five were **highly respected Kel'vari scholars in legitimate society**, celebrated for contributions to the First Anchor project. Their willing secret pursuit of Nhal and involvement in redirecting the Anchor were concealed behind those reputations. Nhal deliberately transformed all five during the breach; they remain extraordinarily long-lived, powerful but killable founding members of the Conclave. Their original names survive in ancient records while modern Unmade chiefly use their titles.
+
+**Five significant surviving Kel'vari enclaves (names predate the Second Sundering):**
+- **Veyr'athun — The Last Bastion:** Ancient protective research centre; now fortified defensive sanctuary.
+- **Oth'irun — The Archive Sanctuary:** Ancient scholarly archive; now preserves surviving records and knowledge.
+- **Oru'sava — The Verdant Refuge:** Ancient cultivation and restoration centre; now sustains agriculture and healing.
+- **Thuma'rei — The Passage Nexus:** Ancient transport and Passage research hub; now guards low-capacity surviving gates.
+- **Soru'vaeth — The Reclaimers:** Ancient reconstruction and material research centre; now recovers ruins, tools and records.
+
+These are **five significant enclaves, not the total surviving Kel'vari population**; they remain independent and are not one hidden kingdom. The names are Oth'vaeri and follow the approved apostrophe convention. Specific governments, leaders, exact locations, dialects and encounter design remain open.
