@@ -118,7 +118,7 @@ The great magical orders translated exceptional knowledge into ordinary civic de
 
 The Age of Wonders was not an age of unlimited sorcery. It was an age of extraordinary accumulated knowledge. A single skilled engineer could maintain a city ward constructed by predecessors; a series of separate expert-created structures could sustain a long-range passage; a forged item could be charged and renewed. Practical magic and conventional craft supported one another even when their schools competed for recognition.
 
-The abundance of magical infrastructure had a hidden cost. A city that relied on ancient passages for grain could become vulnerable when the road beside it fell into disuse. A settlement protected by a self-sustaining ward might forget how to defend itself without that ward. A magical work maintained by an expert lineage could become irreparable when that lineage died. The abundance of magical infrastructure had become inseparable from daily life, and few communities retained the knowledge or resources to replace every system upon which they relied.
+The abundance of magical infrastructure had a hidden cost. A city that relied on ancient passages for grain could become vulnerable when the road beside it fell into disuse. A settlement protected by a self-sustaining ward might forget how to defend itself without that ward. A magical work maintained by an expert lineage could become irreparable when that lineage died. Few communities retained the knowledge or resources to replace every system upon which they relied.
 
 The greatest danger of the Age of Wonders did not begin as a council of seven gods agreeing to fashion a new people. It began with a private wound in the life of one god.
 
@@ -322,7 +322,7 @@ The same changing magical conditions awakening rare mortal potential also reacti
 
 Once responses became reproducible, the meaning was terrifying. The generations who had preserved silent rituals were no longer alone. Nhal's selective communication resumed—not with every cell and not constantly, but through certain rare resonances strengthened by the world's awakening. The Corrupted Conclave's inner leadership began receiving direction after millennia of extrapolating from old fragments. Their preparations became coordinated in a way that had not been possible since the Second Sundering. Old caches and buried plans acquired meaning; agents within royal courts, guilds, militaries and academies were instructed to acquire components, obstruct investigators and accelerate research into ancient links.
 
-The original First Anchor remained entangled with the breach in Aethyr's Veil. Its visible structure was not indestructible. Its activation had made it part of the persistent breach in Aethyr's Veil. Once the damaged boundary and the structure were entangled, destroying the visible mechanism could tear away the remaining framework holding the rupture in check. The Seven had been forced to contain the region through The Binding because destruction might have made the breach worse.
+The original First Anchor was not indestructible, but its activation had left it entangled with the persistent breach in Aethyr's Veil. Once the damaged boundary and the structure were entangled, destroying the visible mechanism could tear away the remaining framework holding the rupture in check. The Seven had been forced to contain the region through The Binding because destruction might have made the breach worse.
 
 Even the Conclave's surviving scholars inherited no complete blueprint for that achievement. Their ancestral knowledge was scattered among damaged records, forbidden fragments and artifacts whose purpose later generations only partly understood. Through the long centuries without direct communication from Nhal, they experimented with inferior reconstructions. As ambient magic awakened and Nhal's whispers began returning, those experiments became more effective. But the devices they built were **not second First Anchors**. They were lesser resonators that exploited the old damage and drew limited influence outward through secondary connections.
 
@@ -352,7 +352,7 @@ The world that Aethyr created through self-sacrifice has not yet understood the 
 
 ### Narrative development notes (working, not locked canon)
 
-### Future Shrouded Lands campaigns and gateway concepts
+#### Future Shrouded Lands campaigns and gateway concepts
 
 In the modern awakening, rediscovered knowledge and revived magical infrastructure would make the gates newly important. Covenant and Dominion could eventually restore larger passages independently, bringing organized expeditions into the Shrouded Lands and contesting the ancient ruins. Yet the two alliances' earlier overseas incursions would continue to rely on ships, landing garrisons and supply lines across the sea. The hidden Unmade routes, the conventional continental war and the eventual Shrouded Lands PvP gateways were connected by history, but they were never the same system.
 
@@ -364,7 +364,7 @@ In the modern era, the rediscovery of larger gateways could bring outsiders to t
 
 The larger contested territory would then be a continuation of the old struggle, not a disconnected battleground. When a warband occupies an ancient stronghold, it inherits walls, wards and supply routes that once belonged to the Kel'vari's civilization. Neglect, overextension or magical instability may permit corrupted defenders to reclaim it. In other cases, territory may become unclaimed or be disrupted by a magical world event, preserving the established range of neutralization outcomes. Kel'vari enclaves might also benefit from the liberation of particular sites, without becoming a third playable faction or an automatic ally of every guild. **A modern siege could therefore be fought over the same gatehouse that a Kel'vari family had defended for generations**, with the military contest concealing a much older and more personal history.
 
-### Other development notes
+#### Other development notes
 
 To preserve player progression and meaningful danger, overseas outposts should be distributed across **level-appropriate frontier areas** rather than placed only in endgame zones. Early reconnaissance leads to raids on caravans, resource control, excavations, stronger fortress assaults and eventually major strategic installations. Players undertaking quests might collide with opponents protecting the same supplies. Enemy guards and patrols provide danger even without enemy players. The working example **Broken Coast** on Dominion land includes a Covenant beachhead, Dominion garrison and contested ore operations; **Ashen Reach** on Covenant land contains a Dominion landing, Covenant hill fort and quarry. The exact names and boundaries are not final. The **Shrouded Lands** remain inaccessible through ordinary travel until ancient Passage routes are unlocked for later larger-scale contested PvP.
 
