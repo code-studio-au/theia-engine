@@ -519,3 +519,17 @@ The original "Create MMO Story" chat has now been supplied as a 403-page PDF. Th
 The Seventh researchers perceived only an unexpected result of their exceptional six-field experiment; they did not recognize its hidden resonance with the Veil. Continued experiments combining all six magical fields periodically reproduced the particular resonant alignment, each instance giving Nhal a fleeting chance to bias outcomes and thereby encourage further work. The researchers initially mistook the results for their own progress; a minority eventually pursued the suspected intelligence. This influence was entirely subsequent to Ascendant's independent creation of the Seventh.
 
 The First Anchor's activation began the Second Sundering by physically tearing apart once-connected landmasses, creating the separated continental heartlands later occupied by Covenant and Dominion. The Seventh homeland was shattered and isolated, becoming the region later enclosed by the Shroud. The collapse of ancient Passage and civic magical networks spread disaster; the Divine War and The Binding compounded it. Exact geography is still open.
+
+
+## 2026-10-13 creator LOCK — The Corrupted Conclave and five leadership roles
+
+**The Corrupted Conclave** is the ancient inner council directing **The Unmade** beneath Nhal. Its founding leadership arose from surviving Seventh researchers and followers who knowingly pursued the alien intelligence before the First Anchor catastrophe. Following the loss of reliable communication with Nhal, they assumed responsibility for preserving the Unmade's purpose, research, sanctuaries and covert operations during the Age of Silence. They were not personally appointed by Nhal; their authority arose from their surviving knowledge, influence and decision to continue. Their willing pursuit preceded their corruption; not every transformed Seventh inhabitant belongs to this leadership or to the Unmade.
+
+**Five approved leadership titles and character foundations:**
+- **The First Voice:** Principal interpreter of Nhal's will; authoritative and devoted, with legitimacy increasingly challenged by the long silence.
+- **The Architect:** Master of forbidden research and Anchor construction; brilliant, obsessive and determined to recover lost techniques.
+- **The Veiled Hand:** Oversees infiltration and covert networks; patient, calculating and adept at manipulating mortal institutions.
+- **The Harbinger:** Maintains doctrine, devotion and recruitment; charismatic, fanatical and willing to elevate fragmentary instructions into sacred teaching.
+- **The Warden:** Military protector of the First Anchor and Unmade strongholds; formidable, disciplined and relentless.
+
+**Hybrid succession model:** Some founding leaders survive into later ages through extraordinary, costly magic; other positions pass to successors. The specific survivors, personal names, longevity mechanisms, seat succession and internal rivalries remain open. These leaders may serve as major storyline or raid antagonists, but exact encounters are not yet canon. Nhal's ongoing corrupting pressure within the Shroud must remain distinct from direct communication, which ceased reliably after the catastrophe and Binding.
