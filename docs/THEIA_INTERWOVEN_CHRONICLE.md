@@ -512,13 +512,21 @@ Their authority did not come from a new instruction from Nhal. It arose from the
 
 #### The First Reunion
 
-Several years after The Binding, Oth'varen followed traces of familiar magical workmanship to a ruined Kel'vari research sanctuary. He recognised the structures Thes'var had once designed and discovered that all five of his former colleagues had survived. They had gathered followers and assumed leadership of the Unmade, but the years of corruption had left their understanding of the catastrophe profoundly distorted.
+Several years after The Binding, Oth'varen followed traces of familiar but altered magical workmanship to a ruined Kel'vari research sanctuary. Its protective patterns had been distorted, yet beneath the new arrangements he recognised the precision of the scholar who had once worked beside him. Thes'var's designs remained unmistakable.
 
-Oth'varen confronted them with the destruction of their homeland. They answered with explanations that treated the catastrophe as a failure of execution, a necessary transformation or proof of an achievement still unfinished. Their conviction had outlived the voice that once guided them. When they offered him a place among them, their combined presence awakened the lingering corruption within his own transformed body.
+Oth'varen had not known which of his five former colleagues had survived the discharge that destroyed the First Anchor complex. He had searched for evidence through the war and the first years of containment, fearing what their survival might mean. Within the sanctuary he found all five alive, their altered forms still bearing the consequences of the breach. They had gathered surviving followers and established authority over the Unmade. Their long exposure to Nhal's influence had not faded with the loss of its voice.
 
-He resisted the pull and refused to join them. When they sought to prevent his departure, he disrupted the sanctuary's wards and escaped. The encounter ended any hope that the five had abandoned their pursuit. For Oth'varen, preserving the evidence of the First Anchor was now inseparable from preventing his former friends from attempting another catastrophe.
+The reunion confronted him with the distance between the people he remembered and those who stood before him. Vaer'uun, now the First Voice, regarded their transformation as evidence that they had reached beyond the gods' limitations. Thes'var, the Architect, treated the catastrophe as proof that the Anchor's construction had been insufficient, not that its purpose was wrong. Su'vareth, the Veiled Hand, justified the concealment of their research as protection from those who would have suppressed it. Oma'vira, the Harbinger, spoke of their transformation as a revelation, while Khor'vun, the Warden, saw the defence of the five and their followers as the duty that remained to him.
 
-The full dramatic encounter is preserved separately as **Memory I — The Six Reunited** in [Theia Memory Scenes](THEIA_MEMORY_SCENES.md).
+Oth'varen had once trusted each of them for different reasons. He had argued with Thes'var over the stability of their designs, relied upon Khor'vun's safeguards and believed Vaer'uun capable of recognising the limits of a discovery. Their answers revealed that those very strengths had been bent towards Nhal's purpose. The destruction of their homeland had not restored their judgement. They had instead learned to interpret it as an incomplete achievement, a sacrifice justified by what they still believed could be attained.
+
+When they invited him to rejoin them, the corruption that had entered Oth'varen during the breach responded to their combined presence. He felt the attraction of the power they had embraced, not as a fresh command from Nhal, whose reliable communication had ceased, but as a resonance among beings transformed by the same primordial force. He drew upon his understanding of magical stability to resist it. The effort caused him pain, and he recognised how vulnerable he remained even after years of refusing the influence.
+
+His refusal ended the encounter. The sanctuary's protective workings turned against him, and Khor'vun barred his departure. Oth'varen disrupted the wards while Thes'var attempted to restore them, breaking their containment long enough to escape into the ruins. He did not defeat the five, nor could he bring himself to destroy them. But he had seen enough to understand that the danger they represented had survived the catastrophe and The Binding.
+
+He returned to the Guardians knowing that their task extended beyond preserving the evidence of the First Anchor. The five still sought to continue their work, and their corrupted convictions made another disaster possible. For Oth'varen, that knowledge carried the grief of an old friendship as well as the responsibility of preventing its consequences.
+
+The full dramatic encounter, including dialogue, is preserved separately as **Memory I — The Six Reunited** in [Theia Memory Scenes](THEIA_MEMORY_SCENES.md).
 
 ### The First Generations — Survival Becomes Inheritance
 
