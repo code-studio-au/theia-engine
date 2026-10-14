@@ -528,7 +528,7 @@ During the Divine War, he had helped establish the Guardians and worked to prese
 
 Several years after The Binding, he discovered traces of familiar magical structures within a ruined Kel'vari research sanctuary.
 
-He recognised the Architect's work.
+He recognised Thes'var, the Architect's work.
 
 Following those traces, he entered the sanctuary and encountered all five of his former colleagues.
 
@@ -590,7 +590,7 @@ Their circumstances produced different priorities. Archive custodians feared rep
 
 Not every corrupted inhabitant served the Unmade. Some transformed Kel'vari and ancient constructs continued duties they barely understood, defending deserted gates or tending workings that had become dangerous. Others willingly followed the Unmade or were exploited by them. Guardian cells protected particular communities and repositories, but securing one refuge or route could expose another.
 
-The Corrupted Conclave strengthened its hold over surviving Unmade strongholds. **the Warden**, defended the approaches to the First Anchor. **the Architect**, gathered fragments of lost research. **the Harbinger**, sustained devotion through teachings drawn from incomplete instructions, while **the First Voice**, asserted his authority to interpret Nhal's purpose despite the silence. **the Veiled Hand**, rebuilt covert contacts beyond the Shroud. None could restore the original Anchor's complete design or reliable communication with Nhal.
+The Corrupted Conclave strengthened its hold over surviving Unmade strongholds. **Khor'vun, the Warden**, defended the approaches to the First Anchor. **Thes'var, the Architect**, gathered fragments of lost research. **Oma'vira, the Harbinger**, sustained devotion through teachings drawn from incomplete instructions, while **Vaer'uun, the First Voice**, asserted his authority to interpret Nhal's purpose despite the silence. **Su'vareth, the Veiled Hand**, rebuilt covert contacts beyond the Shroud. None could restore the original Anchor's complete design or reliable communication with Nhal.
 
 Oth'varen continued to aid the Guardians and protect evidence of the catastrophe. His reunion with the five had shown him that their ambitions survived. He remained a living witness to their transformation, though he could not explain the primordial intelligence's full nature, and the corruption within his own altered body still demanded resistance.
 
@@ -626,13 +626,13 @@ Outside, Kel'vari descendants increasingly identified with the societies in whic
 
 The interruption of Nhal's guidance persisted through generations and then centuries. What had initially been an uncertain absence became known among its followers as **the Age of Silence**. The name did not imply peace within the Shroud: corruption still surrounded the First Anchor. It meant that the intelligence the Unmade served no longer provided reliable instruction.
 
-the First Voice guarded his claim to interpret its remembered intentions. the Harbinger's teachings sustained devotion, sometimes transforming fragments into doctrine. the Architect pursued incomplete designs, the Warden maintained strongholds, and the Veiled Hand kept distant cells connected where possible. Failed efforts to restore contact consumed resources and deepened disagreements. Some followers believed Nhal had abandoned them; others believed The Binding must eventually be undone. The Conclave survived through power, secrecy and shared purpose, not uninterrupted supernatural direction.
+Vaer'uun, the First Voice guarded his claim to interpret its remembered intentions. Oma'vira, the Harbinger's teachings sustained devotion, sometimes transforming fragments into doctrine. Thes'var, the Architect pursued incomplete designs, Khor'vun, the Warden maintained strongholds, and Su'vareth, the Veiled Hand kept distant cells connected where possible. Failed efforts to restore contact consumed resources and deepened disagreements. Some followers believed Nhal had abandoned them; others believed The Binding must eventually be undone. The Conclave survived through power, secrecy and shared purpose, not uninterrupted supernatural direction.
 
 The Kel'vari enclaves continued their separate struggles. Generations maintained wards, cultivated land, protected archives and recovered supplies. Their inhabitants were neither immortal nor universally aligned with the Guardians. Relations with individual Guardian cells depended on protection, secrecy and promises kept or broken.
 
 Beyond the Shroud, the Guardians' protective concealment gradually became a cause of ignorance. Couriers disappeared, repositories became inaccessible and instructions outlived the reasons for which they had been written. **Many later Guardians no longer knew that Kel'vari enclaves survived**, although some custodians retained the truth. Oth'varen remained a living witness, but his identity and survival were closely guarded; the organisation he had founded was not a single perfectly informed institution.
 
-the Veiled Hand's networks and their successors embedded Unmade followers within courts, academies, temples, guilds, military commands and commercial institutions. Some cells retained authentic research; others inherited distorted teachings. The few operational Passage gates supported covert movement, not conquest or renewed communication with Nhal. Different cells pursued their purposes with varying degrees of coordination.
+Su'vareth, the Veiled Hand's networks and their successors embedded Unmade followers within courts, academies, temples, guilds, military commands and commercial institutions. Some cells retained authentic research; others inherited distorted teachings. The few operational Passage gates supported covert movement, not conquest or renewed communication with Nhal. Different cells pursued their purposes with varying degrees of coordination.
 
 Covenant and Dominion meanwhile grew into hostile powers. Treaties and refuge had become political loyalties; the elven division and Vorrath exile remained sources of grievance. Territory, sacred sites, ancient routes and artifacts offered new reasons for conflict. The world increasingly understood the divine age through competing traditions rather than shared knowledge.
 
@@ -668,7 +668,7 @@ The continuing war had provided their hidden networks with opportunities that wo
 
 Peace threatened to remove that protection.
 
-The Veiled Hand recognised the danger. Through agents embedded within the political, military and commercial institutions of both alliances, she began preparing an operation intended not merely to disrupt the negotiations, but to destroy the fragile trust upon which they depended.
+Su'vareth, the Veiled Hand recognised the danger. Through agents embedded within the political, military and commercial institutions of both alliances, she began preparing an operation intended not merely to disrupt the negotiations, but to destroy the fragile trust upon which they depended.
 
 The Unmade exploited existing suspicions, arranged the movement of agents and materials, and ensured that carefully selected evidence would implicate both alliances in the violence to come.
 
@@ -704,7 +704,7 @@ The fragile possibility of reconciliation had been replaced by renewed hostility
 
 Behind the conflicting accusations lay the work of the Unmade.
 
-the Veiled Hand's agents had orchestrated the attack and planted evidence designed to ensure that neither alliance would accept the other's account. Their purpose had never been to secure victory for Covenant or Dominion, but to preserve the conflict that allowed their hidden operations to flourish.
+Su'vareth, the Veiled Hand's agents had orchestrated the attack and planted evidence designed to ensure that neither alliance would accept the other's account. Their purpose had never been to secure victory for Covenant or Dominion, but to preserve the conflict that allowed their hidden operations to flourish.
 
 The Guardians began investigating the inconsistencies surrounding the attack.
 
@@ -730,7 +730,7 @@ Then the responses became reproducible.
 
 Its contact was selective and intermittent, possible through particular resonances strengthened by the awakening. It could not command every follower or act freely throughout the Physical Realm. But the Corrupted Conclave's five enduring founders began receiving guidance once more. Hidden records and caches acquired new meaning; agents within courts, armies, academies and guilds were directed to recover artifacts, obstruct investigators and accelerate construction of new workings.
 
-the Architect's incomplete research gained direction. The original First Anchor remained entangled with the breach, and even its surviving designers could not fully reproduce it. The Unmade instead constructed lesser devices exploiting the damage already done to the Veil. **Minor Resonators** could disturb local workings, **Regional Anchors** could extend influence over larger areas, and **Major Anchors** demanded rare artifacts and complex supporting structures. None was a second First Anchor.
+Thes'var, the Architect's incomplete research gained direction. The original First Anchor remained entangled with the breach, and even its surviving designers could not fully reproduce it. The Unmade instead constructed lesser devices exploiting the damage already done to the Veil. **Minor Resonators** could disturb local workings, **Regional Anchors** could extend influence over larger areas, and **Major Anchors** demanded rare artifacts and complex supporting structures. None was a second First Anchor.
 
 Unlike the original, these modern devices could be dismantled if their connections were understood. A minor resonator might be destroyed directly; a larger Anchor could require its wards and conduits to be severed first. The Guardians sought to distinguish these structures before acting, knowing that careless destruction might worsen the danger. Defeating one working could protect a region, but it would not close the original breach beneath the Shroud.
 
