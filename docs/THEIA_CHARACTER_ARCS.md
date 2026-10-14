@@ -1,6 +1,6 @@
 # THEIA — CHARACTER ARCS AND MILESTONES
 
-**Status:** Oth'varen's overarching modern character arc is **creator-approved and locked (14 October 2026)**. The five Corrupted Conclave founder arcs below are **detailed proposals**, not locked canon. Their ancient histories, original roles, names, titles, transformation and loyalties remain established canon. Milestone placement, new encounters and character decisions require later approval.
+**Status:** Oth'varen's overarching modern character arc is **creator-approved and locked (14 October 2026)**. Thes'var's full arc is also **creator-approved and locked**. The other four Conclave founder arcs below remain **detailed proposals**, not locked canon. Their ancient histories, original roles, names, titles, transformation and loyalties remain established canon. Milestone placement, new encounters and character decisions require later approval.
 
 **Sources:** [Interwoven Chronicle](THEIA_INTERWOVEN_CHRONICLE.md) and [Modern Story and Revelation Timeline](THEIA_MODERN_STORY_REVELATION_TIMELINE.md). This is a player-facing development plan, not a replacement for the historical narrative.
 
@@ -60,19 +60,58 @@ The five are not interchangeable bosses. Each should pursue Nhal's purpose throu
 
 ### Thes'var, the Architect — the unfinished masterpiece
 
-**Historical foundation:** Designed the original Anchor's structures; centuries of experimentation led from Minor Resonators to Regional and Major Anchors.
+**Status: creator-approved and locked (14 October 2026).** The overarching arc and eight milestones below are approved. Exact quest scenes, raid mechanics, dialogue and his ultimate fate remain open.
 
-**Core conflict:** He regards the catastrophe as an incomplete technical achievement. Resonance inversion demonstrates that his methods could serve a purpose opposite to the one he has spent centuries pursuing.
+**Core movement:** From an extraordinarily gifted structural scholar whose innovations complemented Oth'varen's stability expertise to a corrupted visionary whose centuries of independent research made Nhal's return possible. His tragedy is not an absence of intelligence: he can recognise almost any weakness in a magical structure, but no longer sees the fatal weakness in the purpose he serves.
 
-**Proposed milestones:**
-1. Players discover a recurring structural signature in Minor Resonators.
-2. Regional Anchor research reveals a generational chain of improvements, failures and reused designs.
-3. Oth'varen identifies Thes'var's original methods and reluctantly explains their shared history.
-4. The Major Anchor network reveals the scale of the Architect's achievement and the consequences of synchronisation.
-5. The first credible inversion hypothesis forces the Architect to confront an alternative use of his life's work.
-6. A late confrontation centres on control of a major installation rather than a simple attempt to kill its designer. **Whether he attempts to corrupt, seize or destroy an inverted device remains open.**
+#### Before the First Anchor
 
-**Player-facing role:** Principal engineering antagonist and intellectual foil to Oth'varen.
+Thes'var specialised in the architecture required to sustain interactions among multiple magical fields. Oth'varen understood why a working remained stable and where its limits lay; Thes'var saw how those components could be rearranged to achieve something previously impossible. Their collaboration was productive because each challenged the other. Thes'var respected Oth'varen's criticism when it exposed genuine flaws, while Oth'varen relied upon the Architect's imagination to test assumptions.
+
+Their philosophies differed. Oth'varen believed a structure was not truly understood until its limitations were understood. Thes'var treated limitations as invitations to design something better. Neither position was inherently wrong. Nhal exploited Thes'var's conviction that every sufficiently understood problem must possess a solution.
+
+During the six-field experiments, unexpected results appeared that Thes'var could reproduce without fully explaining. His excitement became a willingness to trust results that seemed to vindicate his ambition. When the five suspected a hidden intelligence, he regarded it as a source of knowledge beyond the gods. He incorporated concealed alterations into the First Anchor and increasingly interpreted Oth'varen's warnings as failures of imagination rather than sound objections.
+
+#### Catastrophe and the centuries of silence
+
+The rupture transformed Thes'var and destroyed his homeland. He interpreted the Anchor's ability to reach beyond the Physical Realm as a real achievement and its devastation as a failure of containment and execution. Nhal's corruption reinforced that interpretation, allowing him to regard the undertaking as unfinished rather than fundamentally mistaken.
+
+After The Binding cut off Nhal's guidance, Thes'var continued reconstructing the original research from memory, damaged records and surviving materials. Failures accumulated over centuries. Minor Resonators eventually demonstrated distant resonance with the breach; Regional Anchors linked installations; Major Anchors synchronised the network and ultimately enabled Nhal's selective communication to return. **Thes'var did not merely wait for Nhal: he helped make that return possible.**
+
+#### Modern personality
+
+He is composed, meticulous, intensely curious, intellectually arrogant and obsessive about precision. He can acknowledge suffering without accepting that it invalidates his objective. He retains selective affection for the original colleagues, especially Oth'varen, but the corruption lets him construct sophisticated justifications for actions the uncorrupted scholar might have condemned.
+
+He speaks as a researcher confident in his evidence rather than as a conventional shouting villain. He respects genuine insight, even from enemies, and becomes most unsettled when another scholar demonstrates a possibility he has not considered.
+
+#### Relationships
+
+- **Vaer'uun, the First Voice:** Respects his authority but resents doctrine when it obstructs research.
+- **Su'vareth, the Veiled Hand:** Relies on her for resources and secrecy while disliking political dependence.
+- **Oma'vira, the Harbinger:** Values recruitment and devotion as practical supports but trusts reproducible evidence more.
+- **Khor'vun, the Warden:** His closest operational ally, especially in defending and stabilising installations; they disagree about acceptable risks.
+- **Oth'varen:** His greatest intellectual rival and the former colleague whose judgement mattered most.
+
+#### Eight modern milestones
+
+1. **The Signature — early campaign.** Players discover recurring structural principles among seemingly unrelated Minor Resonators without knowing their designer.
+2. **The Inheritance of Failure — Regional Anchor investigation.** Recovered laboratories reveal generations of failed prototypes, refinements and reused designs. The title *the Architect* emerges.
+3. **The Scholar's Recognition — Oth'varen investigation.** Oth'varen recognises Thes'var's methods and reluctantly reveals part of their collaboration, initially concealing their shared identity.
+4. **The First Encounter — middle-to-late campaign.** Players meet Thes'var during a Regional Anchor operation. He studies their handling of the structure and acknowledges genuine competence before withdrawing or forcing retreat. Exact staging remains open.
+5. **The Network Revealed — Major Anchor storyline.** The scale of his achievement becomes clear: centuries of engineering culminated in the network that strained the Shroud and restored Nhal's whispers.
+6. **The Impossible Alternative — inversion discovery.** Thes'var immediately recognises the technical validity of Oth'varen's inversion hypothesis but rejects its purpose: reinforcing the prison he has spent centuries trying to weaken.
+7. **The Contest of Designs — major confrontation.** Players attempt to capture or reconfigure a significant Anchor while Thes'var seeks to preserve its destabilising purpose. The conflict concerns control and stability of interdependent workings, not merely killing a boss.
+8. **The Unfinished Work — aftermath.** His certainty is challenged but he is not automatically redeemed or killed. His survival permits later campaigns and deeper confrontation with Oth'varen.
+
+#### Defining confrontation
+
+When presented with the inversion hypothesis, Thes'var studies it seriously. He sees the elegance of the alternative arrangement and understands why it might work. For a moment, he and Oth'varen approach the same problem as scholars again. Their dispute is not whether the design is possible, but whether strengthening the Shroud is an acceptable purpose for the knowledge they share. Thes'var regards the original catastrophe as an incomplete design; Oth'varen regards it as proof of the danger of pursuing power without understanding its consequences.
+
+#### Major encounter principles
+
+A late operation may centre on a partially activated Major Anchor. Thes'var alters wards, conduits and six-field relationships while players seek to stabilise or isolate the network. A victory can force him to abandon an installation, creating an opportunity to investigate inversion. Do not require his death as the encounter's outcome. Exact mechanics and the location remain undecided.
+
+**Character-defining principle:** Thes'var is correct about the extraordinary technical significance of his achievements and catastrophically wrong about their purpose. He can recognise the validity of inversion yet reject it because it would turn his life's work against Nhal.
 
 ### Su'vareth, the Veiled Hand — the architect of distrust
 
