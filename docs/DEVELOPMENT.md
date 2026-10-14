@@ -863,3 +863,8 @@ arguments as the automatic reference. `tools/qualify_automatic_mips.py
 committed checker source or `tools/cook_texture_filter_fixture.py` alternating
 profiles. Wayland's optional automatic fixture also accepts `--linear-filter`.
 [Commands/evidence](validation/M4_GPU_LINEAR_FILTER.md).
+
+The assets `texture_tail <sha256.ktx2> <dense-texel-budget> <requested-mip>` example
+admits the complete immutable file and reports a protected coarse suffix and
+source/image-relative selection. Dense texel budgets exclude Vulkan requirements.
+[Contract evidence](validation/M4_MIP_TAIL_CONTRACT.md).

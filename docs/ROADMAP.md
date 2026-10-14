@@ -322,3 +322,9 @@ texels at base/coarser mips, numeric fallback and preserved nearest paths. Broad
 filtering quality and tiled/partial residency remain open. Next isolate a bounded
 coarse-resident mip-tail selection/admission contract before GPU fallback publication;
 full virtual texture pages/feedback and asynchronous allocation reuse stay later.
+
+M4 coarse mip-tail planning now qualifies protected 1x1 retention, exact/short
+texel budgets and source-to-image index mapping against native authored chains.
+Next qualify conventional GPU suffix images using original source dimensions for
+footprints and independent physical allocation limits. Tiled pages/demand feedback
+and asynchronous tail replacement remain later gates.

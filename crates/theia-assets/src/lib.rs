@@ -11,6 +11,7 @@ pub mod texture;
 pub mod texture_filter;
 pub mod texture_footprint;
 pub mod texture_mips;
+pub mod texture_residency;
 pub mod texture_table;
 pub mod uv;
 pub const HEADER_BYTES: usize = 76;

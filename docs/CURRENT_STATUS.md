@@ -4,6 +4,15 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-14.
 
+## M4 CPU coarse mip-tail contract — independently executed (2026-10-14)
+
+An immutable borrowed mip-tail plan keeps the finest complete coarse suffix within
+a dense texel-byte budget, protects 1x1 and maps source levels to resident image
+levels. Exact/short budgets, exhaustive small odd-size cases, thin chains and
+forged inputs pass; assets 58 tests, formatting/Clippy and 156 native cooked-chain
+plan checks pass. GPU adoption/physical allocation qualification remains next.
+[Evidence](validation/M4_MIP_TAIL_CONTRACT.md).
+
 ## M4 GPU bilinear sampling — independently executed (2026-10-14)
 
 Opt-in linear filtering within explicit automatic integer mips now qualifies

@@ -801,3 +801,12 @@ paths stay nearest. `--texture-linear-reference` uses the CPU bilinear oracle
 before linear factors. Patterned GPU replay and budget/cleanup checks qualify
 this bounded path; no trilinear/mip-generation/production-quality claim.
 [Evidence](validation/M4_GPU_LINEAR_FILTER.md).
+
+### CPU protected mip-tail plan
+
+`texture_residency::MipTail` borrows a complete admitted chain, validates public
+level fields, and fits the finest contiguous coarse suffix through 1x1 to a dense
+texel budget. Source footprint dimensions stay separate from resident dimensions;
+selection clamps desired source levels to the resident suffix and returns relative
+image levels. This is not physical allocation accounting, partial I/O or GPU
+publication. [Contract qualification](validation/M4_MIP_TAIL_CONTRACT.md).
