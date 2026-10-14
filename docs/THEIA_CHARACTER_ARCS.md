@@ -1,6 +1,6 @@
 # THEIA — CHARACTER ARCS AND MILESTONES
 
-**Status:** Oth'varen's overarching modern character arc is **creator-approved and locked (14 October 2026)**. Thes'var's full arc is also **creator-approved and locked**. The other three Conclave founder arcs below remain **detailed proposals**, not locked canon. Their ancient histories, original roles, names, titles, transformation and loyalties remain established canon. Milestone placement, new encounters and character decisions require later approval.
+**Status:** Oth'varen's overarching modern character arc is **creator-approved and locked (14 October 2026)**. Thes'var's full arc is also **creator-approved and locked**. The remaining two Conclave founder arcs below remain **detailed proposals**, not locked canon. Their ancient histories, original roles, names, titles, transformation and loyalties remain established canon. Milestone placement, new encounters and character decisions require later approval.
 
 **Sources:** [Interwoven Chronicle](THEIA_INTERWOVEN_CHRONICLE.md) and [Modern Story and Revelation Timeline](THEIA_MODERN_STORY_REVELATION_TIMELINE.md). This is a player-facing development plan, not a replacement for the historical narrative.
 
@@ -164,21 +164,54 @@ Su'vareth arranges evidence so that exposing her network without careful verific
 
 **Character-defining principle:** Her greatest defeat is not simply the loss of agents or a stronghold, but the restoration of trust between people she has spent centuries turning against one another. She should survive the initial exposure of her networks; exact later outcomes remain open.
 
-### Oma'vira, the Harbinger — devotion made into certainty
+### Oma'vira, the Harbinger — the shaping of will
 
-**Historical foundation:** Scholar of consciousness and perception; sustained Unmade devotion and recruitment during the silence.
+**Status: creator-approved and locked (15 October 2026).** The overarching arc, psychological and conditioning role, and eight milestones are approved. Exact encounters, conditioning reversibility and her ultimate fate remain open.
 
-**Core conflict:** She transformed incomplete memories of Nhal into teachings that successive generations treated as truth. The return of direct whispers threatens to reveal how much she added herself, even as she presents it as fulfilment.
+**Core movement:** A scholar who studied the independence and perception of mortal consciousness becomes the Conclave's foremost authority on reshaping that consciousness. She does not merely recruit the Unmade; she develops methods of indoctrination, mental influence and magical conditioning that sustain many of their hostile forces.
 
-**Proposed milestones:**
-1. Players encounter adherents who believe new magical gifts prove divine favour.
-2. Recovered teachings show contradictory accounts of the original transformation.
-3. A recruitment operation targets people frightened or empowered by the awakening, exploiting genuine needs.
-4. A recovered witness or artifact challenges her account of the First Anchor.
-5. She attempts to use Oth'varen's surviving corruption as proof that resistance is self-deception.
-6. Her followers must confront a divide between loyalty to her doctrine and evidence of manipulation. **The extent of any schism remains undecided.**
+#### The original scholar and her corruption
 
-**Player-facing role:** The emotional and psychological face of the Unmade, distinct from the Architect's technical ambitions and the First Voice's authority.
+Before the First Anchor, Oma'vira specialised in Mind, consciousness and perception. She investigated how a mortal mind might distinguish meaningful communication from its own expectations and safely interpret an intelligence fundamentally unlike itself. This expertise was essential to the Anchor's publicly authorised purpose of communicating with Ascendant.
+
+Repeated six-field resonances produced impressions that she initially tested cautiously. As the experiences became more convincing, she began treating their apparent coherence as evidence that ordinary methods of verification were inadequate. Nhal exploited her fascination with experiences beyond mortal perception. She came to interpret Oth'varen's objections as inability to recognise a higher truth, abandoning safeguards she had once helped develop.
+
+The rupture transformed her and allowed Nhal's whispers to reach willing followers more clearly during the Divine War. She studied how that influence altered perception, conviction, fear and obedience. Her early methods of reinforcement gradually became the foundation for later conditioning techniques.
+
+#### The Age of Silence — from devotion to conditioning
+
+When The Binding silenced Nhal, Oma'vira preserved remembered impressions and followers' testimony. These became teachings for generations who had never heard the voice themselves. But devotion alone could not guarantee the combat discipline or obedience needed to defend Unmade installations and the expanding Anchor network.
+
+She initially worked with willing followers, strengthening conviction, courage and resistance to psychological disruption through Mind workings. Some experienced benefits; others became dependent upon repeated reinforcement. Over centuries, she developed more coercive techniques capable of imposing compulsions, suppressing resistance and constraining behaviour. She also investigated severe primordial corruption, exploiting altered minds and bodies that were not always willingly aligned with Nhal.
+
+Her work supports the **Willing, Corrupted and Bound** framework already locked as world canon. The Devoted (willing conditioned adherents), the Conditioned (coerced or bound subjects) and the Severely Altered (unstable transformed beings) are overlapping applications, **not additional races or mutually exclusive factions**. Corruption does not automatically create allegiance, and many transformed Kel'vari remain innocent.
+
+#### Limitations and relationships
+
+Conditioning is costly, specialised and imperfect. It may require continuing magical support. Simple compulsions can be more reliable than complex orders; subjects can resist, deteriorate or become unpredictable. Some victims can recover when bindings are broken, others retain lasting changes, and severe transformation may prevent full recovery. No universal cure, perfect obedience or unlimited army is established.
+
+**Khor'vun, the Warden**, commands and deploys organised Unmade defensive forces. He values disciplined fighters able to interpret orders and adapt; Oma'vira believes greater control can overcome uncertainty. Their disagreements concern effective service to Nhal, not secret opposition to it.
+
+She remains outwardly calm, perceptive and capable of genuine empathy. She understands suffering but has come to believe that removing resistance can liberate consciousness from mortal limitations. She is charismatic, patient, intellectually confident and morally corrupted by her willingness to impose that conclusion upon others.
+
+#### Eight modern milestones
+
+1. **The Devoted — opening.** Players encounter organised Unmade fighters whose unusual discipline appears to arise from fanaticism or military conditioning.
+2. **The Broken Will — early investigation.** Evidence shows that some hostile fighters are unwilling subjects constrained by magical compulsions.
+3. **The Harbinger's Methods — first major Unmade facility.** A laboratory reveals Mind workings, corruption studies, willing researchers and unwilling victims.
+4. **The Scholar Behind the Experiments — historical revelation.** Guardian records identify Oma'vira as one of the six original scholars and link her ancient consciousness research to modern conditioning.
+5. **The Limits of Obedience — mid-campaign.** Conditioned defenders fail to adapt during an operation; Khor'vun's forces intervene, revealing tension over the reliability of imposed loyalty.
+6. **The Sixth Witness — Oth'varen confrontation.** Oma'vira attempts to prove his resistance is a condition that can be overcome. His continued refusal challenges her belief that corruption determines identity.
+7. **The Breaking of Chains — major confrontation.** Players defeat willing commanders, disable conditioning workings and rescue captives where possible at a significant Unmade facility.
+8. **The Unbound — later campaign.** Survivors provide testimony; some recover, others retain lasting changes or remain dangerous. Oma'vira's research continues to threaten the world beyond one defeated installation.
+
+#### Defining confrontation and encounter
+
+Oma'vira remembers Oth'varen as a scholar who questioned their work. She believes his resistance to Nhal is a limitation to be corrected, not a meaningful exercise of freedom. He does not deny that corruption affects him; he insists that influence does not make surrender inevitable.
+
+A major encounter centres on a conditioning complex defended by willing soldiers, bound combatants, corrupted creatures and researchers. Players must distinguish deliberate enemies from coerced victims while disrupting the facility. Rescue, containment and combat are distinct possible outcomes, not a promise that every victim can be saved.
+
+**Character-defining principle:** Thes'var seeks to perfect magical structures; Oma'vira seeks to perfect consciousness by removing resistance. Her arc exposes the moral horror of that purpose without reducing all Unmade hostility to religious belief.
 
 ### Khor'vun, the Warden — protection turned to imprisonment
 
