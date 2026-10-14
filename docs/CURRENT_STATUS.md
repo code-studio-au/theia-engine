@@ -4,6 +4,17 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-14.
 
+## M4 native filtered mip cooking — independently executed (2026-10-14)
+
+Pinned offline KTX now generates bounded power-of-two opaque sRGB box-filtered
+chains from a lossless PNG envelope. Five sources/31 levels preserve exact bases
+and match independent linear-light per-step averages with observed zero RGB error;
+strict Rust admission and repeated cooking pass. Thirteen producer tests and six
+GPU fixed/automatic captures pass, with allocation-boundary cleanup and zero
+standalone Vulkan diagnostics. No Rust/shader changes. General filtering quality,
+odd/HDR/alpha/import profiles, tiled demand and async tail publication remain open.
+[Evidence](validation/M4_FILTERED_MIP_COOKING.md).
+
 ## M4 GPU coarse mip tails — independently executed (2026-10-14)
 
 Conventional images now contain only a protected coarse suffix, while GPU analytic

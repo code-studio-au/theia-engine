@@ -335,3 +335,10 @@ physical limits across horizontal/vertical/odd sources. A queried-precision filt
 oracle handles observed dark-edge quantization. Tiled GPU demand, asynchronous
 suffix refinement/publication and multi-frame allocation reuse remain open; source
 mip generation/quality can be qualified independently with mature offline tools.
+
+M4 native box-filtered colour mip production now qualifies exact base preservation,
+31 generated levels, strict runtime admission and fixed/automatic GPU consumption.
+This is a bounded power-of-two opaque sRGB recipe. General source/filter quality,
+odd/alpha/HDR profiles, tiled demand, async tail refinement and multi-frame reuse
+remain open. Reliable qualification while a physical display sleeps is also an
+independent platform/tooling gate; the observed DPMS timeout is not a renderer pass.

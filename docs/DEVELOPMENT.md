@@ -877,3 +877,9 @@ references optionally accept trailing `--filter-precision <4..16>` for colour bo
 The automatic-mip harness and owned Wayland suite accept `--tail-budget`; the former
 queries the actual selected device's filter precision for linear replay.
 [Commands/evidence](validation/M4_GPU_MIP_TAIL.md).
+
+`tools/cook_filtered_texture.py` generates a bounded power-of-two opaque colour mip
+chain with the existing pinned native KTX tool. It takes the same source/build/
+archive/output arguments as the authored mip cooker, but schema-1 source contains
+only base width/height/rgba. The committed 8x8 checker exercises correct sRGB averaging.
+[Commands/evidence](validation/M4_FILTERED_MIP_COOKING.md).

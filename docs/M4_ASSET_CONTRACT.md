@@ -826,3 +826,13 @@ The bilinear CPU oracle additionally supports a bounded per-weight quantization
 interval using queried device fraction bits. Linear reference commands optionally
 accept trailing `--filter-precision`; nearest/identity/depth/mip checks are preserved.
 This models a diagnostic error envelope, not complete cross-vendor arithmetic.
+
+### Native generated colour mip profile
+
+`tools/cook_filtered_texture.py` accepts opaque power-of-two RGBA8 sRGB source JSON,
+uses a temporary lossless PNG envelope and delegates iterative box/clamp generation
+to pinned offline KTX 4.4.2. Independent checks preserve the base exactly and verify
+per-step linear-light averages with <=1 encoded RGB byte error and opaque alpha.
+The existing packager/strict Rust reader remain unchanged. This bounded recipe is
+separate from explicit authored levels and is not a general filtering policy.
+[Qualification](validation/M4_FILTERED_MIP_COOKING.md).
