@@ -564,7 +564,27 @@ Children born after The Binding inherited a world of broken passages, separated 
 
 #### Within the Shroud
 
-The Kel'vari did not restore a single government. Corrupted territories and ruined routes divided the surviving refuges, each dependent upon whatever infrastructure remained. **Veyr'athun** grew around ancient defensive workings; **Oth'irun** preserved an archive; **Oru'sava** maintained cultivation and restorative systems; **Thuma'rei** guarded a diminished Passage nexus; and **Soru'vaeth** sent expeditions into the ruins to reclaim materials and records. Their names predated the Sundering. These were significant enclaves, not the only Kel'vari communities to survive.
+In the generations following The Binding, the surviving Kel'vari struggled to rebuild their shattered civilization. The corruption spreading across their homeland, together with the destruction of ancient roads and Passage networks, left many communities isolated from one another.
+
+Without the means to restore their former federation, survivors established independent settlements around the few locations where ancient infrastructure, protective wards and essential resources remained intact.
+
+Over time, these refuges developed into **distinct Kel'vari enclaves**, each shaped by the surviving institutions and resources upon which its people depended.
+
+Among the most significant was **Veyr'athun**, a fortified enclave established around an ancient centre of defensive research. Its surviving protective workings provided shelter against the corruption surrounding it.
+
+**Oth'irun** emerged around one of the civilization's great archives, where scholars and custodians dedicated themselves to preserving the knowledge and records that had survived the catastrophe.
+
+In the sheltered lands of **Oru'sava**, ancient cultivation and restorative workings allowed its inhabitants to sustain agriculture and provide for communities whose ancestral farmlands had been lost.
+
+**Thuma'rei**, once a major centre of Passage research and transportation, became an important refuge through its surviving gates, maintaining limited connections between otherwise isolated regions.
+
+At **Soru'vaeth**, a former centre of material research and reconstruction, survivors began recovering resources, artifacts and knowledge from the ruins of their ancestral civilization.
+
+These five enclaves were among the most significant surviving Kel'vari settlements, but they were not the only ones. Smaller refuges remained scattered throughout the Shroud, some maintaining limited contact with their neighbours while others became increasingly isolated.
+
+Although the enclaves shared a common ancestry and the memory of their lost civilization, **they remained independent communities rather than reforming a single Kel'vari kingdom**.
+
+Their different circumstances, surviving knowledge and priorities would gradually shape distinct traditions and identities.
 
 Their circumstances produced different priorities. Archive custodians feared repeating forbidden research, while ward-keepers needed to investigate failing defences. Passage custodians could move only limited supplies and travellers. Reclamation parties sometimes returned with indispensable tools and sometimes disturbed dangers that had lain untouched. Families worked, learned and aged within these refuges, preserving fragments of a civilization no enclave could reproduce in full.
 
