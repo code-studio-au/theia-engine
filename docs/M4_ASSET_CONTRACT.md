@@ -783,3 +783,11 @@ outputs without runtime readback and has its own capability/budget checks.
 reference now reports supported gradients or explicit mip-zero fallback.
 [GPU qualification](validation/M4_GPU_AUTOMATIC_MIPS.md). Filtering quality,
 tiled/partial residency and full-chain streamed replacement remain open.
+
+### CPU bilinear-repeat reference
+
+`texture_filter::linear_repeat` models one opaque sRGB authored mip with ideal
+four-tap weights and RGB decode before interpolation, top-left normalized
+coordinates and half-texel centres. Inputs/alpha/ranges are bounded and checked.
+This readonly CPU oracle does not generate mips or change renderer sampling.
+[Qualification](validation/M4_LINEAR_TEXTURE_REFERENCE.md).

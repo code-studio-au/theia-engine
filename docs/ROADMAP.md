@@ -311,3 +311,8 @@ sampling and explicit unsupported-profile mip-zero fallback. Default/shared repl
 allocation limits/cleanup, preserved modes, Wayland WSI and Windows GNU/Wine checks
 pass. Filtering quality, tiled/partial residency, full-chain replacement, general
 hierarchy/LOD and native Windows GPU remain open.
+
+M4 CPU bilinear-repeat sampling now qualifies decode-before-interpolation, periodic
+edges and native cooked-chain samples. Next qualify opt-in GPU bilinear sampling
+while preserving integer automatic mip selection and nearest paths. Trilinear/
+anisotropic quality and tiled/partial residency remain separate gates.

@@ -1,8 +1,16 @@
-# Theia — Actual Implementation Status (2026-10-11)
+# Theia — Actual Implementation Status (2026-10-14)
 
 **This file separates observed evidence from planned systems.** The original handoff
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
-update is 2026-10-11.
+update is 2026-10-14.
+
+## M4 CPU bilinear sampling reference — independently executed (2026-10-14)
+
+A bounded ideal bilinear-repeat oracle decodes sRGB before interpolation and
+qualifies centres, seams, thin/odd levels, invalid inputs and 1000 independent
+periodic-kernel samples. All 54 assets tests, formatting/Clippy and 102 cooked-chain
+sample probes pass. GPU filtering adoption remains next; nearest renderer behavior
+is preserved. [Evidence](validation/M4_LINEAR_TEXTURE_REFERENCE.md).
 
 ## M4 GPU automatic mip selection — independently executed (2026-10-11)
 

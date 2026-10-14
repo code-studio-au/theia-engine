@@ -8,6 +8,7 @@ pub mod lod;
 pub mod material;
 pub mod residency;
 pub mod texture;
+pub mod texture_filter;
 pub mod texture_footprint;
 pub mod texture_mips;
 pub mod texture_table;
