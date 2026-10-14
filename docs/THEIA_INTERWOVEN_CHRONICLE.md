@@ -642,11 +642,81 @@ By the modern age, Covenant and Dominion remained hostile alliances of four sove
 
 Covenant's hereditary High Ruler balanced the human monarchy, independent dwarf holds, Aelari royalty and Korrath elders. Dominion's trial-chosen High Ruler answered to orc Great Clans, halfling guilds, Vaelari arcane institutions and Vorrath religious authorities. **Queen Seralyth**, **First Archon Selrion** and **First Elder Dromak** were among the established leaders whose peoples carried these histories into modern government.
 
-War exhausted frontier settlements, threatened supplies and demanded expensive overseas garrisons. Against generations of suspicion, an exceptional attempt at peace began to take shape.
+Generations of conflict had taken their toll upon Covenant and Dominion.
 
-For the Unmade, peace threatened the secrecy afforded by war. Missing artifacts and shipments, dangerous experiments and covert operations could be blamed upon enemy activity. **Agents of Su'vareth's networks orchestrated the Shattered Delegation attack**, destroying the attempted negotiations and planting conflicting evidence so that each alliance blamed the other. The precise venue, victims and weapon remain open, but the Unmade's authorship and motive are established.
+Along their contested frontiers, settlements had been abandoned, trade routes disrupted and resources diverted towards the demands of war. Maintaining fortified outposts upon distant enemy shores placed an increasing burden upon both alliances, while repeated campaigns brought victories that seldom endured.
 
-The attack hardened the conflict. Garrisons expanded, expeditions pressed into contested territory and military authorities pursued ancient devices that might offer an advantage. Guardian investigators suspected manipulation but lacked evidence they could reveal safely without endangering their cells. The renewed war gave Unmade agents still more opportunities to operate within both alliances.
+For the rulers of both powers, the cost of continued conflict was becoming increasingly difficult to justify.
+
+Yet generations of hostility had left little room for trust. Old grievances remained unresolved, and neither alliance was willing to appear weak before its enemies or its own people.
+
+Despite these obstacles, influential voices within both alliances began advocating for an end to the fighting.
+
+What began as cautious exchanges through intermediaries gradually developed into the possibility of formal negotiations.
+
+The prospect was extraordinary.
+
+For the first time in generations, representatives of Covenant and Dominion were preparing to meet with the authority to explore terms that might bring their long conflict to an end.
+
+The delegations faced considerable opposition. Military commanders questioned the intentions of their enemies, political leaders feared concessions that might weaken their standing, and communities that had suffered through generations of warfare struggled to imagine reconciliation.
+
+Nevertheless, preparations continued.
+
+For the Unmade, the prospect of peace presented a serious threat.
+
+The continuing war had provided their hidden networks with opportunities that would be far more difficult to exploit in a stable world. Missing supplies could be attributed to enemy raids, forbidden research justified as military necessity, and covert operations concealed beneath the suspicion that surrounded every unexplained incident.
+
+Peace threatened to remove that protection.
+
+Su'vareth, the Veiled Hand, recognised the danger. Through agents embedded within the political, military and commercial institutions of both alliances, she began preparing an operation intended not merely to disrupt the negotiations, but to destroy the fragile trust upon which they depended.
+
+The Unmade exploited existing suspicions, arranged the movement of agents and materials, and ensured that carefully selected evidence would implicate both alliances in the violence to come.
+
+When the delegations finally assembled, the attack struck.
+
+**The gathering was devastated, and the hope of peace collapsed with it.**
+
+Among those lost was someone deeply cherished by the orc leader, whose death transformed an already difficult political decision into a profoundly personal tragedy.
+
+The human monarchy suffered an equally devastating loss. The human ruler's most trusted adviser, a figure whose counsel had helped make the negotiations possible, was killed in the attack.
+
+For both leaders, the destruction of the delegation was no longer simply an assault upon their alliances. It was a personal betrayal, made all the more bitter by evidence that appeared to implicate the very people with whom they had sought peace.
+
+In the confusion that followed, evidence emerged suggesting that Covenant had orchestrated the attack. Other accounts implicated Dominion. Witnesses offered contradictory testimony, while documents and materials recovered from the site appeared to confirm the accusations each side was already inclined to believe.
+
+The surviving representatives returned to their peoples carrying different accounts of the same catastrophe.
+
+Covenant condemned what it regarded as an act of Dominion treachery.
+
+Dominion answered with accusations of betrayal by Covenant.
+
+The negotiations were abandoned.
+
+Across both alliances, outrage overwhelmed those who had advocated peace. Leaders who had supported the gathering found their judgement questioned, while military authorities demanded retaliation.
+
+The event became known as **the Shattered Delegation**.
+
+Its consequences spread rapidly.
+
+Armies mobilised, coastal garrisons were reinforced and expeditions pushed deeper into contested territories. Resources that might have supported recovery were once again committed to warfare.
+
+The fragile possibility of reconciliation had been replaced by renewed hostility, strengthened by the conviction on both sides that their enemies had deliberately betrayed an offer of peace.
+
+Behind the conflicting accusations lay the work of the Unmade.
+
+Su'vareth's agents had orchestrated the attack and planted evidence designed to ensure that neither alliance would accept the other's account. Their purpose had never been to secure victory for Covenant or Dominion, but to preserve the conflict that allowed their hidden operations to flourish.
+
+The Guardians began investigating the inconsistencies surrounding the attack.
+
+Certain details suggested deliberate manipulation, and fragments of evidence pointed towards individuals whose activities extended across both alliances. Yet the Guardians' own secrecy complicated their efforts. Revealing what they knew risked exposing cells embedded within hostile institutions, while incomplete accusations might provoke further reprisals.
+
+Unable to establish the full truth publicly, they continued their investigation from the shadows.
+
+For Covenant and Dominion, the Shattered Delegation became another enduring grievance, reinforcing generations of suspicion.
+
+For the Unmade, it was a calculated success.
+
+**Two alliances had come closer to peace than they had in generations. Through a single act of manipulation, the Unmade had ensured that their war would continue.**
 
 ### The Awakening — The Silence Breaks
 
