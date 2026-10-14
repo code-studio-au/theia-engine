@@ -159,6 +159,20 @@ pub struct Upload {
     linear_filter: bool,
 }
 impl Upload {
+    pub fn begin_tail(
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        tail: &theia_assets::texture_residency::MipTail<'_, '_>,
+        family: u32,
+        queue: vk::Queue,
+        budget: u64,
+        linear_filter: bool,
+    ) -> Result<Self> {
+        let mut upload =
+            Self::begin_levels(device, memory, tail.levels(), None, family, queue, budget)?;
+        upload.linear_filter = linear_filter;
+        Ok(upload)
+    }
     /// Submit one owned transfer without waiting for its dedicated fence.
     pub fn begin(
         device: &ash::Device,
@@ -450,9 +464,6 @@ impl ResidentTexture {
         budget: u64,
         linear_filter: bool,
     ) -> Result<Self> {
-        let mut upload =
-            Upload::begin_levels(device, memory, tail.levels(), None, family, queue, budget)?;
-        upload.linear_filter = linear_filter;
         println!(
             "Resident mip tail: source first {}, {} dense texel bytes, {} uploaded levels; original extent {:?}",
             tail.first_level(),
@@ -460,7 +471,7 @@ impl ResidentTexture {
             tail.levels().len(),
             tail.source_extent()
         );
-        upload.finish()
+        Upload::begin_tail(device, memory, tail, family, queue, budget, linear_filter)?.finish()
     }
     pub fn upload_auto_mips(
         device: &ash::Device,

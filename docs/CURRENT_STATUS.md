@@ -4,6 +4,19 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-14.
 
+## M4 asynchronous mip-tail refinement — independently executed (2026-10-14)
+
+One bounded finer-suffix request now reads an immutable source on a background
+worker, submits an owned transfer and publishes only after fence readiness and
+conservative graphics-generation retirement. Default/shared replay preserves the
+coarse image during transfer and under insufficient coexistence capacity; changed
+sources are rejected. Twelve captures also cover protected-1x1 to full-chain
+refinement. The 507→508 dense-cap case measures 1536+1792 image bytes:
+3328 publishes, 3327 retains. Native Wayland runs have zero Vulkan diagnostics;
+Linux renderer/assets 23/59 tests and Windows GNU eleven packages/150 Wine CPU
+tests pass. Tiled feedback, production scheduling and multi-frame reuse remain
+open. [Evidence](validation/M4_ASYNC_MIP_REFINEMENT.md).
+
 ## Headless asset qualifier integration — independently executed (2026-10-14)
 
 Fixed and automatic mip qualifiers now own private display environments: actual

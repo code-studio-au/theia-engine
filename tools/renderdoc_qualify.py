@@ -61,6 +61,17 @@ def qualify(report):
         texture_tail_budget=int(texture_tail_budget)
         if not texture_auto_mips or texture_tail_budget<4:
             raise RuntimeError('Tail capture requires automatic mips and a protected 1x1 budget')
+    texture_refine_budget=os.environ.get('THEIA_CAPTURE_TEXTURE_REFINE_BUDGET')
+    expected_tail_budget=os.environ.get('THEIA_CAPTURE_EXPECT_TEXTURE_TAIL_BUDGET')
+    image_budget=os.environ.get('THEIA_CAPTURE_TEXTURE_IMAGE_BUDGET')
+    if texture_refine_budget is not None:
+        texture_refine_budget=int(texture_refine_budget)
+        if texture_tail_budget is None or texture_refine_budget<4:
+            raise RuntimeError('Refinement capture requires an initial protected tail')
+    if expected_tail_budget is not None:
+        expected_tail_budget=int(expected_tail_budget)
+        if texture_refine_budget is None or expected_tail_budget<4:
+            raise RuntimeError('Expected tail override requires refinement')
     filter_precision=os.environ.get('THEIA_CAPTURE_FILTER_PRECISION_BITS')
     if filter_precision is not None:
         filter_precision=int(filter_precision)
@@ -115,6 +126,8 @@ def qualify(report):
             if texture_mip_level is not None: arguments+=f' {texture_mip_level}'
             if texture_linear_filter: arguments+=' --texture-linear-filter'
             if texture_tail_budget is not None: arguments+=f' --texture-tail-budget {texture_tail_budget}'
+            if texture_refine_budget is not None: arguments+=f' --texture-refine-budget {texture_refine_budget}'
+            if image_budget is not None: arguments+=f' --texture-budget {int(image_budget)}'
     elif authored:
         if cell_path: raise RuntimeError('Authored material capture requires a fixed geometry page')
         authored = str(Path(authored).resolve())
@@ -374,7 +387,7 @@ def qualify(report):
                 report['lod_framebuffer_verified']=False
                 report['lod_guard_only']=True
             elif camera:
-                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material, authored, uv_page, texture_page, texture_table, texture_mip_level, texture_auto_mips, texture_linear_filter, texture_tail_budget)
+                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material, authored, uv_page, texture_page, texture_table, texture_mip_level, texture_auto_mips, texture_linear_filter, expected_tail_budget if expected_tail_budget is not None else texture_tail_budget)
             else:
                 verify_asset(controller, present.copyDestination, source, count, report)
         save = rd.TextureSave()

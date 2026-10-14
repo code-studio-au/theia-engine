@@ -354,3 +354,11 @@ validation and Xwayland replay environments, including budget and failure cleanu
 Next implement bounded asynchronous mip-tail refinement/publication while retaining
 a protected coarse image until the complete finer suffix is ready. Conservative
 retirement and independent physical coexistence budgets remain necessary.
+
+M4 now qualifies one asynchronous coarse-to-finer conventional suffix replacement:
+background full-source admission, transfer-fence readiness, protected-image retention
+under short capacity/changed source, and conservative generation retirement before
+image/metadata publication. Physical coexistence budgets are independent of dense
+texel caps. Tiled GPU feedback, multi-request scheduling and overlapped multi-frame
+allocation reuse remain future gates; this bounded slice does not complete M4.
+[Evidence](validation/M4_ASYNC_MIP_REFINEMENT.md).

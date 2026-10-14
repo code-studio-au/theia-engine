@@ -884,6 +884,14 @@ archive/output arguments as the authored mip cooker, but schema-1 source contain
 only base width/height/rgba. The committed 8x8 checker exercises correct sRGB averaging.
 [Commands/evidence](validation/M4_FILTERED_MIP_COOKING.md).
 
+For a single asynchronous finer-tail request, combine `--texture-refine-budget
+<dense bytes>` with the initial `--texture-tail-budget` and automatic-mip profile.
+The target must add finer levels. `--texture-budget` limits actual active-plus-pending
+image allocations; staging is measured separately. `tools/qualify_texture_refinement.py`
+owns separate validation/replay displays and checks initial, pending, published and
+deferred images plus changed-source retention.
+[Commands/evidence](validation/M4_ASYNC_MIP_REFINEMENT.md).
+
 ## Owned headless display qualification
 
 For GPU qualification without an active desktop monitor, use

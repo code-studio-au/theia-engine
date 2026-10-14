@@ -836,3 +836,14 @@ per-step linear-light averages with <=1 encoded RGB byte error and opaque alpha.
 The existing packager/strict Rust reader remain unchanged. This bounded recipe is
 separate from explicit authored levels and is not a general filtering policy.
 [Qualification](validation/M4_FILTERED_MIP_COOKING.md).
+
+### Asynchronous conventional tail refinement
+
+`--texture-refine-budget` adds one finer-suffix request to the initial automatic
+tail. Background full-file I/O rechecks immutable source identity; owned transfer
+readiness and conservative graphics-generation retirement gate image/sampler and
+source-metadata publication. Actual active-plus-pending image requirements share
+`--texture-budget`, separately from staging/dense caps. Budget deferral and changed
+source rejection retain the protected coarse image. This is a single qualification
+request, not tiled GPU feedback, retry scheduling or overlapped generation reuse.
+[Evidence and limitations](validation/M4_ASYNC_MIP_REFINEMENT.md).

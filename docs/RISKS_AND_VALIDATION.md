@@ -20,6 +20,14 @@ This is an experimental GPU-first engine. **Consensus on an architecture is not 
 | 24 GiB dev GPU bias | engine might only run on high end | bounded resource budgets and lower VRAM tier later |
 | GPU text/UI semantics | I/O/IME/accessibility cannot be GPU-only | host semantic/input bridge; avoid GPU readback critical path |
 
+Conventional texture-tail refinement now qualifies one background full-file read
+and fence-gated replacement with measured active/pending image coexistence caps.
+Coarse rendering survives short capacity and changed source identity. Retirement
+still conservatively idles the graphics/presentation generation; I/O worker join
+has no latency/cancellation guarantee. Tiled feedback, repeated request scheduling,
+eviction and multi-frame reuse are separate gates.
+[Observed scope](validation/M4_ASYNC_MIP_REFINEMENT.md).
+
 ## Decisions needing concrete values later
 
 - Actual minimum GPU/VRAM models; baseline fps and target resolution; vendor matrix.

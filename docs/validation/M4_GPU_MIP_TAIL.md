@@ -2,7 +2,8 @@
 
 Render Lab `--texture-tail-budget <dense texel bytes>` requires automatic-mip
 mode and selects the qualified CPU plan before Vulkan initialization. The complete
-content-addressed source is admitted/rechecked; encoded CPU bytes remain resident.
+content-addressed source is admitted/rechecked; full-file CPU I/O is still required.
+The initialization bytes are released after upload rather than kept in a CPU cache.
 Only the selected contiguous suffix is copied into a conventional image whose base
 extent is the first resident source level. The protected 1x1 level is always present.
 There is no sparse binding, arbitrary tile mapping or partial file I/O.

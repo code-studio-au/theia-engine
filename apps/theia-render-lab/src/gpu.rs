@@ -894,6 +894,7 @@ pub struct Renderer {
     chain: Option<Swapchain>,
     stream: Option<crate::streaming::Stream>,
     bundle_stream: Option<crate::bundle_streaming::Stream>,
+    texture_refinement: Option<crate::texture_refinement::Refinement>,
     work: Option<IndirectWork>,
     lod: Option<crate::indirect::Lod>,
     materials: Option<crate::asset::Buffer>,
@@ -938,6 +939,7 @@ impl Renderer {
             chain: None,
             stream: None,
             bundle_stream: None,
+            texture_refinement: None,
             recreate: true,
             generations: 0,
             mode: options.render_mode(),
@@ -1430,6 +1432,23 @@ impl Renderer {
             renderer.bundle_stream = Some(stream);
         }
         renderer.rebuild(renderer.ctx.window.inner_size())?;
+        if let Some(target_budget) = options.texture_refine_budget {
+            let path = options.texture.as_ref().unwrap();
+            let bytes = crate::texture::load_mips(path)?;
+            renderer.texture_refinement = Some(crate::texture_refinement::Refinement::new(
+                path.clone(),
+                theia_assets::content_id(&bytes),
+                renderer.texture_tail.unwrap()[2],
+                target_budget,
+                options
+                    .texture_budget
+                    .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64),
+                options.texture_linear_filter,
+            ));
+            println!(
+                "Mip refinement scheduler ready: original source verified; finer dense budget {target_budget}"
+            );
+        }
         Ok(renderer)
     }
     fn bundle_resource_bytes(&self) -> u64 {
@@ -1503,6 +1522,52 @@ impl Renderer {
                 .as_mut()
                 .unwrap()
                 .published(publication, self.presented)?;
+        }
+        Ok(())
+    }
+    fn tick_texture_refinement(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let Some(refinement) = &mut self.texture_refinement else {
+            return Ok(());
+        };
+        if refinement.finished() {
+            return Ok(());
+        }
+        // SAFETY: The selected physical device belongs to the live context.
+        let memory = unsafe {
+            self.ctx
+                .instance
+                .as_ref()
+                .unwrap()
+                .get_physical_device_memory_properties(self.ctx.physical)
+        };
+        let ready = refinement.tick(
+            self.presented,
+            self.texture.as_ref().unwrap().image.allocated_bytes,
+            crate::texture_refinement::Gpu {
+                device: self.ctx.device.as_ref().unwrap(),
+                memory: &memory,
+                family: self.ctx.graphics_family,
+                queue: self.ctx.graphics,
+            },
+        )?;
+        if let Some(ready) = ready {
+            // The frame fence was retired by draw. Conservatively retire the old
+            // presentation/graphics generation before releasing descriptor owners.
+            if let Some(chain) = &mut self.chain {
+                chain.retire()?;
+            }
+            drop(self.chain.take());
+            self.texture = Some(ready.texture);
+            self.texture_tail = Some(ready.metadata);
+            self.recreate = true;
+            self.rebuild(size)?;
+            if self.recreate {
+                return Err("Mip refinement publication generation unavailable".into());
+            }
+            self.texture_refinement
+                .as_mut()
+                .unwrap()
+                .published(ready.metadata[2], self.presented);
         }
         Ok(())
     }
@@ -1650,6 +1715,7 @@ impl Renderer {
             )?;
         }
         self.tick_bundle(size)?;
+        self.tick_texture_refinement(size)?;
         let chain = self.chain.as_mut().unwrap();
         let ctx = &self.ctx;
         let device = ctx.device.as_ref().unwrap();
@@ -1994,6 +2060,9 @@ impl Renderer {
         if self.probes.remaining() != 0 {
             return Err("WSI qualification ended before all four recovery probes ran".into());
         }
+        if let Some(refinement) = &self.texture_refinement {
+            refinement.check_complete(self.presented)?;
+        }
         Ok(())
     }
 }
@@ -2004,6 +2073,7 @@ impl Drop for Renderer {
         drop(self.chain.take());
         drop(self.stream.take());
         drop(self.bundle_stream.take());
+        drop(self.texture_refinement.take());
         drop(self.work.take());
         drop(self.materials.take());
         drop(self.uvs.take());
