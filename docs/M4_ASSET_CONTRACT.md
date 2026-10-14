@@ -810,3 +810,19 @@ texel budget. Source footprint dimensions stay separate from resident dimensions
 selection clamps desired source levels to the resident suffix and returns relative
 image levels. This is not physical allocation accounting, partial I/O or GPU
 publication. [Contract qualification](validation/M4_MIP_TAIL_CONTRACT.md).
+
+### GPU conventional protected mip tails
+
+`--texture-tail-budget` with automatic mips fits a coarse suffix before Vulkan,
+rechecks full immutable source data and uploads only resident levels. A separate
+80-byte fragment push profile carries original dimensions/count and first source
+level; footprint uses original dimensions, sampling subtracts the resident offset.
+Actual image caps remain independent of dense texel budgets. Diagnostic reason 4
+marks residency coarsening; unsupported gradients request source zero then clamp.
+Tail records' byte 44 carries relative mip; nontail reserved zero remains intact.
+[GPU qualification](validation/M4_GPU_MIP_TAIL.md).
+
+The bilinear CPU oracle additionally supports a bounded per-weight quantization
+interval using queried device fraction bits. Linear reference commands optionally
+accept trailing `--filter-precision`; nearest/identity/depth/mip checks are preserved.
+This models a diagnostic error envelope, not complete cross-vendor arithmetic.

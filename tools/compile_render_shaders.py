@@ -50,6 +50,7 @@ def main():
                ('asset_uv_resolve.slang', 'assetUvResolveFragment', 'fragment', 'asset.uv.resolve.frag.spv'),
                ('asset_texture_resolve.slang', 'assetTextureResolveFragment', 'fragment', 'asset.texture.resolve.frag.spv'),
                ('asset_texture_auto_resolve.slang', 'assetTextureAutoResolveFragment', 'fragment', 'asset.texture.auto.resolve.frag.spv'),
+               ('asset_texture_tail_resolve.slang', 'assetTextureAutoResolveFragment', 'fragment', 'asset.texture.tail.resolve.frag.spv'),
                ('asset_texture_table_resolve.slang', 'assetTextureTableResolveFragment', 'fragment', 'asset.texture.table.resolve.frag.spv')]
     try:
         subprocess.run([args.slangc, '-version'], check=True)

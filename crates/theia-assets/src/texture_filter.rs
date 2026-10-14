@@ -6,6 +6,49 @@ use crate::{AssetError, Result, texture::MAX_DIMENSION, texture_mips::MipLevel};
 /// The input must be a dense opaque mip, with finite UV magnitudes <= 64.
 /// This readonly diagnostic oracle scans alpha; it is not a runtime hot path.
 pub fn linear_repeat(level: &MipLevel<'_>, uv: [f64; 2]) -> Result<[f64; 3]> {
+    let (first, fraction) = coordinates(level, uv)?;
+    Ok(interpolate(level, first, fraction))
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct LinearBounds {
+    pub min: [f64; 3],
+    pub max: [f64; 3],
+}
+
+/// Diagnostic envelope for at most one weight-quantization step per axis.
+/// Bits must come from the selected device; 4..16 is this oracle's bounded profile.
+/// This is not a complete model of GPU coordinate/colour arithmetic.
+pub fn linear_repeat_bounds(level: &MipLevel<'_>, uv: [f64; 2], bits: u32) -> Result<LinearBounds> {
+    if !(4..=16).contains(&bits) {
+        return Err(AssetError("unsupported texture weight precision"));
+    }
+    let (first, fraction) = coordinates(level, uv)?;
+    let step = 1. / f64::from(1u32 << bits);
+    let mut bounds = LinearBounds {
+        min: [f64::INFINITY; 3],
+        max: [f64::NEG_INFINITY; 3],
+    };
+    // A bilinear function's extrema on a rectangle occur at its corners.
+    for y in [-step, step] {
+        for x in [-step, step] {
+            let value = interpolate(
+                level,
+                first,
+                [
+                    (fraction[0] + x).clamp(0., 1.),
+                    (fraction[1] + y).clamp(0., 1.),
+                ],
+            );
+            for (axis, v) in value.into_iter().enumerate() {
+                bounds.min[axis] = bounds.min[axis].min(v);
+                bounds.max[axis] = bounds.max[axis].max(v);
+            }
+        }
+    }
+    Ok(bounds)
+}
+fn coordinates(level: &MipLevel<'_>, uv: [f64; 2]) -> Result<([i64; 2], [f64; 2])> {
     if !(1..=MAX_DIMENSION).contains(&level.width)
         || !(1..=MAX_DIMENSION).contains(&level.height)
         || level.texels.len() != level.width as usize * level.height as usize * 4
@@ -19,6 +62,10 @@ pub fn linear_repeat(level: &MipLevel<'_>, uv: [f64; 2]) -> Result<[f64; 3]> {
         std::array::from_fn::<_, 2, _>(|i| (uv[i] - uv[i].floor()) * f64::from(size[i]) - 0.5);
     let first = position.map(|v| v.floor() as i64);
     let fraction = std::array::from_fn::<_, 2, _>(|i| position[i] - position[i].floor());
+    Ok((first, fraction))
+}
+fn interpolate(level: &MipLevel<'_>, first: [i64; 2], fraction: [f64; 2]) -> [f64; 3] {
+    let size = [level.width, level.height];
     let mut result = [0.; 3];
     for y in 0..2 {
         for x in 0..2 {
@@ -45,7 +92,7 @@ pub fn linear_repeat(level: &MipLevel<'_>, uv: [f64; 2]) -> Result<[f64; 3]> {
             }
         }
     }
-    Ok(result)
+    result
 }
 
 #[cfg(test)]
@@ -60,6 +107,37 @@ mod tests {
             height: 2,
             texels: &PIXELS,
         }
+    }
+    #[test]
+    fn quantized_weight_envelope_contains_rounding_at_dark_edges_and_rejects_bad_bits() {
+        let q = quad();
+        for bits in [4, 8, 16] {
+            let scale = (1u32 << bits) as f64;
+            for fraction in [0., 0.0023632, 0.25, 0.5, 0.9999, 1.] {
+                let uv = [(fraction + 0.5) / 2., 0.25];
+                let bounds = linear_repeat_bounds(&q, uv, bits).unwrap();
+                for quantized in [
+                    (fraction * scale).floor() / scale,
+                    (fraction * scale).ceil() / scale,
+                    (fraction * scale).round() / scale,
+                ] {
+                    assert!(
+                        bounds.min[0] <= quantized + 1e-14 && bounds.max[0] + 1e-14 >= quantized
+                    );
+                }
+                let ideal = linear_repeat(&q, uv).unwrap();
+                for (i, value) in ideal.into_iter().enumerate() {
+                    assert!(bounds.min[i] <= value + 1e-14 && bounds.max[i] + 1e-14 >= value);
+                    assert!(
+                        (0. ..=1.).contains(&bounds.min[i]) && (0. ..=1.).contains(&bounds.max[i])
+                    );
+                }
+            }
+        }
+        for bits in [0, 3, 17, u32::MAX] {
+            assert!(linear_repeat_bounds(&q, [0.; 2], bits).is_err());
+        }
+        assert!(linear_repeat_bounds(&q, [f64::NAN, 0.], 8).is_err());
     }
     #[test]
     fn centers_half_texel_edges_and_repeat_decode_before_interpolation() {

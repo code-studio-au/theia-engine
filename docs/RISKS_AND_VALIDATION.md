@@ -85,3 +85,11 @@ CPU model. The test retains two-byte encoded-colour tolerance; it does not prove
 cross-vendor weight quantization or production filtering quality. Explicit integer
 mip selection, authored levels and unsupported-gradient mip-zero fallback remain
 prototype constraints. [Evidence](validation/M4_GPU_LINEAR_FILTER.md).
+
+Conventional mip tails now have GPU byte/pixel/gradient/index proof and exact physical
+allocation boundaries. Dense texel reductions do not guarantee matching VRAM savings:
+a vertical 508-byte suffix costs 12288 physical bytes on the qualified driver.
+Dark bilinear edges exposed finite filter weights; diagnostics now use a one-step
+per-weight envelope at queried device precision plus prior output-byte tolerance.
+This does not prove all coordinate arithmetic or cross-vendor conformance.
+[Evidence](validation/M4_GPU_MIP_TAIL.md).

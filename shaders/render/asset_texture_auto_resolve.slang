@@ -16,7 +16,12 @@ void writeFootprint(float4 pixel,uint2 identity,float2 uv,float2 dx,float2 dy,fl
     footprintProbe.Store4(offset,asuint(float4(dx,dy)));
     footprintProbe.Store2(offset+16,asuint(uv));footprintProbe.Store(offset+24,asuint(rho));
     footprintProbe.Store(offset+28,mip);footprintProbe.Store2(offset+32,identity);
-    footprintProbe.Store(offset+40,reason);footprintProbe.Store(offset+44,0);
+    footprintProbe.Store(offset+40,reason);
+#ifdef THEIA_TEXTURE_MIP_TAIL
+    footprintProbe.Store(offset+44,(reason==1 || reason==3) ? 0u:mip-sceneCamera.textureTail.z);
+#else
+    footprintProbe.Store(offset+44,0);
+#endif
 }
 
 bool authoredGradient(float4 pixel,uint2 identity,float2 value,out float2 dx,out float2 dy) {
@@ -67,11 +72,21 @@ float4 assetTextureAutoResolveFragment(float4 pixel:SV_Position):SV_Target0 {
     if(!all(isfinite(uv))) {writeFootprint(pixel,identity,0,0,0,0,0,3);return float4(1,0,1,1);}
     float2 dx,dy;bool supported=authoredGradient(pixel,identity,uv,dx,dy);
     uint width,height,levels;autoTexture.GetDimensions(0,width,height,levels);
+    uint first=0;
+#ifdef THEIA_TEXTURE_MIP_TAIL
+    uint4 tail=sceneCamera.textureTail;
+    if(tail.x==0 || tail.y==0 || tail.x>1024 || tail.y>1024 || tail.w==0 || tail.w>11 || tail.z>=tail.w
+        || levels!=tail.w-tail.z || width!=max(1u,tail.x>>tail.z) || height!=max(1u,tail.y>>tail.z)) {
+        writeFootprint(pixel,identity,uv,0,0,0,0,3);return float4(1,0,1,1);
+    }
+    width=tail.x;height=tail.y;levels=tail.w;first=tail.z;
+#endif
     float rho=supported ? max(length(dx*float2(width,height)),length(dy*float2(width,height))):0;
     if(!isfinite(rho)) {supported=false;rho=0;}
     if(!supported) {dx=0;dy=0;}
     uint mip=0;
     if(supported) while(mip+1<levels && rho>float(1u<<mip)) ++mip;
+    bool coarsened=mip<first;mip=max(mip,first);
     uint count=autoFactors.Load(16),meshletCount=autoFactors.Load(20);
     if(identity.x>meshletCount) {
         writeFootprint(pixel,identity,uv,dx,dy,rho,mip,3);return float4(1,0,1,1);
@@ -84,6 +99,6 @@ float4 assetTextureAutoResolveFragment(float4 pixel:SV_Position):SV_Target0 {
     }
     uint material=autoFactors.Load(offsets+(meshletCount+1)*4+(begin+identity.y)*4);
     if(material>=count) {writeFootprint(pixel,identity,uv,dx,dy,rho,mip,3);return float4(1,0,1,1);}
-    writeFootprint(pixel,identity,uv,dx,dy,rho,mip,supported ? 0u:2u);
-    return autoTexture.SampleLevel(autoSampler,uv,float(mip))*asfloat(autoFactors.Load4(factors+material*16));
+    writeFootprint(pixel,identity,uv,dx,dy,rho,mip,supported ? (coarsened ? 4u:0u):2u);
+    return autoTexture.SampleLevel(autoSampler,uv,float(mip-first))*asfloat(autoFactors.Load4(factors+material*16));
 }

@@ -868,3 +868,12 @@ The assets `texture_tail <sha256.ktx2> <dense-texel-budget> <requested-mip>` exa
 admits the complete immutable file and reports a protected coarse suffix and
 source/image-relative selection. Dense texel budgets exclude Vulkan requirements.
 [Contract evidence](validation/M4_MIP_TAIL_CONTRACT.md).
+
+For conventional coarse mip tails, add `--texture-tail-budget <dense bytes>` to
+`--texture-auto-mips`. Keep `--texture-budget` for actual physical image limits.
+`--texture-tail-reference` and `--texture-tail-linear-reference` take the original
+mesh/material/UV/texture paths, dense budget, then x/y/width/height/view. Linear
+references optionally accept trailing `--filter-precision <4..16>` for colour bounds.
+The automatic-mip harness and owned Wayland suite accept `--tail-budget`; the former
+queries the actual selected device's filter precision for linear replay.
+[Commands/evidence](validation/M4_GPU_MIP_TAIL.md).

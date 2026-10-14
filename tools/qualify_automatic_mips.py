@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--shader-dir', type=Path, default=Path('build/shaders'))
     parser.add_argument('--linear-filter', action='store_true', help='Qualify opt-in bilinear sampling against the CPU oracle')
+    parser.add_argument('--tail-budget',type=int,help='Dense texel budget for a protected resident mip suffix')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     report = {'passed': False, 'views': []}
@@ -39,6 +40,18 @@ def main():
     try:
         scene = json.loads(args.reference.read_bytes())
         texture = json.loads(args.texture_cook.read_bytes())
+        exe = Path('apps/theia-render-lab/target/debug/theia-render-lab')
+        base = [exe, '--gpu', '7900', '--asset', scene['path'], '--materials', scene['materials']['path'],
+                '--uv-test', scene['uv']['path'], '--texture-auto-mips', texture['path']]
+        if args.tail_budget is not None: base += ['--texture-tail-budget',str(args.tail_budget)]
+        if args.linear_filter: base += ['--texture-linear-filter']
+        precision=None
+        if args.linear_filter:
+            initial=validated(base+['--shader-dir',args.shader_dir,'--frames','1'],'filter-precision')
+            match=re.search(r'Texture filter precision: (\d+) fraction bits',initial)
+            if not match or not 4<=int(match[1])<=16:
+                raise RuntimeError('Missing/unsupported selected device filter precision')
+            precision=int(match[1]);report['filter_precision_bits']=precision
         for view in range(3):
             destination = args.output / ('view-' + str(view))
             env = {k: v for k, v in os.environ.items() if not k.startswith('THEIA_CAPTURE_')}
@@ -47,7 +60,10 @@ def main():
                        THEIA_CAPTURE_UV_PAGE=scene['uv']['path'], THEIA_CAPTURE_TEXTURE_PAGE=texture['path'],
                        THEIA_CAPTURE_TEXTURE_AUTO_MIPS='1', THEIA_CAPTURE_SCENARIO=str(view),
                        THEIA_CAPTURE_SHADER_DIR=str(args.shader_dir.resolve()))
-            if args.linear_filter: env['THEIA_CAPTURE_TEXTURE_LINEAR_FILTER']='1'
+            if args.linear_filter:
+                env['THEIA_CAPTURE_TEXTURE_LINEAR_FILTER']='1'
+                env['THEIA_CAPTURE_FILTER_PRECISION_BITS']=str(precision)
+            if args.tail_budget is not None: env['THEIA_CAPTURE_TEXTURE_TAIL_BUDGET']=str(args.tail_budget)
             execute([args.qrenderdoc, '--python', 'tools/renderdoc_qualify.py'], 'view-' + str(view), env)
             captured = json.loads((destination / 'report.json').read_bytes())
             if not all(captured.get(field) for field in ['replay_verified', 'texture_automatic_mips_verified',
@@ -55,21 +71,23 @@ def main():
                 raise RuntimeError('Incomplete automatic mip replay')
             if args.linear_filter and not captured.get('texture_linear_filter_verified'):
                 raise RuntimeError('Missing linear filtering replay proof')
+            if args.tail_budget is not None and not captured.get('texture_mip_tail_verified'):
+                raise RuntimeError('Missing mip-tail replay proof')
             probes = captured['texture_footprint_probes']
             if len(probes) != 81:
                 raise RuntimeError('Incomplete bounded GPU gradient probe set')
             report['views'].append({'view': view, 'pixels': len(captured['camera_samples']),
                 'gradient_probes': sum(p['reason'] == 0 for p in probes),
                 'fallback_probes': sum(p['reason'] == 2 for p in probes),
+                'resident_coarsened_probes': sum(p['reason'] == 4 for p in probes),
+                'source_first_level': captured.get('texture_source_first_level',0),
+                'resident_mip_count': captured['texture_mip_count'],
                 'linear_distinguishable_pixels': captured.get('linear_distinguishable_pixels',0),
+                'precision_adjusted_pixels': captured.get('precision_adjusted_pixels',0),
                 'sampled_mips': sorted({p['mip_level'] for p in captured['camera_samples'] if p.get('mip_level') is not None})})
-        exe = Path('apps/theia-render-lab/target/debug/theia-render-lab')
-        base = [exe, '--gpu', '7900', '--asset', scene['path'], '--materials', scene['materials']['path'],
-                '--uv-test', scene['uv']['path'], '--texture-auto-mips', texture['path']]
         if args.linear_filter:
             if not any(v['linear_distinguishable_pixels'] for v in report['views']):
                 raise RuntimeError('Fixture does not distinguish bilinear from nearest sampling')
-            base += ['--texture-linear-filter']
         log = validated(base + ['--shader-dir', args.shader_dir, '--wsi-smoke-test'], 'wsi')
         if 'Presented 120 frames' not in log:
             raise RuntimeError('Incomplete WSI execution')
@@ -85,14 +103,15 @@ def main():
             raise RuntimeError('Short image budget did not reject')
         missing = args.output / 'missing-shader'
         missing.mkdir(exist_ok=True)
+        required_shader='asset.texture.tail.resolve.frag.spv' if args.tail_budget is not None else 'asset.texture.auto.resolve.frag.spv'
         for path in args.shader_dir.glob('*.spv'):
-            if path.name != 'asset.texture.auto.resolve.frag.spv':
+            if path.name != required_shader:
                 shutil.copyfile(path, missing / path.name)
-        (missing / 'asset.texture.auto.resolve.frag.spv').unlink(missing_ok=True)
+        (missing / required_shader).unlink(missing_ok=True)
         failed = validated(base + ['--shader-dir', missing, '--frames', '1'], 'missing-shader', False)
         if 'GPU footprint probe:' not in failed or 'Presented ' in failed:
             raise RuntimeError('Missing shader did not exercise post-upload/probe cleanup')
-        report.update(passed=True, linear_filter=args.linear_filter, physical_image_bytes=charge, exact_budget_passed=True,
+        report.update(passed=True, linear_filter=args.linear_filter, tail_texel_budget=args.tail_budget, physical_image_bytes=charge, exact_budget_passed=True,
                       short_budget_rejected=True, missing_shader_cleanup_passed=True)
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
         report['error'] = str(error)

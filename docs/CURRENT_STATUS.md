@@ -4,6 +4,20 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-14.
 
+## M4 GPU coarse mip tails — independently executed (2026-10-14)
+
+Conventional images now contain only a protected coarse suffix, while GPU analytic
+footprints retain original source dimensions and sample image-relative levels.
+Twenty-four tail captures qualify exact/short texel boundaries, 1x1-only/full tails,
+shared interface, odd/vertical shapes and numeric fallback. Physical image caps and
+post-upload cleanup pass zero diagnostics; horizontal allocations measure 9472/
+1792/1536/256 bytes for full/tail-4/tail-5/1x1. A precision-aware CPU envelope handles
+one dark bilinear pixel using the device's queried eight-bit weights. Renderer/
+assets 23/59 tests, both shader variants 33 outputs, seven Wayland modes, Windows
+GNU 11 packages and 150 Wine CPU tests pass. Tiled demand, async tail publication,
+source mip generation/quality and native Windows GPU remain open.
+[Evidence](validation/M4_GPU_MIP_TAIL.md).
+
 ## M4 CPU coarse mip-tail contract — independently executed (2026-10-14)
 
 An immutable borrowed mip-tail plan keeps the finest complete coarse suffix within

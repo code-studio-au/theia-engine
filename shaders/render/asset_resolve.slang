@@ -1,6 +1,11 @@
 #include "resolve.slang"
 [[vk::binding(4,0)]] ByteAddressBuffer resolveGeometry;
-struct SceneCameraRows { float4 row0; float4 row1; float4 row2; float4 row3; };
+struct SceneCameraRows {
+    float4 row0; float4 row1; float4 row2; float4 row3;
+#ifdef THEIA_TEXTURE_MIP_TAIL
+    uint4 textureTail; // original width/height, first resident source level, source count
+#endif
+};
 [[vk::push_constant]] ConstantBuffer<SceneCameraRows> sceneCamera;
 uint resolveByte(uint offset) { return (resolveGeometry.Load(offset&~3u)>>((offset&3u)*8))&255u; }
 [shader("fragment")]

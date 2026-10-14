@@ -40,6 +40,7 @@ pub struct ResolveMode {
     pub texture: bool,
     pub texture_table: bool,
     pub automatic_mips: bool,
+    pub mip_tail: bool,
 }
 pub struct Pipeline {
     device: ash::Device,
@@ -186,6 +187,7 @@ impl Pipeline {
             texture,
             texture_table,
             automatic_mips,
+            mip_tail,
         } = mode;
         Self::configured(
             device,
@@ -195,7 +197,9 @@ impl Pipeline {
             ShaderStages {
                 mesh: "resolve.mesh.spv",
                 task: None,
-                fragment: if automatic_mips {
+                fragment: if mip_tail {
+                    "asset.texture.tail.resolve.frag.spv"
+                } else if automatic_mips {
                     "asset.texture.auto.resolve.frag.spv"
                 } else if texture_table {
                     "asset.texture.table.resolve.frag.spv"
@@ -240,7 +244,15 @@ impl Pipeline {
             let layouts: Vec<_> = descriptor_layout.into_iter().collect();
             let push: Vec<_> = shaders
                 .push
-                .map(|stage| vk::PushConstantRange::default().stage_flags(stage).size(64))
+                .map(|stage| {
+                    vk::PushConstantRange::default().stage_flags(stage).size(
+                        if shaders.fragment == "asset.texture.tail.resolve.frag.spv" {
+                            80
+                        } else {
+                            64
+                        },
+                    )
+                })
                 .into_iter()
                 .collect();
             pipeline.layout = device.create_pipeline_layout(

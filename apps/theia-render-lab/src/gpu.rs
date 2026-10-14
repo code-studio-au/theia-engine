@@ -579,6 +579,14 @@ impl Context {
         self.physical = physical;
         self.graphics_family = graphics;
         self.present_family = present;
+        if linear_filter {
+            // SAFETY: The selected physical device belongs to this live instance.
+            let limits = unsafe { instance.get_physical_device_properties(physical) }.limits;
+            println!(
+                "Texture filter precision: {} fraction bits",
+                limits.sub_texel_precision_bits
+            );
+        }
         println!(
             "Selected GPU: {name}; graphics/compute family {graphics}, present family {present}; presentation-fence retirement enabled"
         );
@@ -894,6 +902,7 @@ pub struct Renderer {
     textures: Vec<crate::texture::ResidentTexture>,
     texture_table: Option<crate::asset::Buffer>,
     footprint: Option<crate::asset::Buffer>,
+    texture_tail: Option<[u32; 4]>,
     authority: Option<[u8; 64]>,
     pub recreate: bool,
     generations: u64,
@@ -940,6 +949,7 @@ impl Renderer {
             textures: Vec::new(),
             texture_table: None,
             footprint: None,
+            texture_tail: None,
             work_items: options.work_items.unwrap_or(2),
             cycle_work: options.smoke,
             presented: 0,
@@ -1204,7 +1214,28 @@ impl Renderer {
                 let budget = options
                     .texture_budget
                     .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64);
-                renderer.texture = Some(if options.texture_auto_mips {
+                renderer.texture = Some(if let Some(raw_budget) = options.texture_tail_budget {
+                    let tail = theia_assets::texture_residency::MipTail::fit(
+                        mips.as_ref().unwrap(),
+                        raw_budget,
+                    )?;
+                    let source = tail.source_extent();
+                    renderer.texture_tail = Some([
+                        source[0],
+                        source[1],
+                        tail.first_level(),
+                        tail.source_level_count(),
+                    ]);
+                    crate::texture::ResidentTexture::upload_tail(
+                        renderer.ctx.device.as_ref().unwrap(),
+                        &memory,
+                        &tail,
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        budget,
+                        options.texture_linear_filter,
+                    )?
+                } else if options.texture_auto_mips {
                     crate::texture::ResidentTexture::upload_auto_mips(
                         renderer.ctx.device.as_ref().unwrap(),
                         &memory,
@@ -1513,6 +1544,7 @@ impl Renderer {
                         .offset(buffer.offset)
                         .range(buffer.bytes)
                 }),
+                mip_tail: self.texture_tail,
                 texture_table: self.texture_table.as_ref().map(|buffer| {
                     vk::DescriptorBufferInfo::default()
                         .buffer(buffer.handle)

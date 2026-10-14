@@ -328,3 +328,10 @@ texel budgets and source-to-image index mapping against native authored chains.
 Next qualify conventional GPU suffix images using original source dimensions for
 footprints and independent physical allocation limits. Tiled pages/demand feedback
 and asynchronous tail replacement remain later gates.
+
+M4 conventional GPU mip-tail sampling now qualifies protected coarse suffixes,
+original-dimension footprint demand, source/image mip mapping and independent
+physical limits across horizontal/vertical/odd sources. A queried-precision filter
+oracle handles observed dark-edge quantization. Tiled GPU demand, asynchronous
+suffix refinement/publication and multi-frame allocation reuse remain open; source
+mip generation/quality can be qualified independently with mature offline tools.

@@ -165,6 +165,7 @@ pub struct ResolveBuffers {
     pub texture: Option<vk::DescriptorImageInfo>,
     pub texture_table: Option<vk::DescriptorBufferInfo>,
     pub footprint: Option<vk::DescriptorBufferInfo>,
+    pub mip_tail: Option<[u32; 4]>,
     pub texture_images: [vk::DescriptorImageInfo; theia_assets::texture_table::MAX_TEXTURES],
     pub texture_count: u32,
 }
@@ -193,6 +194,7 @@ pub struct Target {
     authored: bool,
     uv: bool,
     geometry: Option<(vk::Buffer, u64, u64)>,
+    mip_tail: Option<[u32; 4]>,
 }
 impl Target {
     pub fn new(
@@ -215,6 +217,9 @@ impl Target {
             return Err("Automatic mip probes require fixed geometry/material/UV and one full-chain texture".into());
         }
         let extra_storage = buffers.texture_table.or(buffers.footprint);
+        if buffers.mip_tail.is_some() && buffers.footprint.is_none() {
+            return Err("Mip-tail resolve requires automatic mip probes".into());
+        }
         if buffers.texture_table.is_some()
             && !(1..=theia_assets::texture_table::MAX_TEXTURES as u32).contains(&image_count)
         {
@@ -266,6 +271,7 @@ impl Target {
             authored,
             uv,
             geometry: None,
+            mip_tail: buffers.mip_tail,
         };
         // SAFETY: Images/layouts are live, arrays are retained through calls and handles gain RAII immediately.
         unsafe {
@@ -512,6 +518,7 @@ impl Target {
                 texture: image_count > 0,
                 texture_table: buffers.texture_table.is_some(),
                 automatic_mips: buffers.footprint.is_some(),
+                mip_tail: buffers.mip_tail.is_some(),
             },
         )?);
         println!(
@@ -755,6 +762,17 @@ impl Target {
                     pipeline.layout,
                     vk::ShaderStageFlags::FRAGMENT,
                     rows.unwrap(),
+                );
+            }
+            if let Some(tail) = self.mip_tail {
+                // SAFETY: Four u32 words occupy the tail pipeline's fragment push
+                // bytes 64..80; this command is recording with that layout bound.
+                self.device.cmd_push_constants(
+                    command,
+                    pipeline.layout,
+                    vk::ShaderStageFlags::FRAGMENT,
+                    64,
+                    std::slice::from_raw_parts(tail.as_ptr().cast::<u8>(), 16),
                 );
             }
             mesh.cmd_draw_mesh_tasks(command, 1, 1, 1);
