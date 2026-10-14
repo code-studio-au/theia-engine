@@ -342,3 +342,9 @@ This is a bounded power-of-two opaque sRGB recipe. General source/filter quality
 odd/alpha/HDR profiles, tiled demand, async tail refinement and multi-frame reuse
 remain open. Reliable qualification while a physical display sleeps is also an
 independent platform/tooling gate; the observed DPMS timeout is not a renderer pass.
+
+Owned headless display qualification now keeps GPU rendering/replay independent
+of desktop DPMS: native Wayland WSI and Xwayland visibility/mip-tail replay pass.
+Xwayland recovery after the frame-80 injected presentation case remains open.
+Next reuse these separate environments in asset qualifiers before continuing
+asynchronous mip-tail refinement/publication.

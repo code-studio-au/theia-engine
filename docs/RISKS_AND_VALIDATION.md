@@ -93,3 +93,9 @@ Dark bilinear edges exposed finite filter weights; diagnostics now use a one-ste
 per-weight envelope at queried device precision plus prior output-byte tolerance.
 This does not prove all coordinate arithmetic or cross-vendor conformance.
 [Evidence](validation/M4_GPU_MIP_TAIL.md).
+
+Headless Weston now qualifies native Wayland WSI and separate Xwayland ordinary
+frames/replay while the desktop display remains off. Full headless Xwayland recovery
+still times out after frame 80 in both composition-GPU configurations; cause and
+clean teardown remain unqualified. Do not infer native-seat/scanout or Wayland replay
+from this evidence. [Details](validation/HEADLESS_DISPLAY.md).

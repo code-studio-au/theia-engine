@@ -4,6 +4,16 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-14.
 
+## Headless display qualification — independently executed (2026-10-14)
+
+Owned Weston/GL and Xwayland now execute GPU tests with the desktop monitor off.
+Eight native Wayland WSI modes and eight ordinary Xwayland modes each pass 120
+frames/zero diagnostics. Six replay captures verify visibility counts 0/1/2 and
+linear mip-tail selection: 501 pixels and 243 diagnostic records. The Xwayland
+recovery smoke times out after frame 80 and remains explicitly unqualified; native
+Wayland recovery passes. No Rust/shader or desktop power/configuration changes.
+[Evidence](validation/HEADLESS_DISPLAY.md).
+
 ## M4 native filtered mip cooking — independently executed (2026-10-14)
 
 Pinned offline KTX now generates bounded power-of-two opaque sRGB box-filtered

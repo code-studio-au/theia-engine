@@ -883,3 +883,12 @@ chain with the existing pinned native KTX tool. It takes the same source/build/
 archive/output arguments as the authored mip cooker, but schema-1 source contains
 only base width/height/rgba. The committed 8x8 checker exercises correct sRGB averaging.
 [Commands/evidence](validation/M4_FILTERED_MIP_COOKING.md).
+
+## Owned headless display qualification
+
+For GPU qualification without an active desktop monitor, use
+`tools/qualify_headless_display.py` with extracted Weston and private
+`libxcb-composite0` dependencies. Native Wayland provides WSI validation; owned
+Xwayland provides ordinary presentation and RenderDoc replay. Full Xwayland WSI
+recovery is explicitly unqualified. No system installation, seat or power settings
+change. [Setup/commands/evidence](validation/HEADLESS_DISPLAY.md).
