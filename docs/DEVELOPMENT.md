@@ -892,3 +892,8 @@ For GPU qualification without an active desktop monitor, use
 Xwayland provides ordinary presentation and RenderDoc replay. Full Xwayland WSI
 recovery is explicitly unqualified. No system installation, seat or power settings
 change. [Setup/commands/evidence](validation/HEADLESS_DISPLAY.md).
+
+Both fixed/automatic mip qualifiers accept `--headless` with optional
+`--headless-dri-prime`. Their shared owned context uses Wayland for validated
+standalone commands and Xwayland for RenderDoc replay, without falling back to
+the desktop display. [Commands/evidence](validation/HEADLESS_ASSET_QUALIFIERS.md).

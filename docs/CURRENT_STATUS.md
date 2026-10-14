@@ -4,6 +4,15 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-14.
 
+## Headless asset qualifier integration — independently executed (2026-10-14)
+
+Fixed and automatic mip qualifiers now own private display environments: actual
+Wayland validation/budget/cleanup and Xwayland replay stay distinct. Linear tail-5
+and native generated fixed views pass six captures/504 pixels, all-level/probe
+checks and zero-diagnostic allocation boundaries. Injected caller failure removes
+the private runtime/server. No Rust/shader changes; Xwayland full recovery remains
+open. [Evidence](validation/HEADLESS_ASSET_QUALIFIERS.md).
+
 ## Headless display qualification — independently executed (2026-10-14)
 
 Owned Weston/GL and Xwayland now execute GPU tests with the desktop monitor off.

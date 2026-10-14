@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Qualify automatic GPU mip/gradient probes, sampling, WSI and cleanup."""
 import argparse
+from contextlib import ExitStack
+from headless_display import owned_display
 import json
 import os
 from pathlib import Path
@@ -18,11 +20,17 @@ def main():
     parser.add_argument('--shader-dir', type=Path, default=Path('build/shaders'))
     parser.add_argument('--linear-filter', action='store_true', help='Qualify opt-in bilinear sampling against the CPU oracle')
     parser.add_argument('--tail-budget',type=int,help='Dense texel budget for a protected resident mip suffix')
+    parser.add_argument('--headless',action='store_true',help='Owned headless Wayland validation and Xwayland replay')
+    parser.add_argument('--headless-dri-prime',help='Optional child-only compositor Mesa GPU selector')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     report = {'passed': False, 'views': []}
+    owned = ExitStack()
+    runtime_env = None
+    capture_env = None
 
     def execute(command, name, env=None, succeeds=True):
+        if env is None: env=runtime_env
         path = args.output / (name + '.log')
         with path.open('w') as log:
             result = subprocess.run(list(map(str, command)), stdout=log,
@@ -32,12 +40,17 @@ def main():
         return path.read_text(errors='replace')
 
     def validated(command, name, succeeds=True):
-        text = execute(command, name, succeeds=succeeds)
+        text = execute(command, name, env=runtime_env, succeeds=succeeds)
         if 'Validation totals (including teardown): 0 warnings, 0 errors' not in text:
             raise RuntimeError(name + ': missing zero-diagnostic teardown')
+        if args.headless and succeeds and 'Native surface created (Wayland)' not in text:
+            raise RuntimeError(name+': headless validation used the wrong backend')
         return text
 
     try:
+        if args.headless:
+            runtime_env,capture_env,info=owned.enter_context(owned_display(args.output/'headless-compositor',args.headless_dri_prime))
+            report['headless_display']=info
         scene = json.loads(args.reference.read_bytes())
         texture = json.loads(args.texture_cook.read_bytes())
         exe = Path('apps/theia-render-lab/target/debug/theia-render-lab')
@@ -54,7 +67,7 @@ def main():
             precision=int(match[1]);report['filter_precision_bits']=precision
         for view in range(3):
             destination = args.output / ('view-' + str(view))
-            env = {k: v for k, v in os.environ.items() if not k.startswith('THEIA_CAPTURE_')}
+            env = capture_env.copy() if capture_env is not None else {k: v for k, v in os.environ.items() if not k.startswith('THEIA_CAPTURE_')}
             env.update(THEIA_CAPTURE_OUTPUT=str(destination), THEIA_CAPTURE_ASSET=scene['path'],
                        THEIA_CAPTURE_MATERIAL_PAGE=scene['materials']['path'],
                        THEIA_CAPTURE_UV_PAGE=scene['uv']['path'], THEIA_CAPTURE_TEXTURE_PAGE=texture['path'],
@@ -117,6 +130,7 @@ def main():
         report['error'] = str(error)
         parser.exit(1, str(error) + '\n')
     finally:
+        owned.close()
         (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))
 

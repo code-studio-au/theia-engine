@@ -348,3 +348,9 @@ of desktop DPMS: native Wayland WSI and Xwayland visibility/mip-tail replay pass
 Xwayland recovery after the frame-80 injected presentation case remains open.
 Next reuse these separate environments in asset qualifiers before continuing
 asynchronous mip-tail refinement/publication.
+
+Texture qualifiers now reuse an owned headless context with explicit Wayland
+validation and Xwayland replay environments, including budget and failure cleanup.
+Next implement bounded asynchronous mip-tail refinement/publication while retaining
+a protected coarse image until the complete finer suffix is ready. Conservative
+retirement and independent physical coexistence budgets remain necessary.
