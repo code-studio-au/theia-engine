@@ -1,6 +1,6 @@
 # THEIA — CHARACTER ARCS AND MILESTONES
 
-**Status:** Oth'varen's overarching modern character arc is **creator-approved and locked (14 October 2026)**. Thes'var's full arc is also **creator-approved and locked**. The other four Conclave founder arcs below remain **detailed proposals**, not locked canon. Their ancient histories, original roles, names, titles, transformation and loyalties remain established canon. Milestone placement, new encounters and character decisions require later approval.
+**Status:** Oth'varen's overarching modern character arc is **creator-approved and locked (14 October 2026)**. Thes'var's full arc is also **creator-approved and locked**. The other three Conclave founder arcs below remain **detailed proposals**, not locked canon. Their ancient histories, original roles, names, titles, transformation and loyalties remain established canon. Milestone placement, new encounters and character decisions require later approval.
 
 **Sources:** [Interwoven Chronicle](THEIA_INTERWOVEN_CHRONICLE.md) and [Modern Story and Revelation Timeline](THEIA_MODERN_STORY_REVELATION_TIMELINE.md). This is a player-facing development plan, not a replacement for the historical narrative.
 
@@ -113,21 +113,56 @@ A late operation may centre on a partially activated Major Anchor. Thes'var alte
 
 **Character-defining principle:** Thes'var is correct about the extraordinary technical significance of his achievements and catastrophically wrong about their purpose. He can recognise the validity of inversion yet reject it because it would turn his life's work against Nhal.
 
-### Su'vareth, the Veiled Hand — the architect of distrust
+### Su'vareth, the Veiled Hand — the web of betrayal
 
-**Historical foundation:** Controlled restricted records and external relationships; later cultivated hidden networks beyond the Shroud. Her agents orchestrated the Shattered Delegation before Nhal's voice returned.
+**Status: creator-approved and locked (14 October 2026).** The overarching character arc and eight milestones are approved; specific missions, the first Guardian betrayal, evidence recovered from the Shattered Delegation and her ultimate fate remain open.
 
-**Core conflict:** Her success depends on institutions mistrusting one another. The discovery that Covenant and Dominion have both been manipulated threatens her strongest protection: each alliance's certainty that the other is responsible.
+**Core movement:** From a trusted Kel'vari research coordinator responsible for records, external relationships and institutional confidence to the architect of a covert network embedded across hostile civilizations. Her greatest talent is not inventing obvious lies, but arranging authentic information so that people reach false conclusions.
 
-**Proposed milestones:**
-1. Early missions expose missing artifacts, forged credentials and suspicious shipments without identifying a single organisation.
-2. Players discover linked intermediaries operating in both alliances, each unaware of the full network.
-3. Contradictions in Shattered Delegation evidence implicate deliberate sabotage; personal grief among alliance leaders complicates disclosure.
-4. A Guardian cell is exposed through information that only a trusted insider should have possessed.
-5. The Veiled Hand's identity and methods become known, but public proof remains difficult.
-6. She responds to threatened exposure by sacrificing cells, planting new evidence or turning investigators against each other. **The precise operation and consequences remain open.**
+#### Before the First Anchor
 
-**Player-facing role:** The antagonist whose actions make truth politically dangerous. She should remain effective without possessing omniscience.
+Su'vareth managed restricted records, coordinated research and negotiated with the scholarly assemblies and federal authorities. She understood how evidence was assessed, how institutional cooperation sustained ambitious projects and how research could be delayed or approved. Her original competence made the First Anchor's extraordinary undertaking possible.
+
+Nhal exploited her belief that great discoveries required discretion. She began withholding minor discrepancies to avoid scrutiny, then restricted access to contradictory results and finally manipulated oversight processes themselves. By the time Oth'varen raised objections, authentic successes had been selected and presented in ways that made his concerns seem less credible. Her betrayal mattered because she understood precisely which safeguards she was undermining.
+
+#### Divine War and Age of Silence
+
+After the rupture, Nhal's whispers helped guide willing followers. Su'vareth mixed genuine evidence with forged accusations to deepen the gods' existing distrust, especially around Ascendant's concealed research. She cultivated intermediaries among the older races; some knowingly served the Unmade, while others believed they were protecting their own institutions.
+
+The Binding silenced Nhal but did not destroy her contacts. Su'vareth made the Unmade's operations increasingly compartmentalised: an agent could move an artifact without knowing its destination, a scholar could share research without knowing its purpose, and an officer could pursue a covert objective believing it served an alliance's security. Her strength is **access, influence and exploitation of opportunity**, not control over every government or universal knowledge.
+
+#### The Shattered Delegation
+
+Su'vareth's agents orchestrated the attack before Nhal's renewed communication. She recognised that peace would remove the wartime secrecy that concealed missing supplies, forbidden research and covert operations. The death of someone cherished by the orc leader and the human ruler's most trusted adviser transformed an already fragile political effort into personal grief. She arranged evidence so that both alliances blamed the other, turning genuine suffering into entrenched certainty. The attack was a major achievement of her own judgement during the Age of Silence.
+
+#### Modern personality
+
+Patient, perceptive, socially adaptable, pragmatic, intellectually proud and emotionally controlled. She is interested in people and remembers what they value. Her corruption has not removed her understanding of suffering; it has removed her reluctance to exploit it. She should be formidable without omniscience and capable of misjudging loyalty, courage or cooperation.
+
+#### Relationships
+
+- **Vaer'uun, the First Voice:** She respects his formal authority while understanding the vulnerabilities of doctrine and controlling much of the information reaching him.
+- **Thes'var, the Architect:** He needs her resources, concealment and artifacts; she needs his technology. Their dependence is productive but uneasy.
+- **Oma'vira, the Harbinger:** Inspiration and devotion versus leverage and obligation; their methods sometimes reinforce and sometimes undermine one another.
+- **Khor'vun, the Warden:** She respects his discipline but finds direct protection limiting. He distrusts sacrifices of loyal followers for uncertain advantage.
+- **Oth'varen:** She understands his commitment to secrecy and can use his protective restrictions to isolate Guardian cells and weaken their trust.
+
+#### Eight modern milestones
+
+1. **The Invisible Hand — opening.** Players encounter forged documents, missing supplies and conflicting testimony, initially attributed to ordinary corruption, criminal activity or enemy sabotage.
+2. **The Pattern Beneath the Lies — early investigation.** Repeated methods of concealment suggest linked intermediaries across institutions, without identifying a single mastermind.
+3. **The First Betrayal — Guardian contact.** A trusted source sends investigators into danger, revealing that legitimate relationships can be exploited by the Unmade.
+4. **The Shattered Truth — political investigation.** Players recover evidence that links the Shattered Delegation to a network active within both alliances. Accepted history is challenged, but the leaders' grief and distrust do not simply disappear.
+5. **The Veiled Hand Revealed — major revelation.** Ancient records and modern evidence identify Su'vareth as both a founder who concealed the First Anchor's alterations and a centuries-long manipulator of institutions.
+6. **The Price of Exposure — Conclave confrontation.** She threatens Guardian cells and vulnerable allies unless investigators abandon an operation. Players and Oth'varen confront the costs of secrecy and selective disclosure.
+7. **The Broken Network — major climax.** Players dismantle part of her covert infrastructure and interrupt resources required for a Major Anchor. She sacrifices compromised operations to protect the wider network.
+8. **The Enemy Who Remembers — later campaigns.** She adapts to the Guardians' increasing openness and remains dangerous because she understands the relationships and institutional weaknesses of her opponents.
+
+#### Defining confrontation
+
+Su'vareth arranges evidence so that exposing her network without careful verification would also implicate innocent people and Guardian agents. Oth'varen initially favours withholding it until secured. Players must authenticate records, protect witnesses and distinguish genuine collaborators from manipulated intermediaries. They defeat her operation by making truth verifiable, not by becoming better deceivers.
+
+**Character-defining principle:** Her greatest defeat is not simply the loss of agents or a stronghold, but the restoration of trust between people she has spent centuries turning against one another. She should survive the initial exposure of her networks; exact later outcomes remain open.
 
 ### Oma'vira, the Harbinger — devotion made into certainty
 
