@@ -316,3 +316,9 @@ M4 CPU bilinear-repeat sampling now qualifies decode-before-interpolation, perio
 edges and native cooked-chain samples. Next qualify opt-in GPU bilinear sampling
 while preserving integer automatic mip selection and nearest paths. Trilinear/
 anisotropic quality and tiled/partial residency remain separate gates.
+
+M4 opt-in GPU bilinear sampling now qualifies against the CPU oracle with varied
+texels at base/coarser mips, numeric fallback and preserved nearest paths. Broader
+filtering quality and tiled/partial residency remain open. Next isolate a bounded
+coarse-resident mip-tail selection/admission contract before GPU fallback publication;
+full virtual texture pages/feedback and asynchronous allocation reuse stay later.

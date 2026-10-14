@@ -4,6 +4,18 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-14.
 
+## M4 GPU bilinear sampling — independently executed (2026-10-14)
+
+Opt-in linear filtering within explicit automatic integer mips now qualifies
+checkerboard/alternating texels, mip-zero numeric fallback, both shader interfaces,
+all-level GPU bytes, gradients and colour/depth references. Twelve captures pass;
+exact/one-byte-short image budgets and missing-shader cleanup pass zero diagnostics.
+Seven nested-Wayland modes pass. Assets/renderer 54/23 tests, producer eight tests,
+formatting/Clippy, 69 existing SPIR-V modules and Windows GNU 11-package cross-build/
+Clippy with 145 Wine CPU tests pass. Production filtering quality, trilinear/
+anisotropy, tiled residency and native Windows GPU remain open.
+[Evidence](validation/M4_GPU_LINEAR_FILTER.md).
+
 ## M4 CPU bilinear sampling reference — independently executed (2026-10-14)
 
 A bounded ideal bilinear-repeat oracle decodes sRGB before interpolation and

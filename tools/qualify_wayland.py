@@ -13,7 +13,9 @@ import tempfile
 import time
 
 
-def qualify(weston_root, output, network=False, capture=False, pixels=False, capacity_cook=None, lod_pair=None, mip_case=None, auto_mip_case=None):
+def qualify(weston_root, output, network=False, capture=False, pixels=False, capacity_cook=None, lod_pair=None, mip_case=None, auto_mip_case=None, linear_filter=False):
+    if linear_filter and not auto_mip_case:
+        raise RuntimeError('Linear sampling requires automatic mip fixture')
     if os.name != 'posix' or not os.environ.get('DISPLAY'):
         raise RuntimeError('Nested qualification requires Linux/X11 DISPLAY')
     weston_root, output = weston_root.resolve(), output.resolve()
@@ -67,7 +69,7 @@ def qualify(weston_root, output, network=False, capture=False, pixels=False, cap
                     reference = json.loads(auto_mip_case[0].read_bytes())
                     texture = json.loads(auto_mip_case[1].read_bytes())
                     modes += [('texture-auto-mips', ['--asset', reference['path'], '--materials', reference['materials']['path'],
-                        '--uv-test', reference['uv']['path'], '--texture-auto-mips', texture['path']])]
+                        '--uv-test', reference['uv']['path'], '--texture-auto-mips', texture['path']] + (['--texture-linear-filter'] if linear_filter else []))]
                 for name, mode in modes:
                     path = output/(name+'.log')
                     with path.open('w') as client_log:
@@ -180,7 +182,7 @@ def qualify(weston_root, output, network=False, capture=False, pixels=False, cap
                     'native_surface':'Wayland','standalone_modes':len(modes),'frames_per_mode':120,
                     'lod_full_trajectory_frames':180 if lod_pair else 0,
                     'texture_mip_views':mip_views if mip_case else [],
-                    'automatic_mips':bool(auto_mip_case),
+                    'automatic_mips':bool(auto_mip_case), 'linear_filter':linear_filter,
                     'network_pair':network,'compositor_pixels':pixels,'capture_replay':capture,'programmatic_minimize_restore':False,
                     'texture_capacity':capacity_report,
                     'validation':'zero warnings/errors in checked standalone runs'},indent=2)+'\n')
@@ -205,5 +207,6 @@ if __name__ == '__main__':
     parser.add_argument('--lod-pair', nargs=2, type=Path, metavar=('FINE', 'COARSE'), help='Optional resident LOD hysteresis qualification')
     parser.add_argument('--mip-case', nargs=2, type=Path, metavar=('REFERENCE', 'COOK'), help='Optional fixed texture mip-view qualification')
     parser.add_argument('--auto-mip-case', nargs=2, type=Path, metavar=('REFERENCE', 'COOK'), help='Optional automatic mip/gradient qualification')
+    parser.add_argument('--linear-filter',action='store_true',help='Bilinear sampling for the optional automatic mip fixture')
     args = parser.parse_args()
-    qualify(args.weston_root,args.output,args.network,args.capture,args.pixels,args.capacity_cook,args.lod_pair,args.mip_case,args.auto_mip_case)
+    qualify(args.weston_root,args.output,args.network,args.capture,args.pixels,args.capacity_cook,args.lod_pair,args.mip_case,args.auto_mip_case,args.linear_filter)

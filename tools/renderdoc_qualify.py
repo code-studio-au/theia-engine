@@ -55,6 +55,9 @@ def qualify(report):
     authored = os.environ.get('THEIA_CAPTURE_MATERIAL_PAGE')
     texture_page = os.environ.get('THEIA_CAPTURE_TEXTURE_PAGE')
     texture_auto_mips = os.environ.get('THEIA_CAPTURE_TEXTURE_AUTO_MIPS')=='1'
+    texture_linear_filter = os.environ.get('THEIA_CAPTURE_TEXTURE_LINEAR_FILTER')=='1'
+    if texture_linear_filter and not texture_auto_mips:
+        raise RuntimeError('Linear filter capture requires automatic mip mode')
     texture_mip_level = os.environ.get('THEIA_CAPTURE_TEXTURE_MIP_LEVEL')
     if texture_mip_level is not None:
         texture_mip_level=int(texture_mip_level)
@@ -100,6 +103,7 @@ def qualify(report):
             texture_option = '--texture-table' if texture_table else '--texture-auto-mips' if texture_auto_mips else '--texture-mip-test' if texture_mip_level is not None else '--texture-test'
             arguments += f' --materials {quoted_material} {texture_option} {quoted_texture}'
             if texture_mip_level is not None: arguments+=f' {texture_mip_level}'
+            if texture_linear_filter: arguments+=' --texture-linear-filter'
     elif authored:
         if cell_path: raise RuntimeError('Authored material capture requires a fixed geometry page')
         authored = str(Path(authored).resolve())
@@ -359,7 +363,7 @@ def qualify(report):
                 report['lod_framebuffer_verified']=False
                 report['lod_guard_only']=True
             elif camera:
-                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material, authored, uv_page, texture_page, texture_table, texture_mip_level, texture_auto_mips)
+                verify_camera(controller, executable, root, present.copyDestination, asset_path, scenario, report, cull, material, authored, uv_page, texture_page, texture_table, texture_mip_level, texture_auto_mips, texture_linear_filter)
             else:
                 verify_asset(controller, present.copyDestination, source, count, report)
         save = rd.TextureSave()
@@ -482,7 +486,7 @@ def verify_asset(controller, color_id, source, count, report):
     report.update(asset_surface_samples=samples, asset_surface_verified=True, selected_triangles=len(geometry))
 
 
-def verify_camera(controller, executable, root, color_id, asset_path, scenario, report, cull=False, material=False, authored=None, uv_page=None, texture_page=None, texture_table=None, texture_mip_level=None, texture_auto_mips=False):
+def verify_camera(controller, executable, root, color_id, asset_path, scenario, report, cull=False, material=False, authored=None, uv_page=None, texture_page=None, texture_table=None, texture_mip_level=None, texture_auto_mips=False, texture_linear_filter=False):
     textures = controller.GetTextures()
     color = next(texture for texture in textures if texture.resourceId == color_id)
     depths = [texture for texture in textures if texture.format.compType == rd.CompType.Depth
@@ -574,9 +578,14 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
         if texture_mip_level is not None:
             reference=[str(executable),'--texture-mip-reference',asset_path,authored,uv_page,texture_page,str(texture_mip_level)]
         if texture_auto_mips:
-            reference=[str(executable),'--texture-auto-reference',asset_path,authored,uv_page,texture_page]
+            reference=[str(executable),'--texture-linear-reference' if texture_linear_filter else '--texture-auto-reference',asset_path,authored,uv_page,texture_page]
         expected = json.loads(subprocess.check_output(reference + [
                               str(pixel[0]), str(pixel[1]), str(color.width), str(color.height), str(scenario)], cwd=root))
+        if texture_linear_filter and expected['covered']:
+            nearest=json.loads(subprocess.check_output([str(executable),'--texture-auto-reference',asset_path,authored,uv_page,texture_page,
+                str(pixel[0]),str(pixel[1]),str(color.width),str(color.height),str(scenario)],cwd=root))
+            if any(abs(srgb(a)-srgb(b))>4 for a,b in zip(nearest['color'],expected['color'])):
+                report['linear_distinguishable_pixels']=report.get('linear_distinguishable_pixels',0)+1
         if texture_auto_mips and index<81:
             offset=index*48
             dxdy=struct.unpack_from('<4f',probe_data,offset);uv=struct.unpack_from('<2f',probe_data,offset+16)
@@ -623,6 +632,7 @@ def verify_camera(controller, executable, root, color_id, asset_path, scenario, 
     if uv_page: report['uv_verified'] = True
     if texture_page: report['texture_sampling_verified'] = True
     if texture_auto_mips: report['texture_automatic_mips_verified']=True
+    if texture_linear_filter: report['texture_linear_filter_verified']=True
     if texture_table: report['texture_table_sampling_verified'] = True
 
 report = {'renderdoc': rd.GetVersionString(), 'validation_enabled_in_capture': False}

@@ -791,3 +791,13 @@ four-tap weights and RGB decode before interpolation, top-left normalized
 coordinates and half-texel centres. Inputs/alpha/ranges are bounded and checked.
 This readonly CPU oracle does not generate mips or change renderer sampling.
 [Qualification](validation/M4_LINEAR_TEXTURE_REFERENCE.md).
+
+### Opt-in GPU within-mip linear sampling
+
+`--texture-linear-filter` requires automatic-mip mode and queried RGBA8_SRGB
+linear-sampling support. Min/mag filters become LINEAR; mip choice remains the
+existing explicit integer policy with nearest mipmap mode. Default/fixed/table
+paths stay nearest. `--texture-linear-reference` uses the CPU bilinear oracle
+before linear factors. Patterned GPU replay and budget/cleanup checks qualify
+this bounded path; no trilinear/mip-generation/production-quality claim.
+[Evidence](validation/M4_GPU_LINEAR_FILTER.md).

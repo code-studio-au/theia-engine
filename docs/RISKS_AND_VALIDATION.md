@@ -79,3 +79,9 @@ fragment-storage probe is optional lab instrumentation with queried capabilities
 not an engine baseline requirement. Arbitrary clipping/degeneracy and cross-vendor
 numeric behavior, filtered quality, tiled/partial residency, full-chain replacement
 and performance remain unqualified. [Evidence](validation/M4_GPU_AUTOMATIC_MIPS.md).
+
+Within-mip bilinear sampling now has varied-texel RADV replay proof against the ideal
+CPU model. The test retains two-byte encoded-colour tolerance; it does not prove
+cross-vendor weight quantization or production filtering quality. Explicit integer
+mip selection, authored levels and unsupported-gradient mip-zero fallback remain
+prototype constraints. [Evidence](validation/M4_GPU_LINEAR_FILTER.md).

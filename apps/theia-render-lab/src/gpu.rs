@@ -252,7 +252,7 @@ impl Context {
                 options.render_mode(),
                 RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
             ),
-            options.texture_auto_mips,
+            (options.texture_auto_mips, options.texture_linear_filter),
         )?;
         // SAFETY: Features were queried on the selected device; all queue indices support the intended
         // operations. Create-info backing storage remains live and handles immediately gain RAII ownership.
@@ -339,8 +339,9 @@ impl Context {
         visibility: bool,
         asset: bool,
         cull: bool,
-        footprint: bool,
+        texture_profile: (bool, bool),
     ) -> Result<()> {
+        let (footprint, linear_filter) = texture_profile;
         let instance = self.instance.as_ref().unwrap();
         let surface = self.surface_loader.as_ref().unwrap();
         let mut candidates = Vec::new();
@@ -401,6 +402,17 @@ impl Context {
                     CStr::from_ptr(driver.driver_info.as_ptr()).to_string_lossy()
                 );
                 let checks = [
+                    (
+                        "optional sRGB linear sampling",
+                        !linear_filter
+                            || instance
+                                .get_physical_device_format_properties(
+                                    physical,
+                                    vk::Format::R8G8B8A8_SRGB,
+                                )
+                                .optimal_tiling_features
+                                .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR),
+                    ),
                     (
                         "optional footprint probe profile",
                         !footprint
@@ -1200,6 +1212,7 @@ impl Renderer {
                         renderer.ctx.graphics_family,
                         renderer.ctx.graphics,
                         budget,
+                        options.texture_linear_filter,
                     )?
                 } else if let Some(chain) = &mips {
                     crate::texture::ResidentTexture::upload_mips(

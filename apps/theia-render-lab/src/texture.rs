@@ -156,6 +156,7 @@ pub struct Upload {
     texel_bytes: usize,
     mip_levels: u32,
     view_level: Option<u32>,
+    linear_filter: bool,
 }
 impl Upload {
     /// Submit one owned transfer without waiting for its dedicated fence.
@@ -266,6 +267,7 @@ impl Upload {
             texel_bytes,
             mip_levels: levels.len() as u32,
             view_level,
+            linear_filter: false,
         };
         let image = pending.image.as_ref().unwrap();
         // SAFETY: Mapping/copy sizes are bounded. Pending owns submitted commands,
@@ -383,8 +385,16 @@ impl Upload {
         resident.sampler = unsafe {
             device.create_sampler(
                 &vk::SamplerCreateInfo::default()
-                    .mag_filter(vk::Filter::NEAREST)
-                    .min_filter(vk::Filter::NEAREST)
+                    .mag_filter(if self.linear_filter {
+                        vk::Filter::LINEAR
+                    } else {
+                        vk::Filter::NEAREST
+                    })
+                    .min_filter(if self.linear_filter {
+                        vk::Filter::LINEAR
+                    } else {
+                        vk::Filter::NEAREST
+                    })
                     .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
                     .address_mode_u(vk::SamplerAddressMode::REPEAT)
                     .address_mode_v(vk::SamplerAddressMode::REPEAT)
@@ -418,6 +428,14 @@ impl Upload {
                 "Resident mip chain ready: {} uploaded levels; complete view; GPU footprint selects mip",
                 self.mip_levels
             );
+            println!(
+                "Resident texture filter: {} within mip; nearest mip selection",
+                if self.linear_filter {
+                    "linear"
+                } else {
+                    "nearest"
+                }
+            );
         }
         Ok(resident)
     }
@@ -430,8 +448,12 @@ impl ResidentTexture {
         family: u32,
         queue: vk::Queue,
         budget: u64,
+        linear_filter: bool,
     ) -> Result<Self> {
-        Upload::begin_levels(device, memory, &texture.levels, None, family, queue, budget)?.finish()
+        let mut upload =
+            Upload::begin_levels(device, memory, &texture.levels, None, family, queue, budget)?;
+        upload.linear_filter = linear_filter;
+        upload.finish()
     }
     pub fn upload_mips(
         device: &ash::Device,

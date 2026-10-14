@@ -855,3 +855,11 @@ image-budget boundaries and missing-shader cleanup. The native wide-quad helper
 `tools/cook_texture_footprint_fixture.py` exercises unsupported-gradient fallback.
 Owned Wayland checks accept `--auto-mip-case <geometry-cook-report>
 <texture-cook-report>`. [Commands/evidence](validation/M4_GPU_AUTOMATIC_MIPS.md).
+
+Use `--texture-linear-filter` with `--texture-auto-mips` for opt-in bilinear repeat
+within the selected integer mip. `--texture-linear-reference` accepts the same
+arguments as the automatic reference. `tools/qualify_automatic_mips.py
+--linear-filter` requires visible samples distinguishable from nearest; use the
+committed checker source or `tools/cook_texture_filter_fixture.py` alternating
+profiles. Wayland's optional automatic fixture also accepts `--linear-filter`.
+[Commands/evidence](validation/M4_GPU_LINEAR_FILTER.md).
