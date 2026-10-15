@@ -397,3 +397,11 @@ Retained world/chunk readers prevent premature byte reuse. Four real quadrant
 bundles pass exact/short budgets and shared ownership checks. Camera demand and
 independent GPU chunk publication remain the next integration gates; the mixed
 benchmark still uses its single resident whole-world representation.
+
+
+The bounded CPU demand prerequisite now selects outdoor chunks from actual
+residency using horizontal bounds, load/retention bands, deterministic distance
+priority and slot deferral. The actual benchmark camera plus spatial excursions
+qualify it against real quadrant bundles and independent publication/byte models.
+Next connect protected fallback coverage and fence-gated independent GPU owners;
+the policy alone does not stream or change the displayed mixed benchmark.

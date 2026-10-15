@@ -36,3 +36,11 @@ Atomic add/replace/remove transactions preserve retained world/chunk snapshots.
 No camera scheduling, I/O, Vulkan upload or GPU publication is implied. Run
 `--example bundle_residency -- --world <bundle0> <bundle1> ...` for real-file
 exact/short-budget, shared ownership and retained-reader qualification.
+
+`world_demand` provides a stateless, bounded outdoor XY-distance demand oracle with
+load/retention bands and deterministic slot pressure. It returns planned IDs only;
+byte admission, fallback coverage, pending work and GPU retirement stay separate.
+The bundle example's `--world-route <load-radius> <retain-radius> <slots>
+<byte-budget> <xy-route.txt> <bundle> ...` exercises CPU publication on a bounded
+route. `tools/qualify_world_demand.py` compares it with an independent model using
+the benchmark camera and checked quadrant fixtures. No GPU renderer is changed.

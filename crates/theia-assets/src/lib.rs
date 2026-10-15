@@ -14,6 +14,7 @@ pub mod texture_mips;
 pub mod texture_residency;
 pub mod texture_table;
 pub mod uv;
+pub mod world_demand;
 pub const HEADER_BYTES: usize = 76;
 pub const DEFAULT_BUDGET: usize = 64 * 1024 * 1024;
 #[derive(Debug)]

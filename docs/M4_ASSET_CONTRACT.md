@@ -132,6 +132,33 @@ completion inference. The mixed benchmark still renders its single resident
 whole-world bundle. Next connect bounded spatial demand and fence-gated independent
 GPU chunk publication. [Qualification](validation/M4_WORLD_BUNDLE_RESIDENCY.md).
 
+### Bounded outdoor chunk-distance demand oracle
+
+`world_demand::Catalog` admits 1..4096 unique chunk IDs with finite inclusive XY
+bounds enclosing their full geometry. `plan(eye_xy, actual_resident_ids, policy)`
+selects by horizontal point-to-rectangle distance. Absent chunks enter at the load
+radius; actual residents remain eligible through a larger/equal retention radius.
+Both boundaries are inclusive. Input bounds may overlap. This outdoor 2.5D
+prototype ignores altitude and view direction; it is not frustum/occlusion culling
+or a cave/interior demand policy. Finite f32 inputs widen before arithmetic to
+avoid distance overflow.
+
+Eligible chunks sort nearest first, then ascending ID; `slots` (1..4096) limits
+the desired set. Slot pressure may evict an otherwise retention-eligible chunk;
+the retention band does not pin owners. Plans expose priority-ordered desired,
+load and deferred IDs plus ascending removals. Unknown/duplicate resident IDs,
+invalid bounds, nonfinite queries/radii, negative load radius, retention below
+load radius and unsupported capacity fail explicitly. Planning is stateless:
+failed requests must not be reported as actual residents on the next query.
+
+The policy is an experimental CPU oracle and I/O prerequisite, not an approved
+production streaming policy. It reserves no bytes, starts no requests, evicts
+nothing and mutates no publication. A consumer must separately track pending work,
+protect fallback coverage, reserve coexistence capacity and prove upload/frame
+completion before acting. The offline complete-bundle example executes only CPU
+transactions against a sufficient shared byte budget.
+[Evidence](validation/M4_WORLD_DEMAND.md).
+
 ### Indexed bundle and multiple authored images
 
 THEIABND v2 retains the 176-byte four-root layout, replacing the final KTX2

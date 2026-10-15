@@ -4,6 +4,7 @@ use theia_assets::{
     bundle::{BYTES, Bundle, BundleProfile},
     bundle_residency::{Residency, WorldResidency},
     content_id,
+    world_demand::{Catalog, ChunkBounds, Policy},
 };
 
 struct Input {
@@ -98,6 +99,9 @@ impl Input {
 }
 fn main() -> Result<(), Box<dyn Error>> {
     let paths: Vec<_> = std::env::args().skip(1).collect();
+    if paths.first().is_some_and(|v| v == "--world-route") {
+        return qualify_route(&paths[1..]);
+    }
     if paths.first().is_some_and(|v| v == "--world") {
         return qualify_world(&paths[1..]);
     }
@@ -237,5 +241,95 @@ fn qualify_world(paths: &[String]) -> Result<(), Box<dyn Error>> {
         separate - total,
         union.len()
     );
+    Ok(())
+}
+
+fn qualify_route(args: &[String]) -> Result<(), Box<dyn Error>> {
+    if args.len() < 6 || args.len() > 5 + theia_assets::bundle_residency::MAX_WORLD_CHUNKS {
+        return Err("--world-route needs <load-radius> <retain-radius> <slots> <byte-budget> <xy-route.txt> <bundle> ...".into());
+    }
+    let policy = Policy {
+        load_radius: args[0].parse()?,
+        retain_radius: args[1].parse()?,
+        slots: args[2].parse()?,
+    };
+    let mut store = WorldResidency::new(args[3].parse()?, policy.slots)?;
+    let inputs = args[5..]
+        .iter()
+        .map(|p| Input::load(Path::new(p)))
+        .collect::<Result<Vec<_>, _>>()?;
+    let chunks = inputs
+        .iter()
+        .enumerate()
+        .map(|(id, input)| {
+            let mesh =
+                theia_assets::Mesh::decode(&input.roots[0], None, theia_assets::DEFAULT_BUDGET)?;
+            let min = std::array::from_fn(|axis| {
+                mesh.positions
+                    .iter()
+                    .map(|p| p[axis])
+                    .fold(f32::INFINITY, f32::min)
+            });
+            let max = std::array::from_fn(|axis| {
+                mesh.positions
+                    .iter()
+                    .map(|p| p[axis])
+                    .fold(f32::NEG_INFINITY, f32::max)
+            });
+            Ok(ChunkBounds {
+                id: id as u64,
+                min,
+                max,
+            })
+        })
+        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    let catalog = Catalog::new(&chunks)?;
+    let route_bytes = read(Path::new(&args[4]), 1024 * 1024)?;
+    let route = std::str::from_utf8(&route_bytes)?;
+    let lines: Vec<_> = route.lines().collect();
+    if lines.is_empty() || lines.len() > 4096 {
+        return Err("route needs 1..4096 XY samples".into());
+    }
+    // Parse and validate the whole route before any CPU publication.
+    let points = lines
+        .iter()
+        .map(|line| {
+            let values: Vec<_> = line
+                .split_whitespace()
+                .map(str::parse::<f32>)
+                .collect::<Result<_, _>>()?;
+            let point: [f32; 2] = values
+                .try_into()
+                .map_err(|_| "route sample needs exactly XY")?;
+            catalog.plan(point, &[], policy)?;
+            Ok(point)
+        })
+        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    for (frame, point) in points.iter().enumerate() {
+        let resident = store.snapshot().chunk_ids().collect::<Vec<_>>();
+        let plan = catalog.plan(*point, &resident, policy)?;
+        let additions = plan
+            .loads
+            .iter()
+            .map(|id| {
+                inputs[*id as usize]
+                    .stage_world(&mut store)
+                    .map(|stage| (*id, stage))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if !additions.is_empty() || !plan.removals.is_empty() {
+            store.publish(additions, &plan.removals)?;
+        }
+        println!(
+            "{{\"frame\":{frame},\"desired\":{:?},\"loads\":{:?},\"removals\":{:?},\"deferred\":{:?},\"resident\":{:?},\"epoch\":{},\"live_bytes\":{}}}",
+            plan.desired,
+            plan.loads,
+            plan.removals,
+            plan.deferred,
+            store.snapshot().chunk_ids().collect::<Vec<_>>(),
+            store.snapshot().epoch(),
+            store.live_bytes()
+        );
+    }
     Ok(())
 }

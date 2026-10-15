@@ -4,6 +4,20 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 bounded CPU chunk-distance demand — locally qualified (2026-10-15)
+
+A stateless outdoor XY-distance oracle now prioritizes bounded chunk demand from
+actual residency, with separate load/retention radii and explicit slot deferral.
+It performs no I/O, eviction or GPU work. Four policies pass 686 samples each
+using the benchmark camera route plus boundary excursions and real quadrant
+bounds; every desired/load/remove/deferred set, CPU publication epoch and encoded
+byte charge matches an independent model. All 67 asset tests and denied-warning
+Clippy pass, including 2000 integer-lattice oracle queries and failed-request
+simulation. The mixed renderer remains one resident world bundle; protected
+fallback coverage and independent GPU chunk publication remain next.
+[Contract](M4_ASSET_CONTRACT.md#bounded-outdoor-chunk-distance-demand-oracle),
+[evidence](validation/M4_WORLD_DEMAND.md).
+
 ## M4 independent CPU world-bundle residency — locally qualified (2026-10-15)
 
 A separate bounded world owner now admits several complete bundles against one
