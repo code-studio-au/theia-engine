@@ -1,6 +1,6 @@
 # THEIA — CHARACTER ARCS AND MILESTONES
 
-**Status:** Oth'varen's overarching modern character arc is **creator-approved and locked (14 October 2026)**. Thes'var's full arc is also **creator-approved and locked**. The remaining two Conclave founder arcs below remain **detailed proposals**, not locked canon. Their ancient histories, original roles, names, titles, transformation and loyalties remain established canon. Milestone placement, new encounters and character decisions require later approval.
+**Status:** Oth'varen's overarching modern character arc is **creator-approved and locked (14 October 2026)**. Thes'var's full arc is also **creator-approved and locked**. Oth'varen, Thes'var, Su'vareth, Oma'vira and Khor'vun have approved overarching arcs. Vaer'uun, the First Voice, remains a **detailed proposal**, not yet locked canon. Their ancient histories, original roles, names, titles, transformation and loyalties remain established canon. Milestone placement, new encounters and character decisions require later approval.
 
 **Sources:** [Interwoven Chronicle](THEIA_INTERWOVEN_CHRONICLE.md) and [Modern Story and Revelation Timeline](THEIA_MODERN_STORY_REVELATION_TIMELINE.md). This is a player-facing development plan, not a replacement for the historical narrative.
 
@@ -213,21 +213,61 @@ A major encounter centres on a conditioning complex defended by willing soldiers
 
 **Character-defining principle:** Thes'var seeks to perfect magical structures; Oma'vira seeks to perfect consciousness by removing resistance. Her arc exposes the moral horror of that purpose without reducing all Unmade hostility to religious belief.
 
-### Khor'vun, the Warden — protection turned to imprisonment
+### Khor'vun, the Warden — the last defender
 
-**Historical foundation:** Led protective workings and containment for the First Anchor. He now defends its approaches, surviving Unmade strongholds and the network's vital installations.
+**Status: creator-approved and locked (15 October 2026).** The overarching character arc, military role and eight milestones are approved. Exact strongholds, encounters, dialogue and his ultimate fate remain open.
 
-**Core conflict:** He still defines himself as a protector, but the people and structures he protects perpetuate the threat that devastated his homeland.
+**Core movement:** The scholar once entrusted with safeguarding the First Anchor project has become the formidable commander who protects the organisation responsible for his homeland's destruction. His tragedy is that he still considers himself a protector while losing sight of what deserves protection.
 
-**Proposed milestones:**
-1. Players encounter unusually disciplined defensive systems guarding an otherwise unremarkable site.
-2. A captured stronghold reveals that its safeguards were designed by someone who understood how to protect scholars and civilians.
-3. Guardian records identify the same methods as Khor'vun's pre-rupture work.
-4. He prevents an operation that might damage the network, forcing players to separate defensive mechanisms from dangerous Anchor workings.
-5. A confrontation with Oth'varen reopens their dispute over loyalty, duty and abandonment.
-6. A major siege or containment operation tests whether his duty is to preserve the Conclave at any cost. **His ultimate fate remains open.**
+#### Before the rupture
 
-**Player-facing role:** A formidable defender whose tragedy lies in confusing loyalty to former colleagues with the protection of life.
+Khor'vun specialised in protective workings, containment and the stability of defensive magical structures. He assessed research risks, developed safeguards and coordinated those responsible for the First Anchor team's security. He valued reliability and believed the success of any great undertaking depended on protecting the people carrying it out.
+
+His relationship with Oth'varen was grounded in their complementary responsibilities: Oth'varen independently verified six-field stability, while Khor'vun built protections intended to contain the working's effects. Nhal exploited his sense of duty. As the five increasingly trusted the hidden intelligence, Khor'vun began treating scrutiny as a threat to the project. He accepted compromised safeguards and concealed weaknesses to prevent suspension. At activation, he refused Oth'varen's plea to stop.
+
+#### The catastrophe and the Age of Silence
+
+The rupture transformed Khor'vun, granting extraordinary longevity and resilience without invulnerability. During the Divine War he defended Unmade researchers, surviving records and locations associated with the First Anchor. He interpreted opposition to the work as interference that had prevented its successful completion.
+
+After The Binding severed Nhal's guidance, he gathered surviving followers into disciplined defensive forces. He fortified strongholds, secured research routes and developed layered defences for the Minor Resonators, Regional Anchors and eventual Major Anchors. Over generations, his military organisation operated both within and beyond the Shroud.
+
+His forces comprise willing soldiers, conditioned combatants, defensive specialists, corrupted creatures and constructs where appropriate. Their effectiveness comes from organisation, logistics, layered wards, controlled access, reserves and prepared withdrawal positions, not merely from magical power.
+
+#### Conditioning and military doctrine
+
+**Oma'vira, the Harbinger**, develops the conditioning techniques supporting many Unmade forces. Khor'vun recognises their utility but favours disciplined willing soldiers who can interpret intent and adapt to changing circumstances. Conditioned defenders can obey reliably within narrow parameters yet fail when conditions change; severely altered creatures may be powerful but unpredictable. His objections concern effectiveness and mission safety, **not the morality of coercion**.
+
+#### Modern personality
+
+Restrained, authoritative, observant, patient and ruthless when he judges a threat to his protected charges. He does not need to enjoy cruelty. His protective instincts are real but narrowly applied to the Conclave and its followers, while outsiders are treated as dangers to be contained or eliminated.
+
+#### Relationships
+
+- **Vaer'uun, the First Voice:** Respects formal authority but expects clear objectives and dislikes contradictory doctrinal orders.
+- **Thes'var, the Architect:** His closest operational ally; protects research and its supporting structures while questioning unnecessary technical risk.
+- **Su'vareth, the Veiled Hand:** Respects her intelligence but dislikes sacrificing loyal agents or withholding essential defensive information.
+- **Oma'vira, the Harbinger:** Values her conditioned forces where useful but distrusts their inability to adapt; their dispute concerns military reliability.
+- **Oth'varen:** Once a trusted colleague responsible for independent verification, now regarded as one who abandoned the team and betrayed its work.
+
+#### Eight modern milestones
+
+1. **The Unseen Defences — opening.** Players encounter unusually disciplined hostile forces defending ruins, supply routes and concealed research sites.
+2. **The Fortress Beneath the Ruins — early dungeon.** A hidden stronghold combines ancient Kel'vari safeguards with modern conditioning and military organisation.
+3. **The Warden's Doctrine — military investigation.** Recovered orders reveal a commander who prioritises research protection, personnel preservation and layered defence.
+4. **The Guardian Who Fell — historical revelation.** Oth'varen identifies Khor'vun's defensive methods and reveals his original role among the six scholars.
+5. **The Limits of Control — conditioning storyline.** Oma'vira's conditioned troops fail to adapt; Khor'vun intervenes with disciplined soldiers, revealing tension over imposed loyalty.
+6. **The Siege of the Anchor — major military campaign.** Players assault a fortified Regional or Major Anchor defended by troops, wards, constructs and fallback positions.
+7. **The Last Defence — major confrontation.** Oth'varen challenges Khor'vun's claim to have always protected his colleagues, confronting him with the lives endangered by that protection.
+8. **The Broken Shield — later campaign.** A major defeat forces Khor'vun to reassess his defensive doctrine without automatically changing allegiance; he remains a possible recurring antagonist.
+
+#### Defining confrontation and major encounter
+
+Oth'varen's challenge is that Khor'vun was entrusted with protecting people, not shielding ambition from consequences. Khor'vun believes Oth'varen abandoned their colleagues. Neither has forgotten their former trust.
+
+His major encounter should centre on a fortified Anchor complex. Players overcome layered defences, disable wards and reinforcements, and prevent the Warden from restoring compromised positions. He may redirect attacks through wards, isolate battlefield areas and reinforce structures, but remains killable and not divine. A victory need not end in his death; the exact outcome remains undecided.
+
+**Character-defining principle:** Khor'vun has become extraordinarily good at protecting something that should never have been allowed to continue.
+
 
 ---
 
