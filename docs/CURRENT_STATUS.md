@@ -4,6 +4,16 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 protected coarse GPU startup — locally qualified (2026-10-15)
+
+The isolated covered-world startup profile retains four coarse GPU owners while
+admitting fine chunks within remaining CPU/physical/image caps. Eighteen native
+cases pass with zero diagnostics; seven replays pass 1616 ray/colour probes,
+selected payloads and retained allocation inventory. Renderer 28 tests, Clippy
+and Windows GNU/Wine checks pass. Inactive bytes await a reactivation gate.
+This is synchronous fixed startup, with no live camera-driven selection.
+[Scope](validation/M4_PROTECTED_GPU_STARTUP.md).
+
 ## M4 protected CPU fallback coverage — locally qualified (2026-10-15)
 
 A bounded wrapper now owns complete coarse fallbacks and permits only fine-chunk

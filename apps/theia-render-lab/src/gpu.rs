@@ -1220,6 +1220,7 @@ impl Renderer {
                     options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
                     options.texture_budget.unwrap_or(4 * 1024 * 1024),
                 ),
+                options.world_covered,
             )?);
         } else if let Some(second) = &options.world_bundle_pair {
             // SAFETY: Context retains this selected physical device and instance.

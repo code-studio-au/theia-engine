@@ -177,3 +177,10 @@ explicit scalar component selection passes. Keep pixel oracles alongside validat
 and requalify compiler/driver combinations before changing that expression.
 Camera-driven publication, protected fallback and cross-vendor execution remain
 open. [Evidence](validation/M4_FOUR_RESIDENT_CHUNKS.md).
+
+Protected startup coverage keeps unselected coarse GPU owners, but live fallback
+reactivation has not yet been qualified. RenderDoc 1.46 exposes retained allocation
+metadata without saving initial contents for unused storage buffers. Current
+oracles check all live buffer/image inventory and selected payloads, with separate
+coarse-selected captures. Do not infer inactive-byte readback or post-retirement
+reuse from those checks. [Scope](validation/M4_PROTECTED_GPU_STARTUP.md).

@@ -1138,3 +1138,27 @@ retirement, descriptor construction and worker scheduling must precede any mirro
 GPU/CPU publication; the wrapper cannot infer them. The real-fixture qualifier
 models budget rejection and reservation cancellation without GPU work.
 [Evidence](validation/M4_PROTECTED_CPU_COVERAGE.md).
+
+## Protected coarse GPU startup profile
+
+`--world-covered-test <scene.json>` requires four fine and four edge-compatible
+coarse v2 fixture bundles. Bootstrap stages/uploads all four coarse graphs within
+shared CPU/physical/image caps and publishes coarse CPU IDs 4..7 at epoch 1.
+Fine IDs 0..3 are attempted in fixed order. Full transfer retirement precedes
+each successful fine CPU publication; capacity failure cancels partial work and
+keeps coarse selection. Other errors fail startup. Graphics generations are
+constructed after these synchronous admissions, with no earlier graphics readers.
+
+Selected work/geometry/material/UV/table/images occupy four dense draw slots;
+protected coarse sets displaced by fine selection retain all GPU resources as
+separate owners until teardown. Only selected images enter graphics descriptors.
+Frame-local identity tags still denote region slots, not persistent selected IDs.
+Retained physical accounting includes protected and selected graph allocations,
+with the prior exclusion of work/staging/targets/driver overhead.
+
+This profile qualifies startup protection and fixed selection. It performs no
+background I/O, camera demand, fine removal, retained-fallback reactivation or
+live GPU/CPU generation publication. All input graphs must be available/valid.
+Replay verifies all live allocation inventory and selected payloads; inactive
+storage initial contents are not preserved by the current replay tool.
+[Evidence and limits](validation/M4_PROTECTED_GPU_STARTUP.md).

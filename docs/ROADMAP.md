@@ -469,3 +469,9 @@ Five real-bundle routes qualify camera demand, reservations, tight/coarse-only
 capacity and retained coverage. Next mirror these owners/selections in fence-gated
 GPU generations, then connect runtime camera demand and the timed crowd route.
 [Evidence](validation/M4_PROTECTED_CPU_COVERAGE.md).
+
+The covered-world startup profile now keeps coarse GPU owners while attempting
+fine candidates within remaining caps. Successful complete transfers retire
+before fine CPU publication; short capacity keeps coarse drawing. This fixed
+startup slice precedes live fine removal/fallback reactivation, camera-driven
+requests and crowd-route integration. [Scope](validation/M4_PROTECTED_GPU_STARTUP.md).

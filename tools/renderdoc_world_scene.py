@@ -1,5 +1,7 @@
 """Replay oracle for four complete resident world chunks and buffer arrays."""
 import json
+import hashlib
+from collections import Counter
 import math
 import os
 from pathlib import Path
@@ -39,16 +41,28 @@ def qualify(report):
     out=Path(os.environ['THEIA_WORLD_SCENE_OUTPUT']).resolve();out.mkdir(parents=True,exist_ok=True)
     scene_path=Path(os.environ['THEIA_WORLD_SCENE'])
     scene=json.loads(scene_path.read_bytes());cooks=[e['cook'] for e in scene['quadrants']]
+    covered=os.environ.get('THEIA_WORLD_SCENE_COVERED')
+    selected=json.loads(covered) if covered else list(range(4))
+    if covered:
+        require(len(selected)==4 and all(v in (i,i+4) for i,v in enumerate(selected)), 'Invalid protected selection')
+        cooks=[scene['quadrants' if value<4 else 'fallbacks'][i]['cook'] for i,value in enumerate(selected)]
+        inventory_cooks=[entry['cook'] for entry in scene['fallbacks']]+[scene['quadrants'][i]['cook'] for i,value in enumerate(selected) if value<4]
+    else:inventory_cooks=cooks
     require(len(cooks)==4,'Needs four complete chunks')
     models=[decode(cook) for cook in cooks]
+    inventory_models=[decode(cook) for cook in inventory_cooks]
     pixel_tables=[material_pixels(cook,model[3]) for cook,model in zip(cooks,models)]
     factors=[material_factors(cook) for cook in cooks]
     view=int(os.environ.get('THEIA_WORLD_SCENE_VIEW','2'))
     exe=Path('apps/theia-render-lab/target/debug/theia-render-lab').resolve()
-    args=['--world-scene-test',str(scene_path),'--frames','90','--work-items',str(view),'--no-validation','--gpu','7900']
+    args=['--world-covered-test' if covered else '--world-scene-test',str(scene_path),'--frames','90','--work-items',str(view),'--no-validation','--gpu','7900']
+    if os.environ.get('THEIA_WORLD_SCENE_CAPS'):
+        cpu,gpu,images=json.loads(os.environ['THEIA_WORLD_SCENE_CAPS'])
+        args+=['--bundle-byte-budget',str(cpu),'--bundle-gpu-budget',str(gpu),'--texture-budget',str(images)]
     if os.environ.get('THEIA_WORLD_SCENE_SHADERS'):
         args+=['--shader-dir',os.environ['THEIA_WORLD_SCENE_SHADERS']]
     options=rd.CaptureOptions();options.apiValidation=False;options.debugOutputMute=False
+    options.refAllResources=bool(covered)
     capture=os.environ.get('THEIA_WORLD_SCENE_CAPTURE')
     if not capture:
         launched=rd.ExecuteAndInject(str(exe),str(Path.cwd()),shlex.join(args),[],str(out/'world'),options,False)
@@ -75,14 +89,23 @@ def qualify(report):
         textures=controller.GetTextures();buffers=controller.GetBuffers()
         color=next(t for t in textures if t.resourceId==present.copyDestination);width,height=color.width,color.height
         rows=json.loads(subprocess.check_output([str(exe),'--world-pair-reference',str(width),str(height),str(view)]))['rows']
+        if covered:
+            # refAllResources retains inactive allocation metadata, but RenderDoc
+            # 1.46 does not save unused buffer initial contents. Check the exact
+            # live inventory separately; payload/raster checks cover selected sets.
+            expected_buffers=Counter(len(blob) for model in inventory_models for blob in model[0])
+            expected_buffers[256]+=4
+            require(Counter(b.length for b in buffers)==expected_buffers,'Protected live buffer inventory differs')
         for model in models:
             for blob in model[0]:
                 require(any(bytes(controller.GetBufferData(b.resourceId,0,len(blob)))==blob for b in buffers if b.length==len(blob)),
-                        'World GPU root differs')
+                        'World GPU root differs: %s (%d bytes)'%(hashlib.sha256(blob).hexdigest(),len(blob)))
         expected_images=sorted(p for model in models for p in model[3])
         images=[t for t in textures if (t.width,t.height)==(64,64)]
-        require(len(images)==len(expected_images) and sorted(bytes(controller.GetTextureData(t.resourceId,rd.Subresource())) for t in images)==expected_images,
-                'World GPU texture payload differs')
+        raw_images=Counter(bytes(controller.GetTextureData(t.resourceId,rd.Subresource())) for t in images)
+        expected_count=sum(len(model[3]) for model in inventory_models)
+        require(len(images)==expected_count and not (Counter(expected_images)-raw_images),
+                'World selected GPU textures or retained image inventory differs')
         actual=[]
         for b in buffers:
             if b.length==256:
@@ -152,6 +175,8 @@ def qualify(report):
         save=rd.TextureSave();save.resourceId=color.resourceId;save.destType=rd.FileType.PNG
         success(controller.SaveTexture(save,str(out/'preview.png')))
         report.update(passed=True,capture=capture,view=view,pixels=populations,images=len(images),
+            protected_owners=bool(covered),selected_chunks=selected,root_buffers=len(inventory_models)*4,
+            retained_inventory_verified=bool(covered),payload_scope="selected_graphs",
             compactions_verified=True,identity_depth_bounds_verified=True,sampled_materials=sorted(materials),
             ray_samples=samples,occlusion_probes=occlusion,boundary_envelope_probes=boundaries)
     finally:
