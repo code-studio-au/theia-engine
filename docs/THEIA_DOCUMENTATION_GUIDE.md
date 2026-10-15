@@ -41,3 +41,17 @@ The question numbers were reused around Q297–317, so identify questions by sta
 The recovered decision file is a *summary*, not a complete verified answer register. The remaining high-effort task is to compare every original Q1–435 prompt with the **following user response and all later corrections**, record exact source pages and status, then reconcile each confirmed consequence into the World Bible and narrative. This must not be described as finished until the audit is actually performed.
 
 The story's long-form draft is deliberately separate from the authoritative decision ledger so it can become increasingly novel-like without erasing provenance.
+
+## Human launch campaign — Needs Review (15 October 2026)
+
+The creator authorised completing the human story and necessary connected racial material autonomously, with new work marked **Needs Review**. The following proposed packet is not a new canon lock:
+
+- [Complete Human Campaign](THEIA_HUMAN_CAMPAIGN.md) — five acts, levels 1–60, concluding the human launch narrative.
+- [Human Quest Register](THEIA_HUMAN_QUEST_REGISTER.md) — 92 principal quests, 24 optional local quests, dependencies and choices.
+- [Solo Story Climaxes](THEIA_HUMAN_STORY_DUNGEONS.md) — all five essential story encounters without required raids or PvP.
+- [Cast, Places and Services](THEIA_HUMAN_CAST_AND_PLACES.md) — recurring humans, new contacts, working geography and stable services.
+- [Connected Racial Stories](THEIA_HUMAN_CONNECTED_RACIAL_STORIES.md) — allied visits, Dominion counterpart motivations and 12 proposed native-side companion quests.
+- [Campaign Review Record](THEIA_HUMAN_CAMPAIGN_REVIEW.md) — source precedence, continuity checks, proposed decisions and implementation limits.
+
+Read the approved [Human Act I](THEIA_HUMAN_ACT_I_STORY.md) and [Heartlands framework](THEIA_HUMAN_HEARTLANDS_SETTLEMENT_REGISTER.md) alongside the packet. Latest dated creator locks in the [Modern Timeline](THEIA_MODERN_STORY_REVELATION_TIMELINE.md) establish the five-act bands and first Shroud expedition around level 40; these supersede older six-band and later-expansion proposals. New dialogue, locations, quest staging, Cassian's final sentence and inversion outcomes remain **Needs Review**, even where the draft provides a complete proposed outcome.
+
