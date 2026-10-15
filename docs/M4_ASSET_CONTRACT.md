@@ -1281,3 +1281,14 @@ with optional fresh eight-graph preparation/source/admission checks, default
 JSON/CSV/HTML exports. This is fixture orchestration, with unchanged graph
 schemas and runtime ownership/selection policy.
 [Launcher evidence](validation/M4_STREAMED_BENCHMARK_LAUNCHER.md).
+
+## CPU per-view selection over protected coverage
+
+`world_coverage::Snapshot::select_view` resolves an exact request set against its
+committed epoch. Coarse requests use protected coarse even when fine is present;
+fine requests use committed fine or mark `refinement_needed` on coarse fallback.
+Returned `ViewSnapshot` retains the complete source epoch. Requests are independent
+of residency mutation and output follows stable region order. The caller supplies
+qualified desired levels and owns view/history identity. GPU readiness, draw
+selection and camera-policy integration remain separate gates.
+[Evidence](validation/M4_CPU_VIEW_SELECTION.md).

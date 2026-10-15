@@ -542,3 +542,10 @@ Native legacy and streamed routes, tight repeated demand, export fidelity and
 failure cleanup pass. Next separate per-view geometry choice from fine residency;
 larger catalogs and virtualized geometry/textures remain M4 gates.
 [Launcher evidence](validation/M4_STREAMED_BENCHMARK_LAUNCHER.md).
+
+CPU protected snapshots now support independent per-view representation requests
+and explicit unavailable-fine reporting. Real-graph exhaustive residency/request
+checks preserve ownership and encoded charges. Next connect verified per-region
+error bounds and camera policy, then qualify GPU selection/grounding separately.
+The rendered benchmark still uses finest committed residency.
+[Evidence](validation/M4_CPU_VIEW_SELECTION.md).

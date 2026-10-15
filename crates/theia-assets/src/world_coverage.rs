@@ -7,7 +7,10 @@ use crate::{
     },
     world_demand::{Catalog, ChunkBounds, Plan, Policy},
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Region {
@@ -26,6 +29,41 @@ pub struct Selection {
 pub struct Snapshot {
     world: WorldSnapshot,
     selections: Vec<Selection>,
+    fallbacks: Arc<BTreeMap<ChunkId, ChunkId>>,
+}
+/// One caller-owned per-view LOD request. Derive `desired` from an independently
+/// qualified geometry-error policy; residency does not choose the desired level.
+#[derive(Clone, Copy, Debug)]
+pub struct ViewRequest {
+    pub region: ChunkId,
+    pub desired: crate::lod::Level,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ViewSelection {
+    pub region: ChunkId,
+    pub chunk: ChunkId,
+    pub desired: crate::lod::Level,
+    pub selected: crate::lod::Level,
+    /// Fine was requested but absent at this committed epoch. Coarse preserves
+    /// coverage, without claiming the requested geometric error is satisfied.
+    pub refinement_needed: bool,
+}
+/// A view's choices and their retained CPU epoch. All published owners in that
+/// epoch remain pinned, including representations not selected by this view.
+/// CPU ownership does not imply GPU transfer or graphics-reader readiness.
+#[derive(Clone)]
+pub struct ViewSnapshot {
+    source: Snapshot,
+    selections: Vec<ViewSelection>,
+}
+impl ViewSnapshot {
+    pub fn world(&self) -> &WorldSnapshot {
+        self.source.world()
+    }
+    /// Exactly one committed representation per region, in ascending region ID.
+    pub fn selections(&self) -> &[ViewSelection] {
+        &self.selections
+    }
 }
 impl Snapshot {
     pub fn world(&self) -> &WorldSnapshot {
@@ -35,6 +73,47 @@ impl Snapshot {
     pub fn selections(&self) -> &[Selection] {
         &self.selections
     }
+
+    /// Resolve an exact region request set against this immutable CPU epoch.
+    /// A coarse request selects protected coarse even when fine is resident.
+    /// Fine requests select committed fine or explicitly report fallback use.
+    /// Planning neither loads/evicts chunks nor changes publication/history.
+    pub fn select_view(&self, requests: &[ViewRequest]) -> Result<ViewSnapshot> {
+        if requests.len() != self.fallbacks.len() {
+            return Err(AssetError("incomplete view LOD region requests"));
+        }
+        let mut desired = BTreeMap::new();
+        for request in requests {
+            if !self.fallbacks.contains_key(&request.region)
+                || desired.insert(request.region, request.desired).is_some()
+            {
+                return Err(AssetError("unknown or duplicate view LOD region"));
+            }
+        }
+        let selections = self
+            .fallbacks
+            .iter()
+            .map(|(&region, &fallback)| {
+                let wanted = desired[&region];
+                let fine = wanted == crate::lod::Level::Fine && self.world.chunk(region).is_some();
+                ViewSelection {
+                    region,
+                    chunk: if fine { region } else { fallback },
+                    desired: wanted,
+                    selected: if fine {
+                        crate::lod::Level::Fine
+                    } else {
+                        crate::lod::Level::Coarse
+                    },
+                    refinement_needed: wanted == crate::lod::Level::Fine && !fine,
+                }
+            })
+            .collect();
+        Ok(ViewSnapshot {
+            source: self.clone(),
+            selections,
+        })
+    }
 }
 
 /// Encapsulates the general world store after complete fallback bootstrap.
@@ -43,7 +122,7 @@ impl Snapshot {
 /// Completeness means admitted CPU graphs, not GPU readiness or geometric cover.
 pub struct ProtectedWorld {
     world: WorldResidency,
-    fallbacks: BTreeMap<ChunkId, ChunkId>,
+    fallbacks: Arc<BTreeMap<ChunkId, ChunkId>>,
     demand: Catalog,
 }
 impl ProtectedWorld {
@@ -68,7 +147,7 @@ impl ProtectedWorld {
         let demand = Catalog::new(&regions.iter().map(|r| r.fine).collect::<Vec<_>>())?;
         Ok(Self {
             world,
-            fallbacks,
+            fallbacks: Arc::new(fallbacks),
             demand,
         })
     }
@@ -89,7 +168,11 @@ impl ProtectedWorld {
                 },
             })
             .collect();
-        Snapshot { world, selections }
+        Snapshot {
+            world,
+            selections,
+            fallbacks: self.fallbacks.clone(),
+        }
     }
     /// Load/retain bands apply only to actual committed fine chunks. Coarse
     /// owners do not consume the fine policy's slots and never enter removals.
@@ -367,5 +450,156 @@ mod tests {
                 );
             }
         }
+    }
+    fn view_requests(a: crate::lod::Level, b: crate::lod::Level) -> [ViewRequest; 2] {
+        // Reverse input order deliberately; output uses stable region order.
+        [
+            ViewRequest {
+                region: 2,
+                desired: b,
+            },
+            ViewRequest {
+                region: 1,
+                desired: a,
+            },
+        ]
+    }
+    #[test]
+    fn independent_views_select_coarse_while_fine_stays_resident() {
+        use crate::lod::Level::{Coarse, Fine};
+        let mut world = ProtectedWorld::new(boot(4), &regions()).unwrap();
+        let input = Input::new(71);
+        let pending = input.stage(&mut world);
+        let epoch = world.publish_fine(vec![(1, pending)], &[]).unwrap();
+        let bytes = world.live_bytes();
+        let near = epoch.select_view(&view_requests(Fine, Fine)).unwrap();
+        let far = epoch.select_view(&view_requests(Coarse, Coarse)).unwrap();
+        assert_eq!(
+            near.selections()
+                .iter()
+                .map(|s| s.chunk)
+                .collect::<Vec<_>>(),
+            [1, 20]
+        );
+        assert_eq!(
+            far.selections().iter().map(|s| s.chunk).collect::<Vec<_>>(),
+            [10, 20]
+        );
+        assert!(!near.selections()[0].refinement_needed);
+        assert!(near.selections()[1].refinement_needed);
+        assert!(
+            far.selections()
+                .iter()
+                .all(|s| !s.refinement_needed && s.selected == Coarse)
+        );
+        assert_eq!(near.world().epoch(), far.world().epoch());
+        assert_eq!(chosen(&epoch), [1, 20]);
+        assert_eq!(world.live_bytes(), bytes);
+        assert!(far.world().chunk(1).is_some());
+    }
+    #[test]
+    fn view_requests_reject_missing_duplicate_unknown_without_mutation() {
+        use crate::lod::Level::Fine;
+        let world = ProtectedWorld::new(boot(4), &regions()).unwrap();
+        let epoch = world.snapshot();
+        assert!(epoch.select_view(&[]).is_err());
+        assert!(epoch.select_view(&view_requests(Fine, Fine)[..1]).is_err());
+        let mut requests = view_requests(Fine, Fine);
+        requests[0].region = 1;
+        assert!(epoch.select_view(&requests).is_err());
+        requests[0].region = 99;
+        assert!(epoch.select_view(&requests).is_err());
+        requests[0].region = 10; // Protected chunk ID is not a region ID.
+        assert!(epoch.select_view(&requests).is_err());
+        assert_eq!(world.snapshot().world().epoch(), 1);
+        assert_eq!(chosen(&world.snapshot()), [10, 20]);
+    }
+    #[test]
+    fn retained_views_do_not_follow_later_publication_or_eviction() {
+        use crate::lod::Level::{Coarse, Fine};
+        let mut world = ProtectedWorld::new(boot(4), &regions()).unwrap();
+        let input = Input::new(72);
+        let base = world.live_bytes();
+        let coarse = world
+            .snapshot()
+            .select_view(&view_requests(Fine, Fine))
+            .unwrap();
+        let pending = input.stage(&mut world);
+        let pending_view = world
+            .snapshot()
+            .select_view(&view_requests(Fine, Fine))
+            .unwrap();
+        assert!(
+            pending_view
+                .selections()
+                .iter()
+                .all(|s| s.refinement_needed)
+        );
+        drop(pending_view);
+        let published = world.publish_fine(vec![(1, pending)], &[]).unwrap();
+        let fine = published.select_view(&view_requests(Fine, Coarse)).unwrap();
+        drop(published);
+        world.publish_fine(vec![], &[1]).unwrap();
+        assert_eq!(coarse.world().epoch(), 1);
+        assert_eq!(coarse.selections()[0].chunk, 10);
+        assert!(coarse.selections()[0].refinement_needed);
+        assert_eq!(fine.world().epoch(), 2);
+        assert_eq!(fine.selections()[0].chunk, 1);
+        assert!(fine.world().chunk(1).is_some());
+        assert_eq!(chosen(&world.snapshot()), [10, 20]);
+        assert!(world.live_bytes() > base);
+        drop(fine);
+        assert_eq!(world.live_bytes(), base);
+    }
+    #[test]
+    fn projected_policy_composes_without_treating_fallback_as_error_compliant() {
+        use crate::lod::{
+            self,
+            Level::{Coarse, Fine},
+        };
+        let mut world = ProtectedWorld::new(boot(4), &regions()).unwrap();
+        let input = Input::new(73);
+        let pending = input.stage(&mut world);
+        world.publish_fine(vec![(1, pending)], &[]).unwrap();
+        let bounds = [[-1.; 3], [1.; 3]];
+        let rows = [
+            [1., 0., 0., 0.],
+            [0., 0., 1., 0.],
+            [0., 0., 0., 0.5],
+            [0., 0., 0., 1.],
+        ];
+        let mut seed = 937u64;
+        let mut counts = [0; 3];
+        for _ in 0..5000 {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let error = ((seed >> 32) % 2000) as f32 / 1000. + 0.00025;
+            // Independent orthographic correspondence: 100 pixels/world-Z.
+            let wanted = if f64::from(error) * 100. <= 100. {
+                Coarse
+            } else {
+                Fine
+            };
+            let request = lod::select(bounds, error, rows, [200; 2], 100.).unwrap();
+            assert_eq!(request.level, wanted);
+            let selected = world
+                .snapshot()
+                .select_view(&view_requests(request.level, request.level))
+                .unwrap();
+            for (index, row) in selected.selections().iter().enumerate() {
+                let expected_fine = index == 0 && wanted == Fine;
+                assert_eq!(row.selected, if expected_fine { Fine } else { Coarse });
+                assert_eq!(row.desired, wanted);
+                assert_eq!(row.refinement_needed, index == 1 && wanted == Fine);
+                assert!(selected.world().chunk(row.chunk).is_some());
+                counts[if expected_fine {
+                    0
+                } else if row.refinement_needed {
+                    1
+                } else {
+                    2
+                }] += 1;
+            }
+        }
+        assert!(counts.into_iter().all(|n| n > 1000));
     }
 }

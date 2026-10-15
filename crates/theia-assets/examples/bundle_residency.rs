@@ -99,6 +99,9 @@ impl Input {
 }
 fn main() -> Result<(), Box<dyn Error>> {
     let paths: Vec<_> = std::env::args().skip(1).collect();
+    if paths.first().is_some_and(|v| v == "--covered-views") {
+        return qualify_covered_views(&paths[1..]);
+    }
     if paths.first().is_some_and(|v| v == "--covered-route") {
         return qualify_covered_route(&paths[1..]);
     }
@@ -449,6 +452,122 @@ fn qualify_covered_route(args: &[String]) -> Result<(), Box<dyn Error>> {
             snapshot.world().epoch(),
             world.live_bytes()
         );
+    }
+    Ok(())
+}
+
+/// Exhaustive two-level fixture qualification, deliberately CPU-only. Each mask
+/// is a separate world; all region requests share exactly one committed epoch.
+fn qualify_covered_views(args: &[String]) -> Result<(), Box<dyn Error>> {
+    use theia_assets::{
+        lod::Level,
+        world_coverage::{ProtectedWorld, Region, ViewRequest},
+    };
+    if args.len() != 8 {
+        return Err("--covered-views needs four coarse then four fine bundle paths".into());
+    }
+    let inputs = args
+        .iter()
+        .map(|p| Input::load(Path::new(p)))
+        .collect::<Result<Vec<_>, _>>()?;
+    // These bounds identify four regions for this ownership test; no geometric
+    // error/camera/demand result is inferred from synthetic bounds.
+    let regions: Vec<_> = (0..4)
+        .map(|i| Region {
+            fine: ChunkBounds {
+                id: i,
+                min: [i as f32, 0.],
+                max: [i as f32 + 1., 1.],
+            },
+            fallback: i + 4,
+        })
+        .collect();
+    for resident in 0u32..16 {
+        let mut store = WorldResidency::new(2 * 1024 * 1024, 8)?;
+        let coarse = inputs[..4]
+            .iter()
+            .enumerate()
+            .map(|(i, input)| input.stage_world(&mut store).map(|s| (i as u64 + 4, s)))
+            .collect::<Result<Vec<_>, _>>()?;
+        store.publish(coarse, &[])?;
+        let mut world = ProtectedWorld::new(store, &regions)?;
+        let coarse_bytes = world.live_bytes();
+        let additions = (0..4)
+            .filter(|i| resident & (1 << i) != 0)
+            .map(|i| {
+                let input = &inputs[i + 4];
+                world
+                    .stage(
+                        &input.manifest,
+                        content_id(&input.manifest),
+                        std::array::from_fn(|n| input.roots[n].as_slice()),
+                        &input.leaves.iter().map(Vec::as_slice).collect::<Vec<_>>(),
+                    )
+                    .map(|s| (i as u64, s))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if !additions.is_empty() {
+            world.publish_fine(additions, &[])?;
+        }
+        let source = world.snapshot();
+        let bytes = world.live_bytes();
+        for wanted in 0u32..16 {
+            let requests: Vec<_> = (0u64..4)
+                .rev()
+                .map(|region| ViewRequest {
+                    region,
+                    desired: if wanted & (1 << region) != 0 {
+                        Level::Fine
+                    } else {
+                        Level::Coarse
+                    },
+                })
+                .collect();
+            let view = source.select_view(&requests)?;
+            let selected: Vec<_> = view.selections().iter().map(|s| s.chunk).collect();
+            let missing: Vec<_> = view
+                .selections()
+                .iter()
+                .filter(|s| s.refinement_needed)
+                .map(|s| s.region)
+                .collect();
+            if view.world().epoch() != source.world().epoch()
+                || world.live_bytes() != bytes
+                || view
+                    .selections()
+                    .iter()
+                    .any(|s| view.world().chunk(s.chunk).is_none())
+            {
+                return Err("view changed ownership or selected absent source data".into());
+            }
+            println!(
+                "{{\"resident_mask\":{resident},\"requested_mask\":{wanted},\"selected\":{selected:?},\"refinement_needed\":{missing:?},\"epoch\":{},\"live_bytes\":{bytes}}}",
+                view.world().epoch()
+            );
+        }
+        // Even a coarse-only view pins the complete source epoch after fine
+        // eviction. Drop the source separately to verify the view owns its pin.
+        let requests: Vec<_> = (0..4)
+            .map(|region| ViewRequest {
+                region,
+                desired: Level::Coarse,
+            })
+            .collect();
+        let held = source.select_view(&requests)?;
+        drop(source);
+        let removals: Vec<_> = (0..4).filter(|i| resident & (1 << i) != 0).collect();
+        if !removals.is_empty() {
+            world.publish_fine(vec![], &removals)?;
+        }
+        if world.live_bytes() != bytes
+            || held.world().chunk_ids().count() != 4 + resident.count_ones() as usize
+        {
+            return Err("view failed to retain published fine owners".into());
+        }
+        drop(held);
+        if world.snapshot().world().chunk_ids().count() != 4 || world.live_bytes() != coarse_bytes {
+            return Err("fine eviction changed protected owners or retained released bytes".into());
+        }
     }
     Ok(())
 }

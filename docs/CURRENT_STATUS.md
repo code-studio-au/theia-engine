@@ -4,6 +4,16 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 CPU per-view representation selection — locally qualified (2026-10-15)
+
+Protected snapshots now resolve per-view coarse/fine requests independently of
+fine residency, explicitly reporting unavailable fine data while retaining coarse
+coverage and the source epoch. All 77 asset tests pass; debug/release real-graph
+checks each pass all 256 residency/request pairs. Prior coverage routes, renderer
+30 tests and the existing 10000-proxy native HUD benchmark remain green.
+This is CPU ownership/selection only; renderer adoption remains outstanding.
+[Contract and evidence](validation/M4_CPU_VIEW_SELECTION.md).
+
 ## M4 streamed benchmark launcher — locally qualified (2026-10-15)
 
 `run_scene_benchmark.py --streamed-world` now prepares/checks eight fine/coarse

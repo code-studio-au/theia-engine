@@ -239,3 +239,10 @@ prepared manifests support other layouts without implying native Windows GPU
 execution. The launcher adds no new streaming policy or performance-capacity
 claim; timing/memory scopes and independent per-view LOD limitations remain.
 [Launcher evidence](validation/M4_STREAMED_BENCHMARK_LAUNCHER.md).
+
+CPU per-view selection now separates desired level, available representation
+and missing refinement, retaining the source epoch. Coarse fallback preserves
+coverage but does not satisfy an unmet fine error request. All source-epoch owners
+remain pinned, even when a view chooses coarse, so this is not a minimal per-view
+memory-retention policy. No GPU/view-policy adoption is claimed by CPU evidence.
+[Evidence](validation/M4_CPU_VIEW_SELECTION.md).
