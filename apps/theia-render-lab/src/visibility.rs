@@ -160,6 +160,7 @@ impl Drop for Image {
 }
 #[derive(Clone, Copy, Default)]
 pub struct ResolveBuffers {
+    pub benchmark: bool,
     pub materials: Option<vk::DescriptorBufferInfo>,
     pub uvs: Option<vk::DescriptorBufferInfo>,
     pub texture: Option<vk::DescriptorImageInfo>,
@@ -191,6 +192,7 @@ pub struct Target {
     sampler: vk::Sampler,
     device: ash::Device,
     cooked: bool,
+    benchmark: bool,
     authored: bool,
     uv: bool,
     geometry: Option<(vk::Buffer, u64, u64)>,
@@ -268,6 +270,7 @@ impl Target {
             sampler: vk::Sampler::null(),
             device: device.clone(),
             cooked,
+            benchmark: buffers.benchmark,
             authored,
             uv,
             geometry: None,
@@ -299,7 +302,7 @@ impl Target {
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT)
                 })
                 .collect();
-            if cooked {
+            if cooked || buffers.benchmark {
                 bindings.push(
                     vk::DescriptorSetLayoutBinding::default()
                         .binding(4)
@@ -355,7 +358,7 @@ impl Target {
                 vk::DescriptorBindingFlags::PARTIALLY_BOUND,
                 vk::DescriptorBindingFlags::empty(),
             ];
-            if cooked {
+            if cooked || buffers.benchmark {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
             if authored {
@@ -386,7 +389,7 @@ impl Target {
                     .ty(vk::DescriptorType::SAMPLER)
                     .descriptor_count(1 + u32::from(image_count > 0)),
             ];
-            if cooked {
+            if cooked || buffers.benchmark {
                 sizes.push(
                     vk::DescriptorPoolSize::default()
                         .ty(vk::DescriptorType::STORAGE_BUFFER)
@@ -505,7 +508,21 @@ impl Target {
             }
             device.update_descriptor_sets(&writes, &[]);
         }
-        target.visibility = Some(Pipeline::visibility(device, shaders, work_layout, cooked)?);
+        target.visibility = Some(if buffers.benchmark {
+            Pipeline::benchmark(device, vk::Format::R32G32_UINT, shaders, work_layout, false)?
+        } else {
+            Pipeline::visibility(device, shaders, work_layout, cooked)?
+        });
+        if buffers.benchmark {
+            target.resolve = Some(Pipeline::benchmark(
+                device,
+                color_format,
+                shaders,
+                target.layout,
+                true,
+            )?);
+            return Ok(target);
+        }
         target.resolve = Some(Pipeline::resolve(
             device,
             color_format,
@@ -544,6 +561,15 @@ impl Target {
             );
         }
         self.geometry = Some(key);
+    }
+    pub fn allocated_bytes(&self) -> u64 {
+        self.identity.allocated_bytes
+            + self.depth.allocated_bytes
+            + self
+                .materials
+                .iter()
+                .map(|v| v.allocated_bytes)
+                .sum::<u64>()
     }
     fn push_rows(
         &self,
@@ -699,7 +725,7 @@ impl Target {
                     extent: self.extent,
                 }],
             );
-            if self.cooked {
+            if self.cooked || self.benchmark {
                 self.push_rows(
                     command,
                     visibility.layout,
@@ -739,10 +765,20 @@ impl Target {
         command: vk::CommandBuffer,
         mesh: &ash::ext::mesh_shader::Device,
         rows: Option<[[f32; 4]; 4]>,
+        overlay: Option<&[u8; 32]>,
     ) {
         let pipeline = self.resolve.as_ref().unwrap();
         // SAFETY: Called inside compatible swapchain dynamic rendering; descriptor images have been published.
         unsafe {
+            if let Some(bytes) = overlay {
+                self.device.cmd_push_constants(
+                    command,
+                    pipeline.layout,
+                    vk::ShaderStageFlags::FRAGMENT,
+                    0,
+                    bytes,
+                );
+            }
             self.device.cmd_bind_pipeline(
                 command,
                 vk::PipelineBindPoint::GRAPHICS,

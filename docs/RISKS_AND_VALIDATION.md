@@ -28,6 +28,13 @@ has no latency/cancellation guarantee. Tiled feedback, repeated request scheduli
 eviction and multi-frame reuse are separate gates.
 [Observed scope](validation/M4_ASYNC_MIP_REFINEMENT.md).
 
+The first procedural scene benchmark now validates dense proxy rendering,
+frustum/detail compaction, continuous ground and live GPU counts across a scripted
+route. Timings retain FIFO/single-frame/instrumentation and display-backend context;
+tracked allocations are not total VRAM. A resident low-poly scene does not validate
+cooked-content streaming, skinning/lighting costs or server/network player scale.
+[Scope and evidence](validation/M4_SCENE_BENCHMARK.md).
+
 ## Decisions needing concrete values later
 
 - Actual minimum GPU/VRAM models; baseline fps and target resolution; vendor matrix.

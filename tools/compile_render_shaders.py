@@ -19,7 +19,12 @@ def main():
     parser.add_argument('--spirv-dis', default='spirv-dis', help='shared-interface qualification disassembler')
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    shaders = [('authority.slang', 'authorityMesh', 'mesh', 'authority.mesh.spv'),
+    shaders = [('benchmark.slang','benchmarkCompute','compute','benchmark.compute.spv'),
+               ('benchmark.slang','benchmarkTask','amplification','benchmark.task.spv'),
+               ('benchmark.slang','benchmarkMesh','mesh','benchmark.mesh.spv'),
+               ('benchmark.slang','benchmarkVisibility','fragment','benchmark.visibility.frag.spv'),
+               ('benchmark_resolve.slang','benchmarkResolve','fragment','benchmark.resolve.frag.spv'),
+               ('authority.slang', 'authorityMesh', 'mesh', 'authority.mesh.spv'),
                ('authority.slang', 'authorityFragment', 'fragment', 'authority.frag.spv'),
                ('triangle.slang', 'meshMain', 'mesh', 'triangle.mesh.spv'),
                ('triangle.slang', 'fragmentMain', 'fragment', 'triangle.frag.spv'),

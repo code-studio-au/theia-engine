@@ -26,6 +26,7 @@ pub struct IndirectWork {
     compute_layout: vk::PipelineLayout,
     compute: vk::Pipeline,
     bytes: vk::DeviceSize,
+    pub allocated_bytes: u64,
     asset: Option<crate::asset::Buffer>,
     coarse: Option<crate::asset::Buffer>,
     lod: bool,
@@ -50,7 +51,9 @@ impl IndirectWork {
             mode,
             RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
         );
-        let bytes = if spatial {
+        let bytes = if mode == RenderMode::Benchmark {
+            crate::benchmark::WORK_BYTES
+        } else if spatial {
             9728
         } else if cull {
             256
@@ -59,7 +62,9 @@ impl IndirectWork {
         };
         let shader = ShaderModule::load(
             device,
-            &shader_dir.join(if lod {
+            &shader_dir.join(if mode == RenderMode::Benchmark {
+                "benchmark.compute.spv"
+            } else if lod {
                 "asset.lod.compute.spv"
             } else if cull {
                 "asset.cull.compute.spv"
@@ -81,6 +86,7 @@ impl IndirectWork {
             compute_layout: vk::PipelineLayout::null(),
             compute: vk::Pipeline::null(),
             bytes,
+            allocated_bytes: 0,
             asset: None,
             coarse: None,
             lod,
@@ -94,12 +100,14 @@ impl IndirectWork {
                     .size(bytes)
                     .usage(
                         vk::BufferUsageFlags::STORAGE_BUFFER
-                            | vk::BufferUsageFlags::INDIRECT_BUFFER,
+                            | vk::BufferUsageFlags::INDIRECT_BUFFER
+                            | vk::BufferUsageFlags::TRANSFER_DST,
                     )
                     .sharing_mode(vk::SharingMode::EXCLUSIVE),
                 None,
             )?;
             let requirements = device.get_buffer_memory_requirements(work.buffer);
+            work.allocated_bytes = requirements.size;
             let memory_type = (0..memory_properties.memory_type_count)
                 .find(|&index| {
                     requirements.memory_type_bits & (1 << index) != 0
@@ -123,7 +131,7 @@ impl IndirectWork {
                     .stage_flags(
                         vk::ShaderStageFlags::COMPUTE
                             | vk::ShaderStageFlags::TASK_EXT
-                            | if spatial || cull {
+                            | if spatial || cull || mode == RenderMode::Benchmark {
                                 vk::ShaderStageFlags::MESH_EXT
                             } else {
                                 vk::ShaderStageFlags::empty()
@@ -242,7 +250,9 @@ impl IndirectWork {
             let push = [vk::PushConstantRange::default()
                 .stage_flags(vk::ShaderStageFlags::COMPUTE)
                 .offset(0)
-                .size(if lod {
+                .size(if mode == RenderMode::Benchmark {
+                    96
+                } else if lod {
                     112
                 } else if cull {
                     64
@@ -277,7 +287,11 @@ impl IndirectWork {
                 }
             }
         }
-        if lod {
+        if mode == RenderMode::Benchmark {
+            println!(
+                "Benchmark dense GPU work initialized: {bytes} requested bytes; GPU motion/culling/detail and indirect counts; no per-object host draws"
+            );
+        } else if lod {
             println!(
                 "GPU LOD work initialized: two fixed resident geometry bindings; selected page at 44, projected pixel bounds at 48, reason at 56; geometry physical allocation bytes {}; no selection/count readback",
                 work.resident_bytes()
@@ -418,6 +432,84 @@ impl IndirectWork {
     pub fn resident_bytes(&self) -> u64 {
         self.asset.as_ref().map_or(0, |asset| asset.reserved_bytes)
             + self.coarse.as_ref().map_or(0, |v| v.reserved_bytes)
+    }
+    pub fn benchmark_descriptor(&self) -> vk::DescriptorBufferInfo {
+        vk::DescriptorBufferInfo::default()
+            .buffer(self.buffer)
+            .range(self.bytes)
+    }
+    pub fn generate_benchmark(&self, command: vk::CommandBuffer, push: &[u8; 96], objects: u32) {
+        // SAFETY: Sole frame fence retired all readers; handles are owned through submission.
+        // Header transfer precedes atomic compaction; publication covers indirect/task/mesh/resolve reads.
+        unsafe {
+            let barrier = vk::BufferMemoryBarrier2::default()
+                .buffer(self.buffer)
+                .size(self.bytes)
+                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .src_stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)
+                .src_access_mask(vk::AccessFlags2::MEMORY_READ | vk::AccessFlags2::MEMORY_WRITE)
+                .dst_stage_mask(vk::PipelineStageFlags2::TRANSFER)
+                .dst_access_mask(vk::AccessFlags2::TRANSFER_WRITE);
+            self.device.cmd_pipeline_barrier2(
+                command,
+                &vk::DependencyInfo::default().buffer_memory_barriers(&[barrier]),
+            );
+            let header = [0u32, 1, 1, 1, objects, 0, 0, 0];
+            let mut bytes = [0u8; 32];
+            for (i, v) in header.iter().enumerate() {
+                bytes[i * 4..i * 4 + 4].copy_from_slice(&v.to_ne_bytes());
+            }
+            self.device
+                .cmd_update_buffer(command, self.buffer, 0, &bytes);
+            let init = barrier
+                .src_stage_mask(vk::PipelineStageFlags2::TRANSFER)
+                .src_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
+                .dst_stage_mask(vk::PipelineStageFlags2::COMPUTE_SHADER)
+                .dst_access_mask(
+                    vk::AccessFlags2::SHADER_STORAGE_READ | vk::AccessFlags2::SHADER_STORAGE_WRITE,
+                );
+            self.device.cmd_pipeline_barrier2(
+                command,
+                &vk::DependencyInfo::default().buffer_memory_barriers(&[init]),
+            );
+            self.device
+                .cmd_bind_pipeline(command, vk::PipelineBindPoint::COMPUTE, self.compute);
+            self.device.cmd_bind_descriptor_sets(
+                command,
+                vk::PipelineBindPoint::COMPUTE,
+                self.compute_layout,
+                0,
+                &[self.set],
+                &[],
+            );
+            self.device.cmd_push_constants(
+                command,
+                self.compute_layout,
+                vk::ShaderStageFlags::COMPUTE,
+                0,
+                push,
+            );
+            self.device
+                .cmd_dispatch(command, objects.div_ceil(64), 1, 1);
+            let publish = init
+                .src_stage_mask(
+                    vk::PipelineStageFlags2::COMPUTE_SHADER | vk::PipelineStageFlags2::TRANSFER,
+                )
+                .src_access_mask(
+                    vk::AccessFlags2::SHADER_STORAGE_WRITE | vk::AccessFlags2::TRANSFER_WRITE,
+                )
+                .dst_stage_mask(
+                    vk::PipelineStageFlags2::ALL_GRAPHICS | vk::PipelineStageFlags2::DRAW_INDIRECT,
+                )
+                .dst_access_mask(
+                    vk::AccessFlags2::SHADER_STORAGE_READ | vk::AccessFlags2::INDIRECT_COMMAND_READ,
+                );
+            self.device.cmd_pipeline_barrier2(
+                command,
+                &vk::DependencyInfo::default().buffer_memory_barriers(&[publish]),
+            );
+        }
     }
     pub fn geometry_descriptor(&self) -> vk::DescriptorBufferInfo {
         let asset = self

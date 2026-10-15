@@ -238,7 +238,7 @@ impl Context {
             options.render_mode() == RenderMode::Spatial,
             matches!(
                 options.render_mode(),
-                RenderMode::Visibility | RenderMode::AssetResolve
+                RenderMode::Visibility | RenderMode::AssetResolve | RenderMode::Benchmark
             ),
             matches!(
                 options.render_mode(),
@@ -247,6 +247,7 @@ impl Context {
                     | RenderMode::AssetCull
                     | RenderMode::AssetLod
                     | RenderMode::AssetResolve
+                    | RenderMode::Benchmark
             ),
             matches!(
                 options.render_mode(),
@@ -779,7 +780,10 @@ impl Swapchain {
                         vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
                     )?);
                 }
-                if matches!(mode, RenderMode::Visibility | RenderMode::AssetResolve) {
+                if matches!(
+                    mode,
+                    RenderMode::Visibility | RenderMode::AssetResolve | RenderMode::Benchmark
+                ) {
                     let memory = ctx
                         .instance
                         .as_ref()
@@ -895,6 +899,7 @@ pub struct Renderer {
     stream: Option<crate::streaming::Stream>,
     bundle_stream: Option<crate::bundle_streaming::Stream>,
     texture_refinement: Option<crate::texture_refinement::Refinement>,
+    benchmark: Option<crate::benchmark::Recorder>,
     work: Option<IndirectWork>,
     lod: Option<crate::indirect::Lod>,
     materials: Option<crate::asset::Buffer>,
@@ -940,6 +945,7 @@ impl Renderer {
             stream: None,
             bundle_stream: None,
             texture_refinement: None,
+            benchmark: None,
             recreate: true,
             generations: 0,
             mode: options.render_mode(),
@@ -963,6 +969,48 @@ impl Renderer {
                 })
             }),
         };
+        if options.benchmark {
+            // SAFETY: Live selected physical device; properties and queue family are immutable.
+            let (properties, mesh_limits, bits) = unsafe {
+                let instance = renderer.ctx.instance.as_ref().unwrap();
+                let mut mesh_limits = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
+                let mut properties =
+                    vk::PhysicalDeviceProperties2::default().push_next(&mut mesh_limits);
+                instance.get_physical_device_properties2(renderer.ctx.physical, &mut properties);
+                let queues =
+                    instance.get_physical_device_queue_family_properties(renderer.ctx.physical);
+                (
+                    properties.properties,
+                    mesh_limits,
+                    queues[renderer.ctx.graphics_family as usize].timestamp_valid_bits,
+                )
+            };
+            let count = options.benchmark_config().players + crate::benchmark::STATIC_OBJECTS;
+            if (properties.limits.max_storage_buffer_range as u64) < crate::benchmark::WORK_BYTES
+                || properties.limits.max_push_constants_size < 96
+                || mesh_limits.max_task_work_group_count[0] < count
+                || mesh_limits.max_task_work_group_total_count < count
+                || properties.limits.max_compute_work_group_count[0] < count.div_ceil(64)
+                || mesh_limits.max_mesh_output_vertices < 48
+                || mesh_limits.max_mesh_output_primitives < 16
+            {
+                return Err(
+                    "Selected device cannot support bounded benchmark work/mesh limits".into(),
+                );
+            }
+            // SAFETY: Vulkan's fixed device name is null terminated.
+            let name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) }
+                .to_string_lossy()
+                .into_owned();
+            let metadata = serde_json::json!({"device":name,"vendor_id":properties.vendor_id,"device_id":properties.device_id,"driver_version":properties.driver_version,"api_version":properties.api_version,"timestamp_period_ns":properties.limits.timestamp_period,"timestamp_valid_bits":bits,"validation":!options.no_validation,"debug_assertions":cfg!(debug_assertions),"work_requested_bytes":crate::benchmark::WORK_BYTES,"shader_dir":renderer.shader_dir});
+            renderer.benchmark = Some(crate::benchmark::Recorder::new(
+                renderer.ctx.device.as_ref().unwrap(),
+                options.benchmark_config(),
+                properties.limits.timestamp_period,
+                bits,
+                metadata,
+            )?);
+        }
         if renderer.mode == RenderMode::Authority {
             let mut mesh = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
             let mut props = vk::PhysicalDeviceProperties2::default().push_next(&mut mesh);
@@ -996,6 +1044,7 @@ impl Renderer {
                 | RenderMode::AssetCull
                 | RenderMode::AssetLod
                 | RenderMode::AssetResolve
+                | RenderMode::Benchmark
         ) {
             // SAFETY: The selected physical device belongs to the retained live instance.
             let memory = unsafe {
@@ -1590,6 +1639,7 @@ impl Renderer {
             self.mode,
             self.work.as_ref().map(|work| work.descriptor_layout),
             crate::visibility::ResolveBuffers {
+                benchmark: self.benchmark.is_some(),
                 materials: self.materials.as_ref().map(|buffer| {
                     vk::DescriptorBufferInfo::default()
                         .buffer(buffer.handle)
@@ -1639,6 +1689,7 @@ impl Renderer {
         Ok(())
     }
     pub fn draw(&mut self, size: PhysicalSize<u32>) -> Result<bool> {
+        let cpu_started = std::time::Instant::now();
         if size.width == 0 || size.height == 0 {
             self.recreate = true;
             return Ok(false);
@@ -1654,7 +1705,10 @@ impl Renderer {
         } else {
             self.work_items
         };
-        if self.work.is_some() && self.last_input != Some(input) {
+        if self.work.is_some()
+            && self.last_input != Some(input)
+            && self.mode != RenderMode::Benchmark
+        {
             if matches!(
                 self.mode,
                 RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
@@ -1693,6 +1747,9 @@ impl Renderer {
                 u64::MAX,
             )?;
         }
+        if let Some(benchmark) = &mut self.benchmark {
+            benchmark.collect()?;
+        }
         if let Some(stream) = &mut self.stream {
             // SAFETY: Selected physical device belongs to the live instance retained in Context.
             let (memory, limit) = unsafe {
@@ -1719,7 +1776,21 @@ impl Renderer {
         let chain = self.chain.as_mut().unwrap();
         let ctx = &self.ctx;
         let device = ctx.device.as_ref().unwrap();
-        let camera_rows = if matches!(
+        let benchmark_push = self
+            .benchmark
+            .as_ref()
+            .map(|b| {
+                crate::benchmark::push(
+                    &b.config,
+                    self.presented,
+                    chain.extent.width,
+                    chain.extent.height,
+                )
+            })
+            .transpose()?;
+        let camera_rows = if let Some((_, rows)) = benchmark_push {
+            Some(rows)
+        } else if matches!(
             self.mode,
             RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
         ) {
@@ -1736,6 +1807,13 @@ impl Renderer {
         } else {
             None
         };
+        if self.mode == RenderMode::Benchmark {
+            chain
+                .visibility
+                .as_mut()
+                .unwrap()
+                .bind_geometry(self.work.as_ref().unwrap().benchmark_descriptor());
+        }
         if self.mode == RenderMode::AssetResolve {
             chain
                 .visibility
@@ -1780,6 +1858,9 @@ impl Renderer {
                 &vk::CommandBufferBeginInfo::default()
                     .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?;
+            if let Some(benchmark) = &self.benchmark {
+                benchmark.begin(ctx.command);
+            }
             if let Some(buffer) = &self.footprint {
                 let reuse = [vk::BufferMemoryBarrier2::default()
                     .src_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
@@ -1796,7 +1877,14 @@ impl Renderer {
                     &vk::DependencyInfo::default().buffer_memory_barriers(&reuse),
                 );
             }
-            if let Some(work) = &self.work {
+            if let Some((push, _)) = &benchmark_push {
+                self.work.as_ref().unwrap().generate_benchmark(
+                    ctx.command,
+                    push,
+                    self.benchmark.as_ref().unwrap().config.players
+                        + crate::benchmark::STATIC_OBJECTS,
+                );
+            } else if let Some(work) = &self.work {
                 work.generate(
                     ctx.command,
                     input,
@@ -1816,6 +1904,9 @@ impl Renderer {
                         lod
                     }),
                 );
+            }
+            if let Some(benchmark) = &self.benchmark {
+                benchmark.mark(ctx.command, 1);
             }
             if let Some(depth) = &chain.depth {
                 let barriers = [vk::ImageMemoryBarrier2::default()
@@ -1853,6 +1944,9 @@ impl Renderer {
                     self.work.as_ref().unwrap(),
                     camera_rows,
                 );
+            }
+            if let Some(benchmark) = &self.benchmark {
+                benchmark.mark(ctx.command, 2);
             }
             let to_color = [vk::ImageMemoryBarrier2::default()
                 .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
@@ -1903,11 +1997,19 @@ impl Renderer {
                 rendering = rendering.depth_attachment(depth);
             }
             device.cmd_begin_rendering(ctx.command, &rendering);
+            let overlay = self.benchmark.as_ref().map(|b| {
+                b.overlay(
+                    self.presented,
+                    self.work.as_ref().unwrap().allocated_bytes
+                        + chain.visibility.as_ref().unwrap().allocated_bytes(),
+                )
+            });
             if let Some(target) = &chain.visibility {
                 target.record_resolve(
                     ctx.command,
                     ctx.mesh_commands.as_ref().unwrap(),
                     camera_rows,
+                    overlay.as_ref(),
                 );
             } else if let Some(pipeline) = &chain.pipeline {
                 device.cmd_bind_pipeline(
@@ -1966,6 +2068,9 @@ impl Renderer {
                 }
             }
             device.cmd_end_rendering(ctx.command);
+            if let Some(benchmark) = &self.benchmark {
+                benchmark.mark(ctx.command, 3);
+            }
             let to_present = [vk::ImageMemoryBarrier2::default()
                 .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
                 .src_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE)
@@ -2031,11 +2136,34 @@ impl Renderer {
             if let Some(error) = outcome.error {
                 return Err(error.into());
             }
+            if let Some(benchmark) = &mut self.benchmark {
+                if !outcome.presented {
+                    return Err("Benchmark presentation interrupted; report withheld".into());
+                }
+                benchmark.submitted(
+                    self.presented,
+                    cpu_started.elapsed().as_secs_f64() * 1000.,
+                    [chain.extent.width, chain.extent.height],
+                    self.work.as_ref().unwrap().allocated_bytes
+                        + chain.visibility.as_ref().unwrap().allocated_bytes(),
+                );
+            }
             self.presented += u64::from(outcome.presented);
             Ok(outcome.presented)
         }
     }
-    pub fn qualification_complete(&self) -> Result<()> {
+    pub fn qualification_complete(&mut self) -> Result<()> {
+        if let Some(benchmark) = &mut self.benchmark {
+            // SAFETY: Live complete fence covers the last benchmark query recording.
+            unsafe {
+                self.ctx.device.as_ref().unwrap().wait_for_fences(
+                    &[self.ctx.complete],
+                    true,
+                    u64::MAX,
+                )?;
+            }
+            benchmark.finish(self.generations)?;
+        }
         if let Some(stream) = &self.stream {
             println!(
                 "Cell qualification: {} publications, {} physical-budget deferrals",
@@ -2074,6 +2202,7 @@ impl Drop for Renderer {
         drop(self.stream.take());
         drop(self.bundle_stream.take());
         drop(self.texture_refinement.take());
+        drop(self.benchmark.take());
         drop(self.work.take());
         drop(self.materials.take());
         drop(self.uvs.take());

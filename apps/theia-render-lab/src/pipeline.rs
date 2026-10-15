@@ -55,6 +55,39 @@ struct ShaderStages {
     push: Option<vk::ShaderStageFlags>,
 }
 impl Pipeline {
+    pub fn benchmark(
+        device: &ash::Device,
+        format: vk::Format,
+        shaders: &Path,
+        layout: vk::DescriptorSetLayout,
+        resolve: bool,
+    ) -> Result<Self> {
+        Self::configured(
+            device,
+            format,
+            shaders,
+            Some(layout),
+            ShaderStages {
+                mesh: if resolve {
+                    "resolve.mesh.spv"
+                } else {
+                    "benchmark.mesh.spv"
+                },
+                task: (!resolve).then_some("benchmark.task.spv"),
+                fragment: if resolve {
+                    "benchmark.resolve.frag.spv"
+                } else {
+                    "benchmark.visibility.frag.spv"
+                },
+                depth: (!resolve).then_some(vk::Format::D32_SFLOAT),
+                push: Some(if resolve {
+                    vk::ShaderStageFlags::FRAGMENT
+                } else {
+                    vk::ShaderStageFlags::MESH_EXT
+                }),
+            },
+        )
+    }
     pub fn new(
         device: &ash::Device,
         format: vk::Format,
@@ -246,7 +279,11 @@ impl Pipeline {
                 .push
                 .map(|stage| {
                     vk::PushConstantRange::default().stage_flags(stage).size(
-                        if shaders.fragment == "asset.texture.tail.resolve.frag.spv" {
+                        if shaders.fragment == "benchmark.resolve.frag.spv" {
+                            32
+                        } else if shaders.mesh == "benchmark.mesh.spv" {
+                            96
+                        } else if shaders.fragment == "asset.texture.tail.resolve.frag.spv" {
                             80
                         } else {
                             64

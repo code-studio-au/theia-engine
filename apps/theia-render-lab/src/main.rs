@@ -1,6 +1,7 @@
 mod asset;
 mod authority;
 mod authority_demo;
+mod benchmark;
 mod bundle_streaming;
 mod camera;
 mod gpu;
@@ -35,6 +36,7 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RenderMode {
+    Benchmark,
     Authority,
     Indirect,
     Spatial,
@@ -51,6 +53,14 @@ enum RenderMode {
 
 #[derive(Default)]
 struct Options {
+    benchmark: bool,
+    benchmark_no_overlay: bool,
+    benchmark_players: Option<u32>,
+    benchmark_warmup: Option<u64>,
+    benchmark_seconds: Option<f32>,
+    benchmark_report: Option<std::path::PathBuf>,
+    benchmark_width: Option<u32>,
+    benchmark_height: Option<u32>,
     network_address: Option<std::net::SocketAddr>,
     network_certificate: Option<std::path::PathBuf>,
     network_faults: bool,
@@ -95,6 +105,19 @@ struct Options {
     lod_hysteresis_test: bool,
 }
 impl Options {
+    fn benchmark_config(&self) -> benchmark::Config {
+        benchmark::Config {
+            players: self.benchmark_players.unwrap_or(1000),
+            overlay: !self.benchmark_no_overlay,
+            frames: self.frames.unwrap_or(3660),
+            warmup: self.benchmark_warmup.unwrap_or(60),
+            seconds: self.benchmark_seconds.unwrap_or(60.),
+            report: self
+                .benchmark_report
+                .clone()
+                .unwrap_or_else(|| "build/benchmark/report.json".into()),
+        }
+    }
     fn render_mode(&self) -> RenderMode {
         if self.lod.is_some() {
             RenderMode::AssetLod
@@ -113,6 +136,67 @@ impl Options {
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
+                "--benchmark-no-overlay" => result.benchmark_no_overlay = true,
+                "--benchmark" => {
+                    result.benchmark = true;
+                }
+                "--benchmark-width" => {
+                    result.benchmark_width =
+                        Some(args.next().ok_or("Missing benchmark width")?.parse()?)
+                }
+                "--benchmark-height" => {
+                    result.benchmark_height =
+                        Some(args.next().ok_or("Missing benchmark height")?.parse()?)
+                }
+                "--benchmark-players" => {
+                    result.benchmark_players = Some(
+                        args.next()
+                            .ok_or("Missing benchmark player count")?
+                            .parse()?,
+                    )
+                }
+                "--benchmark-warmup" => {
+                    result.benchmark_warmup = Some(
+                        args.next()
+                            .ok_or("Missing benchmark warmup frames")?
+                            .parse()?,
+                    )
+                }
+                "--benchmark-seconds" => {
+                    result.benchmark_seconds = Some(
+                        args.next()
+                            .ok_or("Missing benchmark logical duration")?
+                            .parse()?,
+                    )
+                }
+                "--benchmark-report" => {
+                    result.benchmark_report =
+                        Some(args.next().ok_or("Missing benchmark report path")?.into())
+                }
+                "--benchmark-reference" => {
+                    let players = args.next().ok_or("Missing players")?.parse()?;
+                    let frame = args.next().ok_or("Missing frame")?.parse()?;
+                    let frames = args.next().ok_or("Missing total frames")?.parse()?;
+                    let width = args.next().ok_or("Missing width")?.parse()?;
+                    let height = args.next().ok_or("Missing height")?.parse()?;
+                    if args.next().is_some() {
+                        return Err("Unexpected benchmark reference argument".into());
+                    }
+                    let config = benchmark::Config {
+                        overlay: false,
+                        players,
+                        frames,
+                        warmup: 0,
+                        seconds: 60.,
+                        report: "unused.json".into(),
+                    };
+                    config.validate()?;
+                    if frame >= frames {
+                        return Err("Benchmark reference frame outside route".into());
+                    }
+                    println!("{}", benchmark::reference(&config, frame, width, height)?);
+                    std::process::exit(0);
+                }
                 "--network-client" => {
                     result.network_address = Some(
                         args.next()
@@ -752,6 +836,9 @@ impl Options {
                 }
                 "--help" => {
                     println!(
+                        "MMO visual benchmark: --benchmark [--benchmark-players 0..10000] [--benchmark-width 1280 --benchmark-height 720] [--frames 3660 --benchmark-warmup 60 --benchmark-seconds 60] [--benchmark-report path.json]\nCPU oracle: --benchmark-reference <players frame frames width height>"
+                    );
+                    println!(
                         "Theia Render Lab: GPU task/mesh qualification\n  --network-client <loopback address> --network-certificate <public DER>  live readonly GPU viewer\n  --network-faults  bounded encrypted post-bootstrap packet faults\n  --network-repair-test  qualification ACK withholding until full repair\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-hysteresis <0..1>  stricter coarsening entry fraction (default 0)\n  --lod-hysteresis-test  explicit eight-phase budget trajectory\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-auto-mips <file>  GPU analytic-footprint mip choice\n  --texture-refine-budget <dense texel bytes>  one asynchronous finer-tail publication\n  --texture-tail-budget <dense texel bytes>  coarse resident suffix for automatic mips\n  --texture-tail-reference <mesh material uv texture budget x y width height view>  CPU suffix sampling JSON\n  --texture-tail-linear-reference <mesh material uv texture budget x y width height view>  CPU bilinear suffix sampling JSON\n  --texture-linear-filter  opt-in bilinear repeat within automatic mip\n  --texture-linear-reference <mesh material uv texture x y width height view>  CPU bilinear sampling JSON\n  --texture-auto-reference <mesh material uv texture x y width height view>  CPU automatic sampling JSON\n  --texture-mip-test <file level>  upload complete chain with a fixed mip view\n  --texture-mip-reference <mesh material uv texture level x y width height view>  CPU mip sampling JSON\n  --texture-footprint-reference <mesh uv texture x y width height view>  CPU UV-gradient/mip oracle\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
@@ -1024,6 +1111,46 @@ impl Options {
             }
             result.frames = Some(120);
         }
+        if result.benchmark {
+            if result
+                .benchmark_width
+                .is_some_and(|v| !(64..=8192).contains(&v))
+                || result
+                    .benchmark_height
+                    .is_some_and(|v| !(64..=8192).contains(&v))
+            {
+                return Err("Benchmark extent must be 64..8192 per axis".into());
+            }
+            if result.mode.is_some()
+                || result.asset.is_some()
+                || result.cell.is_some()
+                || result.bundle.is_some()
+                || result.camera
+                || result.frustum
+                || result.material
+                || result.work_items.is_some()
+                || result.smoke
+                || result.authority_demo
+                || result.authority_script
+                || result.authority_alpha.is_some()
+                || result.network_address.is_some()
+            {
+                return Err("Benchmark owns its procedural scene and timeline; do not combine other lab modes or smoke injection".into());
+            }
+            let config = result.benchmark_config();
+            config.validate()?;
+            result.frames = Some(config.frames);
+            result.mode = Some(RenderMode::Benchmark);
+        } else if result.benchmark_no_overlay
+            || result.benchmark_width.is_some()
+            || result.benchmark_height.is_some()
+            || result.benchmark_players.is_some()
+            || result.benchmark_warmup.is_some()
+            || result.benchmark_seconds.is_some()
+            || result.benchmark_report.is_some()
+        {
+            return Err("Benchmark options require --benchmark".into());
+        }
         Ok(result)
     }
 }
@@ -1062,6 +1189,8 @@ impl ApplicationHandler for App {
                     Window::default_attributes()
                         .with_title(if self.options.network_address.is_some() {
                             "Theia network viewer — Connecting"
+                        } else if self.options.benchmark {
+                            "Theia — MMO scene benchmark (visual proxies)"
                         } else if self.options.authority_demo {
                             "Theia — local authority demo (WASD/arrows, Space attack)"
                         } else if self.options.render_mode() == RenderMode::Authority {
@@ -1069,7 +1198,14 @@ impl ApplicationHandler for App {
                         } else {
                             "Theia Render Lab — M0-D mesh triangle"
                         })
-                        .with_inner_size(PhysicalSize::new(960, 540)),
+                        .with_inner_size(if self.options.benchmark {
+                            PhysicalSize::new(
+                                self.options.benchmark_width.unwrap_or(1280),
+                                self.options.benchmark_height.unwrap_or(720),
+                            )
+                        } else {
+                            PhysicalSize::new(960, 540)
+                        }),
                 )?,
             );
             let mut renderer =
@@ -1219,7 +1355,7 @@ impl ApplicationHandler for App {
                     .frames
                     .is_some_and(|limit| self.frames >= limit)
                 {
-                    if let Err(error) = self.renderer.as_ref().unwrap().qualification_complete() {
+                    if let Err(error) = self.renderer.as_mut().unwrap().qualification_complete() {
                         self.fail(event_loop, error);
                         return;
                     }

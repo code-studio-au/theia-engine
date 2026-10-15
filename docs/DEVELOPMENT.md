@@ -894,6 +894,14 @@ deferred images plus changed-source retention.
 
 ## Owned headless display qualification
 
+The integrated procedural MMO benchmark runs visibly by default via
+`python3 tools/run_scene_benchmark.py --slangc /path/to/slangc`; use `--headless`
+for unattended runs. Its optional stats panel, bounded populations, scripted
+camera and JSON/CSV/HTML traces form a rendering baseline. Use
+`tools/qualify_scene_benchmark.py` for separate actual Wayland validation and
+Xwayland replay. [Usage](SCENE_BENCHMARK.md),
+[observed evidence/limits](validation/M4_SCENE_BENCHMARK.md).
+
 For GPU qualification without an active desktop monitor, use
 `tools/qualify_headless_display.py` with extracted Weston and private
 `libxcb-composite0` dependencies. Native Wayland provides WSI validation; owned

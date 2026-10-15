@@ -1,8 +1,26 @@
-# Theia — Actual Implementation Status (2026-10-14)
+# Theia — Actual Implementation Status (2026-10-15)
 
 **This file separates observed evidence from planned systems.** The original handoff
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
-update is 2026-10-14.
+update is 2026-10-15.
+
+## M4 integrated procedural scene benchmark — independently executed (2026-10-15)
+
+A repeatable three-phase camera route now renders continuous ground, 64 buildings,
+128 tree proxies and 0..10000 moving visual proxies through GPU culling/detail,
+indirect task/mesh draws and visibility/deferred resolve. An optional on-screen
+stats panel reads GPU counts directly; the launcher builds and exports JSON/CSV/
+interactive frame traces. Five 240-frame Wayland populations pass zero diagnostics;
+seven replay captures pass all-record/compaction/image checks, 171 ray/colour probes
+and 4375 stats glyph pixels. Renderer 27 tests, both 38-module shader interfaces,
+Windows GNU eleven packages and 154 Wine CPU tests pass. This resident procedural
+workload does not yet measure cooked-content streaming, skinning, GI or MMO server
+load. [Usage](SCENE_BENCHMARK.md), [evidence](validation/M4_SCENE_BENCHMARK.md).
+
+Three optimized 3660-frame headless routes for 100/500/1000 proxies also export
+complete reports with 60 warmup frames excluded, validation/overlay disabled and
+explicit presentation/backend context. These are initial observations, not an
+uncapped FPS score or a production engine capacity claim.
 
 ## M4 asynchronous mip-tail refinement — independently executed (2026-10-14)
 

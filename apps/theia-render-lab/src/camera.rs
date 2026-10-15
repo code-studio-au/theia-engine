@@ -40,6 +40,17 @@ fn rig_rows(
     target: [f32; 3],
     fov: f32,
 ) -> Result<[[f32; 4]; 4]> {
+    perspective_rows(width, height, eye, target, fov, 0.1, 10.)
+}
+pub fn perspective_rows(
+    width: u32,
+    height: u32,
+    eye: [f32; 3],
+    target: [f32; 3],
+    fov: f32,
+    near: f32,
+    far: f32,
+) -> Result<[[f32; 4]; 4]> {
     if width == 0 || height == 0 {
         return Err("Camera requires nonzero extent".into());
     }
@@ -48,8 +59,6 @@ fn rig_rows(
     let up = cross(right, forward);
     let z = forward.map(|v| -v);
     let s = 1.0 / (fov.to_radians() * 0.5).tan();
-    let near = 0.1;
-    let far = 10.;
     let a = far / (near - far);
     let b = far * near / (near - far);
     Ok([

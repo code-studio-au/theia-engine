@@ -362,3 +362,14 @@ image/metadata publication. Physical coexistence budgets are independent of dens
 texel caps. Tiled GPU feedback, multi-request scheduling and overlapped multi-frame
 allocation reuse remain future gates; this bounded slice does not complete M4.
 [Evidence](validation/M4_ASYNC_MIP_REFINEMENT.md).
+
+The user-approved M4 scene-benchmark target now has a first resident procedural
+workload: a repeatable approach/village/crowd camera route, moving proxies, GPU
+culling/near-far detail, visibility resolve, timings and live stats. It executes
+0..10000 visual proxies under bounded validation/replay; it is not network-player
+capacity evidence. Next integrate cooked world content, representative textures/
+geometry LOD and explicit streaming pressure into this same benchmark framework.
+Richer lighting/temporal rendering and animated characters expand it across M5/M6;
+server-controlled bots and replication/load instrumentation expand it across M7–M9.
+This adds an integration/profiling target without closing those milestones.
+[Benchmark scope](SCENE_BENCHMARK.md), [qualification](validation/M4_SCENE_BENCHMARK.md).
