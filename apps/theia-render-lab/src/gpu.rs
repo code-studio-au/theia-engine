@@ -1095,7 +1095,7 @@ impl Renderer {
                 })
             }),
         };
-        if options.benchmark {
+        if options.benchmark || options.world_camera_timings.is_some() {
             // SAFETY: Live selected physical device; properties and queue family are immutable.
             let (properties, mesh_limits, bits) = unsafe {
                 let instance = renderer.ctx.instance.as_ref().unwrap();
@@ -1146,7 +1146,9 @@ impl Renderer {
                 .to_string_lossy()
                 .into_owned();
             let mut metadata = serde_json::json!({"device":name,"vendor_id":properties.vendor_id,"device_id":properties.device_id,"driver_version":properties.driver_version,"api_version":properties.api_version,"timestamp_period_ns":properties.limits.timestamp_period,"timestamp_valid_bits":bits,"validation":!options.no_validation,"debug_assertions":cfg!(debug_assertions),"work_requested_bytes":crate::benchmark::WORK_BYTES,"shader_dir":renderer.shader_dir});
-            metadata["scene_kind"] = serde_json::json!(if options.benchmark_mixed {
+            metadata["scene_kind"] = serde_json::json!(if options.world_camera_timings.is_some() {
+                "streamed-world"
+            } else if options.benchmark_mixed {
                 "mixed-world"
             } else if options.benchmark_cooked {
                 "cooked-bundle"
@@ -1180,6 +1182,29 @@ impl Renderer {
                 metadata["visibility_identity"] = serde_json::json!(
                     "frame-local bit31 marks visual proxies; lower31 stores dense id+1; zero background"
                 );
+            }
+            if options.world_camera_timings.is_some() {
+                metadata["camera_route_frames"] = serde_json::json!(
+                    options
+                        .world_camera_period
+                        .unwrap_or(options.frames.unwrap_or(240))
+                );
+                metadata["streaming"] = true.into();
+                metadata["world_scene"] = serde_json::json!(options.world_scene);
+                metadata["warmup_scope"]="exclude timing samples from summaries; camera/demand/proxy clock starts at frame zero".into();
+                metadata["logical_duration_scope"] =
+                    "60 seconds per route; repeated periods reset camera/proxy time".into();
+                metadata["gpu_timestamp_scope"]="frame compute/visibility/resolve only; excludes upload submissions and graphics-generation retirement before recording".into();
+                metadata["cpu_timing_scope"]="draw wall includes polling, synchronous upload submission/waits and generation rebuilds; background worker CPU time is not measured".into();
+                metadata["tracked_allocation_scope"]="work arenas and owned offscreen targets; excludes graph/query table, staging, swapchain and driver allocations".into();
+                metadata["work_requested_bytes"] =
+                    serde_json::json!(4 * 256 + crate::benchmark::WORK_BYTES);
+                metadata["bundle_cpu_budget"] =
+                    serde_json::json!(options.bundle_byte_budget.unwrap_or(64 * 1024 * 1024));
+                metadata["aggregate_gpu_budget"] =
+                    serde_json::json!(options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024));
+                metadata["image_gpu_budget"] =
+                    serde_json::json!(options.texture_budget.unwrap_or(4 * 1024 * 1024));
             }
             renderer.benchmark = Some(crate::benchmark::Recorder::new(
                 renderer.ctx.device.as_ref().unwrap(),
@@ -1921,6 +1946,14 @@ impl Renderer {
         }
         Ok(renderer)
     }
+    fn work_allocation_bytes(&self) -> u64 {
+        self.work.as_ref().map_or(0, |w| w.allocated_bytes)
+            + self.proxy_work.as_ref().map_or(0, |w| w.allocated_bytes)
+            + self
+                .scene
+                .as_ref()
+                .map_or(0, |s| s.work.iter().map(|w| w.allocated_bytes).sum::<u64>())
+    }
     fn bundle_resource_bytes(&self) -> u64 {
         self.ground_table.as_ref().map_or(0, |v| v.allocated_bytes)
             + self.work.as_ref().map_or(0, IndirectWork::resident_bytes)
@@ -2403,19 +2436,31 @@ impl Renderer {
         self.tick_covered_reload(size)?;
         self.tick_world_camera(size)?;
         self.tick_texture_refinement(size)?;
-        let cooked_stats = (self.benchmark.is_some() && self.mode == RenderMode::AssetResolve)
-            .then(|| crate::benchmark::CookedStats {
-                bundle_bytes: self.bundle_resource_bytes(),
-                textures: self.textures.len() as u32,
-                publications: self.bundle_stream.as_ref().map_or(0, |s| s.publications),
-                deferrals: self.bundle_stream.as_ref().map_or(0, |s| s.rejections),
-            });
+        let cooked_stats = (self.benchmark.is_some()
+            && self.mode == RenderMode::AssetResolve
+            && self.scene.is_none())
+        .then(|| crate::benchmark::CookedStats {
+            bundle_bytes: self.bundle_resource_bytes(),
+            textures: self.textures.len() as u32,
+            publications: self.bundle_stream.as_ref().map_or(0, |s| s.publications),
+            deferrals: self.bundle_stream.as_ref().map_or(0, |s| s.rejections),
+        });
+        let world_stats = if self.benchmark.is_some() {
+            self.scene
+                .as_ref()
+                .map(|s| s.benchmark_stats(self.presented))
+                .transpose()?
+        } else {
+            None
+        };
+        let work_allocation_bytes = self.work_allocation_bytes();
         let chain = self.chain.as_mut().unwrap();
         let ctx = &self.ctx;
         let device = ctx.device.as_ref().unwrap();
         let benchmark_push = self
             .benchmark
             .as_ref()
+            .filter(|_| self.scene.is_none())
             .map(|b| {
                 crate::benchmark::push(
                     &b.config,
@@ -2697,8 +2742,7 @@ impl Renderer {
                 .map(|b| {
                     let base = b.overlay(
                         self.presented,
-                        self.work.as_ref().unwrap().allocated_bytes
-                            + self.proxy_work.as_ref().map_or(0, |p| p.allocated_bytes)
+                        work_allocation_bytes
                             + chain.visibility.as_ref().unwrap().allocated_bytes(),
                     );
                     let mut bytes = [0; 48];
@@ -2852,10 +2896,9 @@ impl Renderer {
                     self.presented,
                     cpu_started.elapsed().as_secs_f64() * 1000.,
                     [chain.extent.width, chain.extent.height],
-                    self.work.as_ref().unwrap().allocated_bytes
-                        + self.proxy_work.as_ref().map_or(0, |p| p.allocated_bytes)
-                        + chain.visibility.as_ref().unwrap().allocated_bytes(),
+                    work_allocation_bytes + chain.visibility.as_ref().unwrap().allocated_bytes(),
                     cooked_stats,
+                    world_stats,
                 );
             }
             self.presented += u64::from(outcome.presented);
@@ -2874,9 +2917,14 @@ impl Renderer {
             }
             benchmark.finish(
                 self.generations,
-                self.bundle_stream
+                self.scene
                     .as_ref()
-                    .map(|s| (s.publications, s.rejections)),
+                    .and_then(crate::world_scene::Scene::stream_outcome)
+                    .or_else(|| {
+                        self.bundle_stream
+                            .as_ref()
+                            .map(|s| (s.publications, s.rejections))
+                    }),
             )?;
         }
         if let Some(stream) = &self.stream {

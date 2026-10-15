@@ -29,7 +29,7 @@ def failure_cases(args,out,runtime,scene):
         log_path=out/(name+'.log');history=out/(name+'-history.json')
         with log_path.open('w') as log:
             child=subprocess.Popen([str(args.renderer.resolve()),'--world-camera-test',str(path),'--frames','240',
-                '--world-camera-report',str(history),*crowd_flags,*extra,'--gpu','7900'],env=runtime,stdout=log,stderr=subprocess.STDOUT)
+                '--world-camera-report',str(history),*crowd_flags,*getattr(args,'profile_flags',[]),*extra,'--gpu','7900'],env=runtime,stdout=log,stderr=subprocess.STDOUT)
             try:
                 deadline=time.monotonic()+45
                 while child.poll() is None and time.monotonic()<deadline:

@@ -467,6 +467,17 @@ impl Scene {
         }
         Ok(())
     }
+    pub fn benchmark_stats(&self, frame: u64) -> Result<serde_json::Value> {
+        self.demand
+            .as_ref()
+            .ok_or("Missing camera world stats")?
+            .frame_stats(self.covered_stats(frame)?, frame)
+    }
+    pub fn stream_outcome(&self) -> Option<(u64, u64)> {
+        self.demand
+            .as_ref()
+            .map(crate::world_camera::Stream::outcome)
+    }
     pub fn qualification_complete(&self, frame: u64) -> Result<()> {
         if self.retirement.is_some()
             && frame >= 81

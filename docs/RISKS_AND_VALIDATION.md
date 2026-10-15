@@ -213,3 +213,11 @@ centers; no slope-conforming animation, foot IK or transition morphing is claime
 The current path has no timed recorder/HUD, and its correctness results do not
 establish production streaming throughput or networked-player capacity.
 [Evidence and scope](validation/M4_STREAMED_WORLD_CROWD.md).
+
+Streamed-world timing reports now qualify frame-stage timestamps and per-frame
+residency snapshots. GPU intervals exclude transfers and complete-generation
+retirement before frame recording; CPU draw wall includes synchronous renderer
+costs but not background worker CPU usage. FIFO/single-frame/instrumentation and
+small prevalidated content constrain interpretation. Report correctness does not
+prove production streaming throughput or networked-player capacity.
+[Metric scope](validation/M4_STREAMED_WORLD_TIMINGS.md).

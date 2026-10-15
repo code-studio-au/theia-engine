@@ -520,3 +520,10 @@ and two-way occlusion. Next connect timed recording and a live HUD for this
 combined path, preserving graph/pending/fixed allocation scope. Broader catalogs,
 independent per-view LOD and virtualized geometry/textures remain open.
 [Evidence](validation/M4_STREAMED_WORLD_CROWD.md).
+
+The combined route now records finite frame timestamps and matching residency
+snapshots. Independent checks cover warmup/repeat clocks, all sample ledgers,
+stream counters and summary arithmetic; captures verify the corresponding pixels.
+Next add a live HUD that reads the four world/proxy work counters directly on
+the GPU, using completed timing data and explicitly scoped memory labels.
+[Evidence](validation/M4_STREAMED_WORLD_TIMINGS.md).

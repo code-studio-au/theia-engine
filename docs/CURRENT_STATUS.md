@@ -4,6 +4,17 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 streamed crowd frame timings — locally qualified (2026-10-15)
+
+The combined world/crowd route now records GPU frame stages and per-frame CPU
+residency snapshots, with an explicit warmup/route clock and allocation scope.
+Debug and release each pass seventeen native cases with zero runtime diagnostics;
+three replays pass 580 image probes and checked timing/ownership summaries. A
+3660-frame release run records 3600 measured samples with explicit display,
+validation and metric scope. Uploads and graphics
+retirement before recording remain outside GPU frame timings. The live HUD is
+still open. [Evidence and metric scope](validation/M4_STREAMED_WORLD_TIMINGS.md).
+
 ## M4 streamed world with 10000 grounded proxies — locally qualified (2026-10-15)
 
 The camera-driven four-region world now shares visibility/depth with up to 10000

@@ -216,6 +216,7 @@ struct PendingFrame {
     allocated_bytes: u64,
     interval_ms: f64,
     cooked: Option<CookedStats>,
+    world: Option<Value>,
 }
 
 pub struct Recorder {
@@ -273,6 +274,7 @@ impl Recorder {
             allocated_bytes,
             interval_ms,
             cooked,
+            world,
         }) = self.pending.take()
         {
             let mut values = [0u64; 4];
@@ -289,9 +291,12 @@ impl Recorder {
                 ((values[b].wrapping_sub(values[a])) & self.mask) as f64 * self.period as f64
                     / 1_000_000.
             };
-            let mut sample = json!({"frame":frame,"warmup":frame<self.config.warmup,"scene_time":self.config.time(frame),"cpu_draw_ms":cpu_ms,"frame_interval_ms":interval_ms,"extent":extent,"tracked_image_and_work_allocation_bytes":allocated_bytes,"gpu_total_ms":elapsed(0,3),"gpu_compute_ms":elapsed(0,1),"gpu_visibility_ms":elapsed(1,2),"gpu_resolve_ms":elapsed(2,3)});
+            let mut sample = json!({"frame":frame,"warmup":frame<self.config.warmup,"scene_time":self.route_time(frame),"cpu_draw_ms":cpu_ms,"frame_interval_ms":interval_ms,"extent":extent,"tracked_image_and_work_allocation_bytes":allocated_bytes,"gpu_total_ms":elapsed(0,3),"gpu_compute_ms":elapsed(0,1),"gpu_visibility_ms":elapsed(1,2),"gpu_resolve_ms":elapsed(2,3)});
             if let Some(stats) = cooked {
                 sample["cooked"] = json!({"active_bundle_allocation_bytes":stats.bundle_bytes,"resident_texture_count":stats.textures,"publications":stats.publications,"deferrals":stats.deferrals});
+            }
+            if let Some(world) = world {
+                sample["world"] = world;
             }
             self.samples.push(sample);
         }
@@ -322,6 +327,7 @@ impl Recorder {
         extent: [u32; 2],
         allocated_bytes: u64,
         cooked: Option<CookedStats>,
+        world: Option<Value>,
     ) {
         let interval = self.last_submit.elapsed().as_secs_f64() * 1000.;
         self.last_submit = Instant::now();
@@ -332,7 +338,15 @@ impl Recorder {
             allocated_bytes,
             interval_ms: interval,
             cooked,
+            world,
         });
+    }
+    fn route_time(&self, frame: u64) -> f32 {
+        if let Some(period) = self.metadata["camera_route_frames"].as_u64() {
+            self.config.seconds * (frame % period) as f32 / (period - 1) as f32
+        } else {
+            self.config.time(frame)
+        }
     }
     pub fn overlay(&self, frame: u64, allocated_bytes: u64) -> [u8; 32] {
         let (count, interval) = self
@@ -351,7 +365,7 @@ impl Recorder {
         let last = self.samples.last();
         let scaled =
             |value: f64, scale: f64| (value * scale).round().clamp(0., u32::MAX as f64) as u32;
-        let time = self.config.time(frame);
+        let time = self.route_time(frame);
         let values = [
             scaled(fps, 10.),
             scaled(
@@ -398,9 +412,10 @@ impl Recorder {
         {
             std::fs::create_dir_all(parent)?;
         }
+        let world = self.metadata["scene_kind"] == "streamed-world";
         let mixed = self.metadata["scene_kind"] == "mixed-world";
-        let cooked = mixed || self.metadata["scene_kind"] == "cooked-bundle";
-        let report = json!({"schema":1,"workload":if mixed {"theia-cooked-mmo-v1"} else if cooked {"theia-cooked-bundle-route-v1"} else {"theia-procedural-mmo-v1"},"players":self.config.players,"static_objects":if cooked {Value::Null} else {json!(STATIC_OBJECTS)},"frames":self.config.frames,"warmup_frames":self.config.warmup,"logical_duration_seconds":self.config.seconds,"wall_seconds":self.started.elapsed().as_secs_f64(),"presentation":"FIFO; single frame in flight","cpu_metric":"draw call wall time including fence/acquire/present; excludes event loop gaps","gpu_metric":"four ALL_COMMANDS timestamps on one graphics/compute queue; instrumentation enabled","overlay":self.config.overlay,"streaming":self.metadata["streaming"].as_bool().unwrap_or(false),"stream_outcome":stream.map(|(publications,deferrals)|json!({"publications":publications,"deferrals":deferrals})),"authority":false,"skinned_animation":false,"generations":generations,"metadata":self.metadata,"summary_ms":summary,"samples":self.samples});
+        let cooked = world || mixed || self.metadata["scene_kind"] == "cooked-bundle";
+        let report = json!({"schema":1,"workload":if world {"theia-streamed-mmo-v1"} else if mixed {"theia-cooked-mmo-v1"} else if cooked {"theia-cooked-bundle-route-v1"} else {"theia-procedural-mmo-v1"},"players":self.config.players,"static_objects":if cooked {Value::Null} else {json!(STATIC_OBJECTS)},"frames":self.config.frames,"warmup_frames":self.config.warmup,"logical_duration_seconds":self.config.seconds,"wall_seconds":self.started.elapsed().as_secs_f64(),"presentation":"FIFO; single frame in flight","cpu_metric":"draw call wall time including fence/acquire/present; excludes event loop gaps","gpu_metric":"four ALL_COMMANDS timestamps on one graphics/compute queue; instrumentation enabled","overlay":self.config.overlay,"streaming":self.metadata["streaming"].as_bool().unwrap_or(false),"stream_outcome":stream.map(|(publications,deferrals)|json!({"publications":publications,"deferrals":deferrals})),"authority":false,"skinned_animation":false,"generations":generations,"metadata":self.metadata,"summary_ms":summary,"samples":self.samples});
         std::fs::write(&self.config.report, serde_json::to_vec_pretty(&report)?)?;
         println!(
             "Benchmark report written: {} ({} measured frames)",

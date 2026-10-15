@@ -250,6 +250,26 @@ impl Stream {
         self.history.push_back(row);
         Ok(())
     }
+    pub fn frame_stats(&self, mut row: serde_json::Value, frame: u64) -> Result<serde_json::Value> {
+        let pending = self.pending()?;
+        row["pending"] = serde_json::to_value(&pending)?;
+        row["fixed_gpu_bytes"] = self.fixed_gpu_bytes.into();
+        row["total_gpu_bytes"] = (row["physical_bytes"].as_u64().unwrap()
+            + self.fixed_gpu_bytes
+            + pending
+                .as_ref()
+                .and_then(|p| p["pending_gpu_bytes"].as_u64())
+                .unwrap_or(0))
+        .into();
+        row["publications"] = self.publications.into();
+        row["evictions"] = self.evictions.into();
+        row["deferrals"] = (self.deferrals_cpu + self.deferrals_gpu).into();
+        row["route_cycle"] = (frame / self.config.frames).into();
+        Ok(row)
+    }
+    pub fn outcome(&self) -> (u64, u64) {
+        (self.publications, self.deferrals_cpu + self.deferrals_gpu)
+    }
     pub fn report(&self, final_state: serde_json::Value, completed: bool) -> Result<()> {
         if let Some(path) = &self.report {
             if let Some(parent) = path.parent()

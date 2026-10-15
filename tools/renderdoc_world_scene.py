@@ -70,6 +70,10 @@ def qualify(report):
         args+=['--world-camera-period',os.environ.get('THEIA_WORLD_SCENE_PERIOD',str(frames)),
             '--world-camera-slots',os.environ.get('THEIA_WORLD_SCENE_SLOTS','2'),'--world-camera-report',str(out/'camera.json')]
     if crowd is not None:args+=['--world-camera-crowd',str(crowd)]
+    timed=os.environ.get('THEIA_WORLD_SCENE_TIMINGS')=='1'
+    if timed:
+        require(crowd is not None,'Timings require world crowd profile')
+        args+=['--world-camera-timings',str(out/'timings.json'),'--world-camera-warmup',os.environ.get('THEIA_WORLD_SCENE_WARMUP','10')]
     if retire:
         require(covered,'Retirement requires protected selection')
         args+=['--world-covered-reload-test' if reload else '--world-covered-retire-test','--world-covered-report',str(out/'retirement.json')]
@@ -117,6 +121,12 @@ def qualify(report):
         models=[decode(cook) for cook in cooks];inventory_models=[decode(cook) for cook in inventory_cooks]
         pixel_tables=[material_pixels(cook,model[3]) for cook,model in zip(cooks,models)]
         factors=[material_factors(cook) for cook in cooks]
+    timing_proof=None
+    if timed:
+        from world_timing_reference import verify as verify_timings
+        timing_proof=verify_timings(json.loads((out/'timings.json').read_bytes()),camera_report,scene,exe,frames,
+            camera_report['route_frames'],int(os.environ.get('THEIA_WORLD_SCENE_WARMUP','10')),crowd,
+            json.loads(os.environ.get('THEIA_WORLD_SCENE_CAPS','[67108864,33554432,4194304]')))
     cap=rd.OpenCaptureFile();controller=None
     try:
         success(cap.OpenFile(capture,'',None));result,controller=cap.OpenCapture(rd.ReplayOptions(),None);success(result)
@@ -238,7 +248,7 @@ def qualify(report):
             samples.append(dict(pixel=[x,y],identity=actual,color=actual_rgb))
         save=rd.TextureSave();save.resourceId=color.resourceId;save.destType=rd.FileType.PNG
         success(controller.SaveTexture(save,str(out/'preview.png')))
-        report.update(passed=True,crowd=proxies['proof'] if proxies else None,proxy_pixels=proxy_pixels,cross_occlusion_probes=cross_occlusion,capture=capture,view=view,frame=frame,retirement=retirement,camera=camera_report,camera_state=camera_state,pixels=populations,images=len(images),
+        report.update(passed=True,timing_proof=timing_proof,crowd=proxies['proof'] if proxies else None,proxy_pixels=proxy_pixels,cross_occlusion_probes=cross_occlusion,capture=capture,view=view,frame=frame,retirement=retirement,camera=camera_report,camera_state=camera_state,pixels=populations,images=len(images),
             protected_owners=bool(covered),selected_chunks=selected,root_buffers=len(inventory_models)*4,
             retained_inventory_verified=bool(covered),payload_scope="selected_graphs",
             compactions_verified=True,identity_depth_bounds_verified=True,sampled_materials=sorted(materials),

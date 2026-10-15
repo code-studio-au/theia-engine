@@ -1256,3 +1256,11 @@ generated CPU table metadata remain outside that cap. The table retains both
 terrain levels for this fixture; it is not a new asset schema or virtualized
 query streamer. The path renders visual mock proxies without gameplay authority,
 timed recording or HUD. [Evidence](validation/M4_STREAMED_WORLD_CROWD.md).
+
+`--world-camera-timings <json>` optionally records the streamed crowd under
+`theia-streamed-mmo-v1`, with `--world-camera-warmup <frames>` filtering summary
+samples without delaying the camera route. Each presented frame records the
+matching CPU selection/epoch and current/pending/fixed ledger. GPU stages cover
+frame compute/visibility/resolve, excluding earlier transfers and graphics
+retirement. Timing failure does not publish a completed report.
+[Clock, allocation and qualification scope](validation/M4_STREAMED_WORLD_TIMINGS.md).
