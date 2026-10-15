@@ -491,3 +491,14 @@ resident while chunk 1 alternates every twenty presented frames after bounded
 I/O and fence-gated uploads; both remain visible during budget deferral. This
 schedule is diagnostic and does not follow the camera-distance oracle.
 [Lifecycle, caps and proof](validation/M4_WORLD_CHUNK_STREAMING.md).
+
+## Native Bevy visual comparison
+
+`tools/run_bevy_comparison.py` runs the current streamed Theia route without its
+HUD, exports cooked resources and observed view/selection samples, then replays
+the visual workload in a standalone Bevy 0.19.1 executable. It matches opaque
+unlit world/proxy appearance, requested extent and FIFO presentation. Bevy uses
+preloaded representations and CPU ECS proxy updates; this is not an equivalent
+streaming implementation or a total-engine performance ranking.
+[Usage and interpretation](../tools/theia-bevy-benchmark/README.md),
+[executed evidence](validation/M4_BEVY_VISUAL_REFERENCE.md).

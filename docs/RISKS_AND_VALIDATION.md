@@ -246,3 +246,11 @@ coverage but does not satisfy an unmet fine error request. All source-epoch owne
 remain pinned, even when a view chooses coarse, so this is not a minimal per-view
 memory-retention policy. No GPU/view-policy adoption is claimed by CPU evidence.
 [Evidence](validation/M4_CPU_VIEW_SELECTION.md).
+
+A native Bevy port now qualifies the benchmark's visible workload, with sampled
+pixels and fine/coarse ground agreement. It preloads eight graphs and replays
+Theia selection, with CPU ECS proxy motion. FIFO host intervals and differently
+scoped CPU measurements cannot establish relative maximum throughput, GPU cost,
+streaming or VRAM efficiency. Initial presentation diagnostics required a
+reference-only first-surface clear; corrected native Wayland runs pass.
+[Evidence and limits](validation/M4_BEVY_VISUAL_REFERENCE.md).

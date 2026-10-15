@@ -1,8 +1,19 @@
-# Theia — Actual Implementation Status (2026-10-15)
+# Theia — Actual Implementation Status (2026-10-16)
 
 **This file separates observed evidence from planned systems.** The original handoff
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
-update is 2026-10-15.
+update is 2026-10-16.
+
+## Optional native Bevy visual reference — locally qualified (2026-10-16)
+
+The current cooked scene/camera/proxy workload now runs in a separate Bevy 0.19.1
+comparison tool. Three native population pairs (0/1000/10000), twelve captures
+with 1462 pixel probes and independent fine/coarse ground checks pass. A separate
+660-frame pair records timing traces with explicit FIFO/CPU-scope limits. Bevy
+preloads the eight graphs and replays Theia's selections; streaming equivalence
+and performance superiority are not established. No Theia runtime dependency or
+locked decision changes. [Usage](../tools/theia-bevy-benchmark/README.md),
+[evidence](validation/M4_BEVY_VISUAL_REFERENCE.md).
 
 ## M4 CPU per-view representation selection — locally qualified (2026-10-15)
 
