@@ -453,3 +453,11 @@ selection. Next protect spatial fallback coverage and connect camera-distance
 demand to independently published GPU sets, then integrate that world path with
 the timed crowd workload. General streaming, geometry LOD and virtual textures
 remain M4 exit gates. [Evidence](validation/M4_FOUR_RESIDENT_CHUNKS.md).
+
+
+Four offline coarse-quadrant candidates now preserve the fine terrain perimeter,
+qualifying all 16 mixed selections without unmatched terrain edges. Continuous
+vertical error, full props/material preservation and native cooked admission are
+checked. Next connect protected fallback owners to committed fine residency;
+fixed resident selections alone do not provide camera-driven streaming or runtime
+LOD. [Evidence](validation/M4_CHUNK_FALLBACK_GEOMETRY.md).

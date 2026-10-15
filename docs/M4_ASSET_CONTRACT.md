@@ -1100,3 +1100,18 @@ This is fixed startup composition with coarse fixed cameras, opaque unlit neares
 mip-zero textures and no visual proxies. It does not generalize live replacement,
 connect camera demand, establish protected fallback or change the single-whole-
 world timed crowd benchmark. [Qualification](validation/M4_FOUR_RESIDENT_CHUNKS.md).
+
+
+## Edge-compatible quadrant fallback recipe
+
+The optional `cook_benchmark_scene.py --chunk-fallbacks` recipe emits four complete
+coarse v2 graphs. The 16 m interior ground retains all fine 8 m perimeter edges,
+positions/heights and UVs; buildings, trees and material assignments stay exact.
+All 16 coarse/fine selections form a closed edge-matched rectangle. Exact rational
+continuous overlay checks bound each quadrant's vertical difference below 0.12 m
+and reject missing triangle coverage. This is an offline recipe/evaluation bound,
+not a locked general LOD policy. No skirts or overlapping representations are used.
+
+The existing four-resident fixture can draw any fixed selection. Protected coarse
+ownership, camera demand and fence-gated fine publication are not connected by
+this asset slice. [Qualification](validation/M4_CHUNK_FALLBACK_GEOMETRY.md).

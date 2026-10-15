@@ -113,6 +113,72 @@ def geometry():
     return parts, counts
 
 
+def fallback_geometry():
+    """Coarse quadrant interiors with the fine 8 m perimeter retained exactly.
+
+    Every boundary segment can meet either fine or coarse neighbours. Split
+    boundary edges of the 16 m grid without skirts or hidden overlap geometry.
+    Authored props/materials/UVs remain unchanged.
+    """
+    parts, _ = geometry()
+    for slot, part in enumerate(parts):
+        x0, y0 = (slot % 2 - 1) * 64, (slot // 2 - 1) * 64
+        ground = {'positions': [], 'uvs': [], 'indices': []}
+        vertices = {}
+
+        def vertex(x, y):
+            key = (x, y)
+            if key not in vertices:
+                vertices[key] = len(ground['positions'])
+                ground['positions'].append((x, y, height(x, y)))
+                ground['uvs'].append((x / 8, y / 8))
+            return vertices[key]
+
+        for y in range(y0, y0 + 64, 16):
+            for x in range(x0, x0 + 64, 16):
+                corners = [(x, y), (x + 16, y), (x, y + 16), (x + 16, y + 16)]
+                for indices in ((0, 1, 2), (1, 3, 2)):
+                    original = [corners[i] for i in indices]
+                    triangles = [original]
+                    for a, b in zip(original, original[1:] + original[:1]):
+                        boundary = any(a[axis] == b[axis] and
+                            a[axis] in (lower, lower + 64)
+                            for axis, lower in enumerate((x0, y0)))
+                        if not boundary:
+                            continue
+                        midpoint = tuple((a[i] + b[i]) // 2 for i in range(2))
+                        split = []
+                        for triangle in triangles:
+                            if a in triangle and b in triangle:
+                                for i in range(3):
+                                    p, q, r = [triangle[(i + j) % 3] for j in range(3)]
+                                    if p == a and q == b:
+                                        split.extend(([p, midpoint, r], [midpoint, q, r]))
+                                        break
+                                else:
+                                    raise ValueError('Fallback boundary winding changed')
+                            else:
+                                split.append(triangle)
+                        triangles = split
+                    for triangle in triangles:
+                        ground['indices'].extend(vertex(*p) for p in triangle)
+        part[0] = ground
+    return parts
+
+
+def fallback_ground_error(fine, coarse):
+    """Continuous vertical error and complete coverage on one quadrant."""
+    from continuous_height_error import continuous_error
+    positions = list(dict.fromkeys(map(tuple, fine['positions'])))
+    mapping = {point: i for i, point in enumerate(positions)}
+    source = [mapping[tuple(fine['positions'][i])] for i in fine['indices']]
+    simplified = [mapping[tuple(coarse['positions'][i])] for i in coarse['indices']]
+    result = continuous_error(positions, source, simplified, .12)
+    result['vertical_error_limit_metres'] = .12
+    result['checker_sha256'] = digest((ROOT / 'tools/continuous_height_error.py').read_bytes())
+    return result
+
+
 def whole_geometry():
     """One complete resident scene; coarser ground keeps the current <=32 cap.
 
@@ -229,6 +295,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--source-only', action='store_true')
     parser.add_argument('--whole-world', action='store_true', help='Also cook one complete resident world with bounded coarse ground')
+    parser.add_argument('--chunk-fallbacks', action='store_true', help='Also cook four coarse quadrants retaining fine perimeter edges')
     parser.add_argument('--importer', type=Path)
     parser.add_argument('--library', type=Path)
     parser.add_argument('--meshoptimizer-source', type=Path)
@@ -254,6 +321,16 @@ def main():
             source = output / 'sources/whole-world.gltf'
             write_json(source, gltf(primitives))
             jobs.append(('whole-world', 'whole-world', source, {'ground': 64, 'buildings': 64, 'trees': 128}))
+        fallback_errors = {}
+        if args.chunk_fallbacks:
+            fine, _ = geometry()
+            for slot, primitives in enumerate(fallback_geometry()):
+                name = f'fallback-{slot}'
+                fallback_errors[name] = fallback_ground_error(fine[slot][0], primitives[0])
+                source = output / f'sources/{name}.gltf'
+                write_json(source, gltf(primitives))
+                jobs.append((name, name, source, dict(counts[slot], ground=16)))
+            report['fallbacks'] = []
         for name, log_tag, source, objects in jobs:
             entry = {'source': str(source), 'source_sha256': digest(source.read_bytes()),
                      'objects': objects}
@@ -282,11 +359,16 @@ def main():
                 entry.update(ground_error=ground_error, triangles=1664,
                              runtime_profile='one complete resident bundle; no dynamic LOD or crowd')
                 report['whole_world'] = entry
+            elif name in fallback_errors:
+                entry.update(ground_error=fallback_errors[name],
+                    runtime_profile='coarse quadrant; fixed fine perimeter; no automatic runtime selection')
+                report['fallbacks'].append(entry)
             else:
                 report['quadrants'].append(entry)
         if not args.source_only:
             unique = {}
-            entries = [*report['quadrants'], *([report['whole_world']] if args.whole_world else [])]
+            entries = [*report['quadrants'], *report.get('fallbacks', []),
+                       *([report['whole_world']] if args.whole_world else [])]
             for entry in entries:
                 cook = entry['cook']
                 for record in [cook, cook['materials'], cook['uv'], cook['texture_table'],
@@ -298,7 +380,7 @@ def main():
                       generator_sha256=digest(Path(__file__).read_bytes()),
                       total_objects={name: sum(c[name] for c in counts) for name in counts[0]},
                       total_triangles=2048,
-                      limits='four quadrant bundles, optional whole-world bundle; each <=32 meshlets; opaque unlit nearest mip0')
+                      limits='four fine quadrant bundles; optional four edge-compatible fallbacks and whole-world bundle; each <=32 meshlets; opaque unlit nearest mip0')
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
         report['error'] = str(error)
         parser.exit(1, str(error) + '\n')

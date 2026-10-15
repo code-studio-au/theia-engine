@@ -4,6 +4,17 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 edge-compatible quadrant fallback assets (2026-10-15)
+
+An optional offline recipe now cooks four coarse quadrant bundles retaining the
+fine 8 m perimeter exactly. All 16 fine/coarse combinations pass closed-edge and
+coverage tests; continuous vertical error stays below 0.12 m. Props/UVs/materials
+are unchanged, reducing 2048 triangles/43 meshlets to 1728/31. Source-to-cook and
+Rust admission checks cover all eight fine/coarse graphs. Seventeen native cases
+pass with zero diagnostics; four replays pass 931 ray/colour probes. Runtime automatic LOD,
+protected fallback ownership and camera demand remain separate gates.
+[Scope and evidence](validation/M4_CHUNK_FALLBACK_GEOMETRY.md).
+
 ## M4 four complete resident world chunks — integration slice (2026-10-15)
 
 The isolated four-chunk scene now composes the full fine village through shared
