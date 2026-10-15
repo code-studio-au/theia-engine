@@ -113,6 +113,62 @@ def geometry():
     return parts, counts
 
 
+def whole_geometry():
+    """One complete resident scene; coarser ground keeps the current <=32 cap.
+
+    Weld only equal position+UV rows within a material. Buildings/trees retain
+    their exact source triangles; no material seam or winding may be merged away.
+    """
+    parts, _ = geometry()
+    merged = []
+    for material in range(4):
+        primitive = {'positions': [], 'uvs': [], 'indices': []}
+        if material == 0:
+            primitive['positions'] = [(x * 16 - 64, y * 16 - 64,
+                                       height(x * 16 - 64, y * 16 - 64))
+                                      for y in range(9) for x in range(9)]
+            primitive['uvs'] = [(x / 8, y / 8) for x, y, _ in primitive['positions']]
+            for y in range(8):
+                for x in range(8):
+                    i = y * 9 + x
+                    primitive['indices'].extend([i, i + 1, i + 9, i + 1, i + 10, i + 9])
+        else:
+            seen = {}
+            for part in parts:
+                source = part[material]
+                mapping = []
+                for point, uv in zip(source['positions'], source['uvs']):
+                    key = (*point, *uv)
+                    if key not in seen:
+                        seen[key] = len(primitive['positions'])
+                        primitive['positions'].append(point)
+                        primitive['uvs'].append(uv)
+                    mapping.append(seen[key])
+                primitive['indices'].extend(mapping[i] for i in source['indices'])
+        merged.append(primitive)
+    return merged
+
+
+def whole_ground_error(primitives):
+    """Exact vertical difference between the actual fine/coarse ground triangles."""
+    from continuous_height_error import continuous_error
+    parts, _ = geometry()
+    positions, mapping, fine = [], {}, []
+    for part in parts:
+        source = part[0]
+        for point in source['positions']:
+            if point not in mapping:
+                mapping[point] = len(positions)
+                positions.append(point)
+        fine.extend(mapping[source['positions'][i]] for i in source['indices'])
+    ground = primitives[0]
+    coarse = [mapping[tuple(ground['positions'][i])] for i in ground['indices']]
+    result = continuous_error(positions, fine, coarse, .12)
+    result['vertical_error_limit_metres'] = .12
+    result['checker_sha256'] = digest((ROOT / 'tools/continuous_height_error.py').read_bytes())
+    return result
+
+
 def gltf(primitives):
     data = bytearray()
     views, accessors, output = [], [], []
@@ -172,6 +228,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--source-only', action='store_true')
+    parser.add_argument('--whole-world', action='store_true', help='Also cook one complete resident world with bounded coarse ground')
     parser.add_argument('--importer', type=Path)
     parser.add_argument('--library', type=Path)
     parser.add_argument('--meshoptimizer-source', type=Path)
@@ -190,34 +247,47 @@ def main():
     try:
         sources, counts = generate(output / 'sources')
         env = {**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'}
-        for i, source in enumerate(sources):
+        jobs = [(f'quadrant-{i}', str(i), source, counts[i]) for i, source in enumerate(sources)]
+        if args.whole_world:
+            primitives = whole_geometry()
+            ground_error = whole_ground_error(primitives)
+            source = output / 'sources/whole-world.gltf'
+            write_json(source, gltf(primitives))
+            jobs.append(('whole-world', 'whole-world', source, {'ground': 64, 'buildings': 64, 'trees': 128}))
+        for name, log_tag, source, objects in jobs:
             entry = {'source': str(source), 'source_sha256': digest(source.read_bytes()),
-                     'objects': counts[i]}
+                     'objects': objects}
             if not args.source_only:
-                normalized = output / f'quadrant-{i}.json'
-                with (output / f'import-{i}.log').open('w') as log:
+                normalized = output / f'{name}.json'
+                with (output / f'import-{log_tag}.log').open('w') as log:
                     subprocess.run([str(args.importer.resolve()), str(source), str(normalized),
                                     '--unlit-textures'], stdout=log, stderr=subprocess.STDOUT,
                                    env=env, check=True, timeout=120)
-                directory = output / f'quadrant-{i}'
+                directory = output / name
                 command = [sys.executable, str(ROOT / 'tools/cook_meshlet_fixture.py'),
                            '--geometry', str(normalized), '--library', str(args.library.resolve()),
                            '--source-archive', str(args.meshoptimizer_source.resolve()),
                            '--ktx', str(args.ktx.resolve()), '--ktx-build', str(args.ktx_build.resolve()),
                            '--ktx-source-archive', str(args.ktx_source.resolve()),
                            '--output-dir', str(directory)]
-                with (output / f'cook-{i}.log').open('w') as log:
+                with (output / f'cook-{log_tag}.log').open('w') as log:
                     subprocess.run(command, stdout=log, stderr=subprocess.STDOUT,
                                    env=env, check=True, timeout=240)
                 cooked = json.loads((directory / 'imported-report.json').read_bytes())
                 if cooked['meshlets'] > 32:
-                    raise ValueError('Quadrant exceeds current bounded GPU meshlet profile')
+                    raise ValueError('Scene asset exceeds current bounded GPU meshlet profile')
                 entry.update(normalized=str(normalized),
                              normalized_sha256=digest(normalized.read_bytes()), cook=cooked)
-            report['quadrants'].append(entry)
+            if name == 'whole-world':
+                entry.update(ground_error=ground_error, triangles=1664,
+                             runtime_profile='one complete resident bundle; no dynamic LOD or crowd')
+                report['whole_world'] = entry
+            else:
+                report['quadrants'].append(entry)
         if not args.source_only:
             unique = {}
-            for entry in report['quadrants']:
+            entries = [*report['quadrants'], *([report['whole_world']] if args.whole_world else [])]
+            for entry in entries:
                 cook = entry['cook']
                 for record in [cook, cook['materials'], cook['uv'], cook['texture_table'],
                                cook['bundle'], *cook['textures']]:
@@ -228,7 +298,7 @@ def main():
                       generator_sha256=digest(Path(__file__).read_bytes()),
                       total_objects={name: sum(c[name] for c in counts) for name in counts[0]},
                       total_triangles=2048,
-                      limits='four independent bundles; each <=32 meshlets; opaque unlit nearest mip0')
+                      limits='four quadrant bundles, optional whole-world bundle; each <=32 meshlets; opaque unlit nearest mip0')
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
         report['error'] = str(error)
         parser.exit(1, str(error) + '\n')

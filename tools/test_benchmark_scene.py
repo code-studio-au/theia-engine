@@ -3,7 +3,7 @@ from collections import Counter
 import math
 import struct
 import unittest
-from cook_benchmark_scene import geometry, texture, png
+from cook_benchmark_scene import geometry, texture, png, whole_geometry, whole_ground_error
 
 
 class SceneTests(unittest.TestCase):
@@ -61,6 +61,45 @@ class SceneTests(unittest.TestCase):
         self.assertEqual(totals, [512, 768, 256, 512])
         self.assertEqual(sum(v['trees'] for v in counts), 128)
         self.assertEqual(sum(totals), 2048)
+
+    def test_whole_world_preserves_all_authored_props_and_closed_ground(self):
+        parts, _ = geometry()
+        world = whole_geometry()
+        def triangles(primitive):
+            p, uv, indices = (primitive[k] for k in ('positions', 'uvs', 'indices'))
+            return Counter(tuple((*p[v], *uv[v]) for v in indices[i:i + 3])
+                           for i in range(0, len(indices), 3))
+        for material in range(1, 4):
+            expected = Counter()
+            for part in parts:
+                expected.update(triangles(part[material]))
+            self.assertEqual(triangles(world[material]), expected)
+        ground = world[0]
+        edges = Counter()
+        area = 0
+        for triangle in triangles(ground).elements():
+            a, b, c = [p[:3] for p in triangle]
+            projected = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+            self.assertGreater(projected, 0)
+            area += projected / 2
+            edges.update(tuple(sorted(edge)) for edge in ((a, b), (b, c), (c, a)))
+        self.assertEqual(area, 128 * 128)
+        self.assertEqual(len(ground['positions']), 81)
+        for (a, b), count in edges.items():
+            boundary = any(a[axis] == b[axis] and abs(a[axis]) == 64 for axis in (0, 1))
+            self.assertEqual(count, 1 if boundary else 2)
+        self.assertEqual(sum(len(p['indices']) // 3 for p in world), 1664)
+
+    def test_whole_ground_continuous_error_is_bounded_and_holes_reject(self):
+        world = whole_geometry()
+        result = whole_ground_error(world)
+        bound = result['continuous_vertical_error_upper_bound']
+        self.assertGreater(bound, .11)
+        self.assertLess(bound, .12)
+        # Removing an actual coarse triangle must fail the exact coverage gate.
+        world[0]['indices'] = world[0]['indices'][:-3]
+        with self.assertRaises(ValueError):
+            whole_ground_error(world)
 
     def test_textures_are_distinct_opaque_spatial_patterns_with_bounded_pngs(self):
         textures = [texture(i) for i in range(4)]

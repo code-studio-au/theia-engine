@@ -107,7 +107,8 @@ def qualify(report):
     quadrant = int(os.environ.get('THEIA_COOKED_QUADRANT', '0'))
     frame = int(os.environ.get('THEIA_COOKED_FRAME', '90'))
     require(0 <= quadrant < 4 and 0 <= frame < 181, 'Invalid quadrant/frame')
-    cook = scene['quadrants'][quadrant]['cook']
+    whole_world = os.environ.get('THEIA_COOKED_WHOLE_WORLD') == '1'
+    cook = scene['whole_world']['cook'] if whole_world else scene['quadrants'][quadrant]['cook']
     blobs, triangles, hulls, texels = decode(cook)
     exe = Path('apps/theia-render-lab/target/debug/theia-render-lab').resolve()
     args = ['--benchmark-cooked', '--bundle', cook['bundle']['path'], '--frames', '181',
@@ -228,7 +229,8 @@ def qualify(report):
         save.resourceId = present.copyDestination
         save.destType = rd.FileType.PNG
         success(controller.SaveTexture(save, str(output / 'preview.png')))
-        report.update(passed=True, capture=capture, quadrant=quadrant, frame=frame,
+        report.update(passed=True, capture=capture, quadrant=None if whole_world else quadrant, frame=frame,
+                      scene_selection='whole-world' if whole_world else f'quadrant-{quadrant}',
                       visible_meshlets=ids, gpu_buffers_verified=4, gpu_texture_texels_verified=16384,
                       whole_image_identity_depth_verified=True, covered_pixels=covered,
                       samples=samples, sampled_materials=sorted(materials), boundary_envelope_probes=boundary_probes, texel_coordinate_envelope=.002)

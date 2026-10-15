@@ -4,6 +4,20 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 complete resident cooked world — independently executed (2026-10-15)
+
+The asset pipeline now optionally cooks the entire village into one admitted
+bundle: 64 buildings, 128 trees and continuous coarse ground, 1664 triangles in
+28 meshlets. Exact continuous vertical error against the finer ground is bounded
+by 0.114 metres under a 0.12-metre gate. Prop geometry/UVs are preserved. All 31
+offline Python tests and strict Rust admission pass; headless native Wayland and
+optimized launcher each complete 240 frames with zero diagnostics. Three camera
+replays pass immutable buffers/texels, hull compaction, image bounds and 96 ray/
+colour probes. This renders the whole static scene together as one resident
+bundle; independent quadrant streaming, moving proxies and the cooked HUD remain
+open. No runtime/shader or binary-format changes.
+[Usage](SCENE_BENCHMARK.md#complete-resident-cooked-world).
+
 ## M4 cooked-bundle benchmark route — independently executed (2026-10-15)
 
 An explicit cooked mode now reuses the benchmark camera/timing recorder with the

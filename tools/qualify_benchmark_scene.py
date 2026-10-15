@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 import struct
 import subprocess
-from cook_benchmark_scene import MATERIALS, digest, f32, geometry, texture
+from cook_benchmark_scene import MATERIALS, digest, f32, geometry, texture, whole_geometry, whole_ground_error
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -175,21 +175,31 @@ def main():
                 'Incomplete cooked scene')
         parts, _ = geometry()
         env = {**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'}
-        for i, (entry, primitives) in enumerate(zip(scene['quadrants'], parts)):
+        jobs = [(str(i), entry, primitives) for i, (entry, primitives) in enumerate(zip(scene['quadrants'], parts))]
+        if 'whole_world' in scene:
+            primitives = whole_geometry()
+            require(scene['whole_world']['ground_error'] == whole_ground_error(primitives),
+                    'Whole-world ground error gate changed')
+            jobs.append(('whole-world', scene['whole_world'], primitives))
+        for label, entry, primitives in jobs:
             result = verify(entry, primitives)
             command = ['cargo', 'run', '--locked', '--manifest-path',
                        str(ROOT / 'crates/theia-assets/Cargo.toml'), '--example', 'bundle',
                        '--', result['bundle']]
-            with (args.output / f'admit-{i}.log').open('w') as log:
+            with (args.output / f'admit-{label}.log').open('w') as log:
                 subprocess.run(command, check=True, stdout=log, stderr=subprocess.STDOUT,
                                timeout=120, env=env)
             result['rust_complete_bundle_admission'] = True
-            report['quadrants'].append(result)
+            if label == 'whole-world':
+                require(result['triangles'] == 1664, 'Whole-world triangle coverage')
+                report['whole_world'] = result
+            else:
+                report['quadrants'].append(result)
         require(sum(v['triangles'] for v in report['quadrants']) == 2048, 'Scene triangle coverage')
         if args.gpu_smoke:
             report['gpu_smoke'] = gpu_smoke(scene, args.output, args.gpu, args.headless_dri_prime)
         report.update(passed=True, source_objects=scene['total_objects'], total_triangles=2048,
-                      texture_texels_checked=65536)
+                      texture_texels_checked=65536 + (16384 if 'whole_world' in scene else 0))
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError, struct.error) as error:
         report['error'] = str(error)
         parser.exit(1, str(error) + '\n')

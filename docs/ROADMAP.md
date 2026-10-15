@@ -377,3 +377,9 @@ Richer lighting/temporal rendering and animated characters expand it across M5/M
 server-controlled bots and replication/load instrumentation expand it across M7–M9.
 This adds an integration/profiling target without closing those milestones.
 [Benchmark scope](SCENE_BENCHMARK.md), [qualification](validation/M4_SCENE_BENCHMARK.md).
+
+A complete resident cooked village now fits the current bounded viewer in one
+28-meshlet bundle, using an error-checked coarse ground mesh while preserving all
+buildings/trees. It shares the camera/timing framework and has three-phase replay
+evidence. This closes the single-quadrant visual gap for a fixed resident asset;
+independent quadrant residency and integration with moving proxies remain next.

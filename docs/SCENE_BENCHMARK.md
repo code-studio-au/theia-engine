@@ -267,3 +267,49 @@ whole-image identity/depth bounds and independent world-space ray/UV/texture col
 probes. At nearest-texel boundaries, a recorded ±0.002-texel coordinate envelope
 permits only adjacent source texels; encoded RGB tolerance remains two bytes.
 This bounded RADV numeric profile is not cross-vendor conformance.
+
+## Complete resident cooked world
+
+Add `--whole-world` to `cook_benchmark_scene.py` to retain the four original
+quadrant assets and additionally cook one complete world bundle. It contains all
+64 roofed buildings and 128 trees, with a continuous 8×8 ground grid over the same
+128×128 metre rectangle. Equal position/UV rows weld within each material; authored
+prop triangles, winding, UVs and material seams remain unchanged.
+
+The finer 16×16 ground plus all props exceeded the current 32-meshlet viewer
+profile in the evaluated cook. The complete representation instead has 1664
+triangles, 1553 vertices and 28 meshlets. This is a fixed coarse-ground test asset,
+not dynamic geometry LOD or independently resident quadrants. Ground topology
+retains complete rectangular coverage and matching edges. The existing exact
+continuous-heightfield checker gates vertical difference from the four-quadrant
+fine ground at 0.12 metres; the qualified bound is 0.11387628316879274 metres.
+This comparison is between represented triangular surfaces, not an analytic
+terrain, silhouette, normal or general 3D error guarantee.
+
+`scene.json.whole_world` records the complete asset, its own object/triangle counts
+and error proof. Legacy top-level totals still describe the quadrant representation.
+`qualify_benchmark_scene.py` additionally checks the whole asset and strict Rust
+admission when this entry is present. Cooked formats and GPU limits are unchanged.
+
+Select the complete resident asset through the existing launcher:
+
+```sh
+VK_DRIVER_FILES=/usr/share/vulkan/icd.d/radeon_icd.json \
+PYTHONPYCACHEPREFIX="$PWD/build/qualification/python-cache" \
+python3 tools/run_scene_benchmark.py \
+  --cooked-scene build/qualification/benchmark-world/scene.json --whole-world \
+  --frames 240 --warmup 30 --profile release --skip-build --validation \
+  --headless --headless-dri-prime pci-0000_03_00_0 --gpu 7900 \
+  --output build/benchmark/whole-world
+```
+
+The source cook must have included `--whole-world`. This selection cannot combine
+`--quadrant` or `--stream-quadrant`. Launcher reports identify whole-world selection
+and the exact source manifest hash; HTML labels the complete resident scene.
+Direct Render Lab `--benchmark-cooked --bundle <whole-world bundle>` also works.
+
+Add `--whole-world` to `qualify_cooked_benchmark.py` to run the resident world route
+and three camera-phase replays. It checks the same immutable buffer/texel, hull,
+identity/depth and ray/colour invariants. The original quadrant/pressure suite
+remains its default. No new renderer/shader implementation, moving proxies,
+cooked HUD, dynamic LOD or independent world-chunk scheduling is added here.

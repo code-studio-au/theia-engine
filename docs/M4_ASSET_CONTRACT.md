@@ -624,6 +624,15 @@ and exclude pre-frame transfers from GPU query spans. Frame allocation traces
 exclude cooked bundle owners, whose physical budgets remain separate. No binary
 contract or authority policy changed. [Workflow](SCENE_BENCHMARK.md#cooked-bundle-route-and-timing-observations).
 
+An optional offline whole-world representation combines the static village with
+a coarser continuous ground in one unchanged indexed bundle, within the same
+32-meshlet admission profile. An exact continuous rectangular-heightfield gate
+bounds vertical deviation from the fine quadrant ground at 0.12 metres. Equal
+position/UV rows weld only within a material; authored prop triangles and seams
+are preserved. This is a fixed resident test representation, not dynamic LOD,
+independent world-chunk publication or general 3D simplification qualification.
+[Scope](SCENE_BENCHMARK.md#complete-resident-cooked-world).
+
 One/two-image alternating sets and source/table/framebuffer consistency pass
 local RX 7900 XTX validation/replay. Existing geometry-only streaming and fixed
 render modes remain separate. General GPU allocation reuse, geometry arenas for

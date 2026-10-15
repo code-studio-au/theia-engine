@@ -1,5 +1,38 @@
 # M4 procedural MMO scene benchmark qualification (2026-10-15)
 
+## Complete resident cooked world (2026-10-15)
+
+`build/qualification/resident-world-proof/report.json` passes strict Rust admission
+and source/import/cooked checks for the four preserved quadrants plus an optional
+complete world bundle. The world has **1553 vertices, 28 meshlets, 1664 triangles**
+and four diagnostic textures. Topology/winding/UV tests preserve all 64 buildings
+and 128 trees, with 64 continuous ground tiles covering the full 128×128 rectangle.
+All 31 offline Python tests pass. Removing a coarse ground triangle rejects.
+
+The exact continuous-heightfield checker reports a maximum vertical difference
+of **1910527/16777216**, rounded upward to **0.11387628316879274 metres**, against
+the original finer quadrant ground. It passes a 0.12-metre limit over 2506 overlay
+pairs/4234 vertices. This is between represented triangular surfaces; it does not
+bound analytic/silhouette/material/general 3D error. A forged proof field rejects.
+Repeated cooking at the same destination reproduces the full manifest and all
+hashes; existing quadrant geometry/material/UV hashes remain unchanged across
+roots. Three incompatible launcher selections reject before launch.
+
+`build/qualification/resident-world-final/report.json` passes 240 native headless
+Wayland frames with zero Vulkan warnings/errors through teardown. Three separate
+Xwayland/RenderDoc captures at frames 10/90/170 verify all four GPU buffers,
+49152 aggregate GPU texels, hull compaction and whole-image identity/depth bounds.
+All **96 ray/colour probes** pass across four materials, including 32 probes with
+the existing explicit nearest-texel boundary envelope. The replay preview shows
+the complete static village together. Captures are separate from validation.
+
+The optimized `resident-world-launcher/cooked-whole-world/report.json` run also
+passes 240 frames and exports JSON/CSV/HTML with complete-world labeling and source
+manifest digest. The prior desktop quadrant preview finishes all 9000 frames and
+zero diagnostics. No renderer, shader, Rust, binary format or platform API changed
+in this unit. This is one resident coarse-ground bundle: independently streamed
+quadrants, moving proxies, dynamic LOD and the cooked HUD remain unimplemented.
+
 ## Cooked-bundle route and timing integration (2026-10-15)
 
 `build/qualification/cooked-route-final/report.json` passes twelve native headless

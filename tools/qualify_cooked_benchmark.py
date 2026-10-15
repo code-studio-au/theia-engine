@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--scene', type=Path, required=True)
     parser.add_argument('--qrenderdoc', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--whole-world', action='store_true', help='Qualify the complete resident world instead of quadrant replacement')
     parser.add_argument('--gpu', default='7900')
     parser.add_argument('--headless-dri-prime')
     args = parser.parse_args()
@@ -30,7 +31,8 @@ def main():
     args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     args.scene = args.scene.resolve()
-    report = {'passed': False, 'runtime': [], 'captures': [], 'negative': []}
+    report = {'passed': False, 'runtime': [], 'captures': [], 'negative': [],
+              'scope': 'resident-whole-world' if args.whole_world else 'quadrant-replacement'}
     exe = ROOT / 'apps/theia-render-lab/target/debug/theia-render-lab'
 
     def execute(command, output, env):
@@ -90,36 +92,41 @@ def main():
                 print('Validated route:', name, flush=True)
                 return text
 
-            for i, bundle in enumerate(bundles):
-                runtime(f'quadrant-{i}', ['--benchmark-cooked', '--bundle', bundle])
-            stream = ['--benchmark-cooked', '--bundle', bundles[0], '--stream-bundle', bundles[3]]
-            text = runtime('stream-baseline', stream, outcome='publish')
-            match = re.search(r'active (\d+) \+ pending (\d+) physical bytes', text)
-            require(match is not None, 'Missing measured bundle allocation')
-            gpu_cap = int(match[1]) + int(match[2])
-            image_sizes = [re.search(r'4 hash-sorted images, (\d+) aggregate physical image bytes',
-                          (args.output / f'quadrant-{i}' / 'run.log').read_text()) for i in (0, 3)]
-            require(all(v is not None for v in image_sizes), 'Missing measured image allocations')
-            image_cap = sum(int(v[1]) for v in image_sizes)
-            unique = {}
-            for i in (0, 3):
-                c = scene['quadrants'][i]['cook']
-                for r in [c, c['materials'], c['uv'], c['texture_table'], c['bundle'], *c['textures']]:
-                    unique[r['content_id']] = r['bytes']
-            for flag, cap in [('--bundle-gpu-budget', gpu_cap), ('--texture-budget', image_cap),
-                              ('--bundle-byte-budget', sum(unique.values()))]:
-                for short in (False, True):
-                    name = flag[2:] + ('-short' if short else '-exact')
-                    runtime(name, stream + [flag, str(cap - int(short))], outcome='defer' if short else 'publish')
-            runtime('procedural-regression', ['--benchmark', '--benchmark-players', '1000'], cooked=False)
+            if args.whole_world:
+                require('whole_world' in scene, 'Missing complete resident world')
+                runtime('whole-world', ['--benchmark-cooked', '--bundle', scene['whole_world']['cook']['bundle']['path']])
+            else:
+                for i, bundle in enumerate(bundles):
+                    runtime(f'quadrant-{i}', ['--benchmark-cooked', '--bundle', bundle])
+                stream = ['--benchmark-cooked', '--bundle', bundles[0], '--stream-bundle', bundles[3]]
+                text = runtime('stream-baseline', stream, outcome='publish')
+                match = re.search(r'active (\d+) \+ pending (\d+) physical bytes', text)
+                require(match is not None, 'Missing measured bundle allocation')
+                gpu_cap = int(match[1]) + int(match[2])
+                image_sizes = [re.search(r'4 hash-sorted images, (\d+) aggregate physical image bytes',
+                              (args.output / f'quadrant-{i}' / 'run.log').read_text()) for i in (0, 3)]
+                require(all(v is not None for v in image_sizes), 'Missing measured image allocations')
+                image_cap = sum(int(v[1]) for v in image_sizes)
+                unique = {}
+                for i in (0, 3):
+                    c = scene['quadrants'][i]['cook']
+                    for r in [c, c['materials'], c['uv'], c['texture_table'], c['bundle'], *c['textures']]:
+                        unique[r['content_id']] = r['bytes']
+                for flag, cap in [('--bundle-gpu-budget', gpu_cap), ('--texture-budget', image_cap),
+                                  ('--bundle-byte-budget', sum(unique.values()))]:
+                    for short in (False, True):
+                        name = flag[2:] + ('-short' if short else '-exact')
+                        runtime(name, stream + [flag, str(cap - int(short))], outcome='defer' if short else 'publish')
+                runtime('procedural-regression', ['--benchmark', '--benchmark-players', '1000'], cooked=False)
             sampled = set()
-            for quadrant in (0, 3):
+            for quadrant in ((None,) if args.whole_world else (0, 3)):
                 for frame in (10, 90, 170):
                     output = args.output / f'capture-{quadrant}-{frame}'
                     output.mkdir(parents=True, exist_ok=True)
                     replay_env = capture_env.copy()
                     replay_env.update(THEIA_COOKED_CAPTURE_OUTPUT=str(output),
-                                      THEIA_COOKED_SCENE=str(args.scene), THEIA_COOKED_QUADRANT=str(quadrant),
+                                      THEIA_COOKED_SCENE=str(args.scene), THEIA_COOKED_QUADRANT=str(quadrant if quadrant is not None else 0),
+                                      THEIA_COOKED_WHOLE_WORLD='1' if args.whole_world else '0',
                                       THEIA_COOKED_FRAME=str(frame), THEIA_COOKED_GPU=args.gpu)
                     execute([args.qrenderdoc, '--python', 'tools/renderdoc_cooked_benchmark.py'],
                             output / 'capture.log', replay_env)
