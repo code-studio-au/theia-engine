@@ -4,6 +4,15 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 selected terrain heights — CPU query qualified (2026-10-15)
+
+A bounded direct-grid query now reads actual cooked ground triangles for all
+fine/coarse quadrant combinations. An independent source-triangle oracle passes
+569680 comparisons, including 10000-proxy positions at three route frames, with
+maximum error below 1.26e-7 m. Renderer 30 CPU tests and Clippy pass. This changes
+no rendered heights yet; GPU query qualification precedes streamed crowd
+integration. [Contract and scope](validation/M4_SELECTED_TERRAIN_HEIGHTS.md).
+
 ## M4 camera-driven protected world residency — locally qualified (2026-10-15)
 
 A bounded camera scheduler now loads and retires fine chunks over four protected

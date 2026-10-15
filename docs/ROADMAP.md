@@ -499,3 +499,9 @@ Next define proxy ground heights over mixed selected terrain and integrate this
 route with the timed crowd/HUD workload. Independent per-view LOD, general asset
 catalogs and virtualized geometry/textures remain separate gates.
 [Scope](validation/M4_CAMERA_WORLD_DEMAND.md).
+
+The CPU selected-terrain query now matches independent source triangles over
+569680 mixed-selection heights, including dense proxy trajectories. Next qualify
+the same bounded query on the GPU and account for its allocations before wiring
+streamed world selection into proxy compute/rendering and timed HUD reporting.
+[Evidence](validation/M4_SELECTED_TERRAIN_HEIGHTS.md).

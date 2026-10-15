@@ -1223,3 +1223,12 @@ residency selects the rendered representation only in this prototype. Independen
 per-view LOD, production catalog streaming and timed crowd integration remain
 open. This profile keeps its optional descriptor capabilities isolated.
 [Evidence and accounting scope](validation/M4_CAMERA_WORLD_DEMAND.md).
+
+## Presentation ground query qualification
+
+The CPU-only `--world-ground-reference <scene.json points.json>` extracts
+material-zero cooked terrain into bounded 8x8 quadrant candidate ranges. It
+evaluates all 16 fine/coarse masks using actual triangles, including coarse
+perimeter subdivisions. Ground is a single-layer benchmark convention; this is
+not gameplay collision or a new bundle schema. GPU encoding/ownership/budgeting
+and use by rendered proxies remain open. [Evidence](validation/M4_SELECTED_TERRAIN_HEIGHTS.md).
