@@ -1021,6 +1021,29 @@ impl Renderer {
             )?;
         }
 
+        if let Some((scene, points, report)) = &options.world_ground_test {
+            // SAFETY: Context retains the selected physical device and instance.
+            let (memory, limits) = unsafe {
+                let instance = ctx.instance.as_ref().unwrap();
+                (
+                    instance.get_physical_device_memory_properties(ctx.physical),
+                    instance.get_physical_device_properties(ctx.physical).limits,
+                )
+            };
+            let shaders = options.shader_dir.clone().unwrap_or_else(|| {
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/shaders")
+            });
+            crate::world_ground_gpu::qualify(
+                ctx.device.as_ref().unwrap(),
+                &memory,
+                ctx.graphics_family,
+                ctx.graphics,
+                &shaders,
+                (scene, points, report),
+                limits,
+            )?;
+        }
+
         let mut renderer = Self {
             authority: if options.render_mode() == RenderMode::Authority {
                 Some(

@@ -1,5 +1,5 @@
 //! Minimal task/mesh pipeline ownership. No conventional vertex/index buffers.
-use crate::{RenderMode, Result};
+use crate::{RenderMode, Result, asset::Transfer};
 use ash::vk;
 use std::{fs::File, io::BufReader, path::Path};
 
@@ -447,6 +447,49 @@ impl Drop for Pipeline {
             if self.layout != vk::PipelineLayout::null() {
                 self.device.destroy_pipeline_layout(self.layout, None);
             }
+        }
+    }
+}
+
+pub(super) struct ComputeSubmission {
+    // Retire commands before deleting referenced layouts/pipelines/descriptors.
+    pub(super) transfer: Option<Transfer>,
+    pub(super) device: ash::Device,
+    pub(super) descriptor_layout: vk::DescriptorSetLayout,
+    pub(super) pool: vk::DescriptorPool,
+    pub(super) layout: vk::PipelineLayout,
+    pub(super) pipeline: vk::Pipeline,
+}
+impl Drop for ComputeSubmission {
+    fn drop(&mut self) {
+        drop(self.transfer.take());
+        // SAFETY: Transfer retirement completed; caller retains the parent device.
+        unsafe {
+            if self.pipeline != vk::Pipeline::null() {
+                self.device.destroy_pipeline(self.pipeline, None);
+            }
+            if self.layout != vk::PipelineLayout::null() {
+                self.device.destroy_pipeline_layout(self.layout, None);
+            }
+            if self.pool != vk::DescriptorPool::null() {
+                self.device.destroy_descriptor_pool(self.pool, None);
+            }
+            if self.descriptor_layout != vk::DescriptorSetLayout::null() {
+                self.device
+                    .destroy_descriptor_set_layout(self.descriptor_layout, None);
+            }
+        }
+    }
+}
+impl ComputeSubmission {
+    pub(super) fn new(device: &ash::Device) -> Self {
+        Self {
+            transfer: None,
+            device: device.clone(),
+            descriptor_layout: vk::DescriptorSetLayout::null(),
+            pool: vk::DescriptorPool::null(),
+            layout: vk::PipelineLayout::null(),
+            pipeline: vk::Pipeline::null(),
         }
     }
 }

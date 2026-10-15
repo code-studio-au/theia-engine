@@ -4,6 +4,15 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 selected terrain heights — GPU batch qualified (2026-10-15)
+
+The isolated Slang compute profile now verifies 569680 selected fine/coarse
+heights in both default/shared shader profiles with zero native diagnostics.
+Ten cases include failure cleanup and the preserved descriptor probe. GPU/source
+height error is bounded below 3.65e-7 m for sampled points. All 49 shader modules
+validate; renderer 30 tests and Clippy pass. This is readback qualification, with
+rendered crowd integration still open. [Evidence](validation/M4_GPU_SELECTED_TERRAIN_HEIGHTS.md).
+
 ## M4 selected terrain heights — CPU query qualified (2026-10-15)
 
 A bounded direct-grid query now reads actual cooked ground triangles for all

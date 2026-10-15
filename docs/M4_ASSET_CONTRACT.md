@@ -1232,3 +1232,10 @@ evaluates all 16 fine/coarse masks using actual triangles, including coarse
 perimeter subdivisions. Ground is a single-layer benchmark convention; this is
 not gameplay collision or a new bundle schema. GPU encoding/ownership/budgeting
 and use by rendered proxies remain open. [Evidence](validation/M4_SELECTED_TERRAIN_HEIGHTS.md).
+
+The separate `--world-ground-gpu-test <scene points report>` profile now verifies
+batched selected-terrain heights in Slang using three ordinary storage bindings.
+Its runtime-generated table retains all eight terrain surfaces, with one mask per
+query; no bundle format changes. Persistent query-table budget integration and
+GPU-generated crowd queries remain separate gates.
+[Encoding, native evidence and limits](validation/M4_GPU_SELECTED_TERRAIN_HEIGHTS.md).

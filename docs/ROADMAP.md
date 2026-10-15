@@ -505,3 +505,10 @@ The CPU selected-terrain query now matches independent source triangles over
 the same bounded query on the GPU and account for its allocations before wiring
 streamed world selection into proxy compute/rendering and timed HUD reporting.
 [Evidence](validation/M4_SELECTED_TERRAIN_HEIGHTS.md).
+
+The batched Slang selected-ground query now verifies 569680 heights with zero
+validation diagnostics and bounded interpolation error against independently
+qualified source data. Next integrate the table with explicit allocation charges
+and query it from GPU proxy generation, then qualify shared streamed-world/crowd
+visibility, resolve and HUD/timing. No per-frame readback is intended in that path.
+[Evidence](validation/M4_GPU_SELECTED_TERRAIN_HEIGHTS.md).

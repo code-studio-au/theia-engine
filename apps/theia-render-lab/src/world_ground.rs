@@ -141,7 +141,7 @@ fn read_json(path: &Path, limit: u64) -> Result<serde_json::Value> {
     }
     Ok(serde_json::from_slice(&bytes)?)
 }
-pub fn reference(scene: &Path, queries: &Path) -> Result<serde_json::Value> {
+fn load(scene: &Path, queries: &Path) -> Result<(Vec<Surface>, Vec<[f32; 2]>)> {
     let scene = read_json(scene, 1024 * 1024)?;
     if scene["passed"] != true {
         return Err("Ground reference requires checked fixture".into());
@@ -160,6 +160,17 @@ pub fn reference(scene: &Path, queries: &Path) -> Result<serde_json::Value> {
     if points.is_empty() || points.len() > 50000 {
         return Err("Ground reference requires 1..50000 points".into());
     }
+    if points
+        .iter()
+        .flatten()
+        .any(|v| !v.is_finite() || v.abs() > 64.)
+    {
+        return Err("Ground point outside benchmark world".into());
+    }
+    Ok((surfaces, points))
+}
+pub fn reference(scene: &Path, queries: &Path) -> Result<serde_json::Value> {
+    let (surfaces, points) = load(scene, queries)?;
     let mut fine = Vec::new();
     let mut coarse = Vec::new();
     let mut regions = Vec::new();
@@ -194,6 +205,67 @@ pub fn reference(scene: &Path, queries: &Path) -> Result<serde_json::Value> {
         "max_cell_candidates":surfaces.iter().map(|s|s.max_candidates).collect::<Vec<_>>(),
         "presentation_only":true,"gpu_execution":false}),
     )
+}
+pub(super) struct GpuInput {
+    pub table: Vec<u8>,
+    pub queries: Vec<u8>,
+    pub expected: Vec<(f32, u32)>,
+    pub points: usize,
+}
+pub(super) fn gpu_input(scene: &Path, queries: &Path) -> Result<GpuInput> {
+    let (surfaces, points) = load(scene, queries)?;
+    // Eight 32-byte headers: origin XY, triangle/offset/reference byte addresses,
+    // triangle/reference counts, reserved. Triangles are three float4 records.
+    let mut table = vec![0u8; 8 * 32];
+    for (index, surface) in surfaces.iter().enumerate() {
+        let triangles = table.len() as u32;
+        for triangle in &surface.triangles {
+            for p in triangle {
+                for v in [p[0], p[1], p[2], 0.] {
+                    table.extend(v.to_le_bytes());
+                }
+            }
+        }
+        let offsets = table.len() as u32;
+        for &offset in &surface.offsets {
+            table.extend((offset as u32).to_le_bytes());
+        }
+        let references = table.len() as u32;
+        for &id in &surface.candidates {
+            table.extend((id as u32).to_le_bytes());
+        }
+        let words = [
+            surface.origin[0].to_bits(),
+            surface.origin[1].to_bits(),
+            triangles,
+            offsets,
+            references,
+            surface.triangles.len() as u32,
+            surface.candidates.len() as u32,
+            0,
+        ];
+        for (i, word) in words.into_iter().enumerate() {
+            table[index * 32 + i * 4..index * 32 + i * 4 + 4].copy_from_slice(&word.to_le_bytes());
+        }
+    }
+    let mut queries = Vec::with_capacity(points.len() * 16 * 16);
+    let mut expected = Vec::with_capacity(points.len() * 16);
+    for mask in 0..16u32 {
+        for &p in &points {
+            let slot = usize::from(p[0] >= 0.) + 2 * usize::from(p[1] >= 0.);
+            let surface = slot + if mask & (1 << slot) != 0 { 0 } else { 4 };
+            for word in [p[0].to_bits(), p[1].to_bits(), mask, 0] {
+                queries.extend(word.to_le_bytes());
+            }
+            expected.push((surfaces[surface].height(p)?, slot as u32));
+        }
+    }
+    Ok(GpuInput {
+        table,
+        queries,
+        expected,
+        points: points.len(),
+    })
 }
 #[cfg(test)]
 mod tests {

@@ -2,41 +2,11 @@
 use crate::{
     Result,
     asset::{Buffer, Transfer},
-    pipeline::ShaderModule,
+    pipeline::{ComputeSubmission, ShaderModule},
 };
 use ash::vk;
 use std::path::Path;
 
-struct Probe {
-    // Retire commands before deleting referenced layouts/pipelines/descriptors.
-    transfer: Option<Transfer>,
-    device: ash::Device,
-    descriptor_layout: vk::DescriptorSetLayout,
-    pool: vk::DescriptorPool,
-    layout: vk::PipelineLayout,
-    pipeline: vk::Pipeline,
-}
-impl Drop for Probe {
-    fn drop(&mut self) {
-        drop(self.transfer.take());
-        // SAFETY: Transfer retirement completed; caller retains the parent device.
-        unsafe {
-            if self.pipeline != vk::Pipeline::null() {
-                self.device.destroy_pipeline(self.pipeline, None);
-            }
-            if self.layout != vk::PipelineLayout::null() {
-                self.device.destroy_pipeline_layout(self.layout, None);
-            }
-            if self.pool != vk::DescriptorPool::null() {
-                self.device.destroy_descriptor_pool(self.pool, None);
-            }
-            if self.descriptor_layout != vk::DescriptorSetLayout::null() {
-                self.device
-                    .destroy_descriptor_set_layout(self.descriptor_layout, None);
-            }
-        }
-    }
-}
 pub fn qualify(
     device: &ash::Device,
     memory: &vk::PhysicalDeviceMemoryProperties,
@@ -70,14 +40,7 @@ pub fn qualify(
         1024,
     )?;
     // This guard drops before sources/output on every construction/error path.
-    let mut probe = Probe {
-        transfer: None,
-        device: device.clone(),
-        descriptor_layout: vk::DescriptorSetLayout::null(),
-        pool: vk::DescriptorPool::null(),
-        layout: vk::PipelineLayout::null(),
-        pipeline: vk::Pipeline::null(),
-    };
+    let mut probe = ComputeSubmission::new(device);
     let shader = ShaderModule::load(device, &shaders.join("world.descriptors.compute.spv"))?;
     // SAFETY: All input arrays and buffer owners outlive calls/submission. Every
     // successful object immediately gains ownership; Probe retires commands first.
