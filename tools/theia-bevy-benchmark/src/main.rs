@@ -30,6 +30,8 @@ use bevy::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{num::NonZeroU32, path::PathBuf, time::Instant};
+mod stats;
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 // Share the engine's qualified readonly workload/camera functions. Vulkan
 // recorder code in the module is unused; no Theia renderer runs in this process.
@@ -364,10 +366,11 @@ fn setup(
     }
     commands.insert_resource(ProxyMeshes { near, far });
 }
-fn begin(fixture: Res<Fixture>, mut run: ResMut<Run>) {
+fn begin(fixture: Res<Fixture>, mut run: ResMut<Run>, mut stats: ResMut<stats::Stats>) {
     let now = Instant::now();
     let interval = (now - run.last).as_secs_f64() * 1000.;
     run.last = now;
+    stats.interval(interval);
     run.update_started = now;
     if run.tick >= run.pre_roll && run.tick - run.pre_roll < fixture.frames.len() {
         let index = run.tick - run.pre_roll;
@@ -423,8 +426,10 @@ fn finish(
     fixture: Res<Fixture>,
     mut run: ResMut<Run>,
     mut exit: MessageWriter<AppExit>,
+    mut stats: ResMut<stats::Stats>,
 ) {
     let update_ms = run.update_started.elapsed().as_secs_f64() * 1000.;
+    stats.previous_cpu_ms = update_ms;
     if run.tick >= run.pre_roll && run.tick - run.pre_roll < fixture.frames.len() {
         let index = run.tick - run.pre_roll;
         if let Some(sample) = run.samples.last_mut() {
@@ -436,9 +441,11 @@ fn finish(
     if let Some(frame) = run.snapshot {
         if run.tick == run.pre_roll {
             let output = run.output.clone();
+            let hud_text = stats.text.clone();
+            let overlay = stats.enabled;
             commands.spawn(Screenshot::primary_window()).observe(move |event:On<ScreenshotCaptured>,mut run:ResMut<Run>| {
                 std::fs::write(output.join("screenshot.raw"),event.image.data.as_ref().unwrap()).unwrap();
-                std::fs::write(output.join("screenshot.json"),serde_json::to_vec_pretty(&json!({"frame":frame,"width":event.image.width(),"height":event.image.height(),"format":format!("{:?}",event.image.texture_descriptor.format)})).unwrap()).unwrap();
+                std::fs::write(output.join("screenshot.json"),serde_json::to_vec_pretty(&json!({"frame":frame,"width":event.image.width(),"height":event.image.height(),"format":format!("{:?}",event.image.texture_descriptor.format),"overlay":overlay,"hud_text":hud_text,"hud_text_scope":"snapshot request; frozen before asynchronous readback"})).unwrap()).unwrap();
                 run.captured=true;
             });
         }
@@ -454,7 +461,7 @@ fn finish(
             .collect::<Vec<_>>();
         values.sort_by(f64::total_cmp);
         let quantile = |p: f64| values[((values.len() - 1) as f64 * p).ceil() as usize];
-        let report = json!({"schema":1,"engine":"bevy-0.19.1","workload":fixture.workload,"players":fixture.players,"frames":fixture.frames.len(),"warmup_frames":fixture.warmup,"pre_roll_frames":run.pre_roll,"extent":fixture.extent,"presentation":"FIFO; requested maximum frame latency 1; pipelined rendering disabled","materials":"opaque unlit; source textures/linear factors; proxy face colors and view-depth fog","streaming":false,"asset_residency":"all eight source graphs preloaded; recorded selection replay","motion":"CPU ECS; shared Theia readonly motion; CPU selected-terrain query","gpu_timestamps":false,"cpu_metric":"First-to-Last main schedule only; excludes later render extraction/submission","wall_seconds":run.started.elapsed().as_secs_f64(),"source_report_sha256":fixture.source_report_sha256,"source_manifest_sha256":fixture.source_manifest_sha256,"summary_frame_interval_ms":{"mean":values.iter().sum::<f64>()/values.len() as f64,"p50":quantile(0.5),"p95":quantile(0.95),"p99":quantile(0.99),"max":values.last()},"samples":run.samples,"metadata":run.metadata});
+        let report = json!({"schema":1,"engine":"bevy-0.19.1","workload":fixture.workload,"players":fixture.players,"frames":fixture.frames.len(),"warmup_frames":fixture.warmup,"pre_roll_frames":run.pre_roll,"extent":fixture.extent,"presentation":"FIFO; requested maximum frame latency 1; pipelined rendering disabled","materials":"opaque unlit; source textures/linear factors; proxy face colors and view-depth fog","streaming":false,"asset_residency":"all eight source graphs preloaded; recorded selection replay","motion":"CPU ECS; shared Theia readonly motion; CPU selected-terrain query","gpu_timestamps":false,"overlay":stats.enabled,"ui_renderer":"Bevy UI + default font; 468x288 panel; 11 rows; updated every frame","cpu_metric":"First-to-Last main schedule only; excludes later render extraction/submission","wall_seconds":run.started.elapsed().as_secs_f64(),"source_report_sha256":fixture.source_report_sha256,"source_manifest_sha256":fixture.source_manifest_sha256,"summary_frame_interval_ms":{"mean":values.iter().sum::<f64>()/values.len() as f64,"p50":quantile(0.5),"p95":quantile(0.95),"p99":quantile(0.99),"max":values.last()},"samples":run.samples,"metadata":run.metadata});
         std::fs::write(
             run.output.join("report.json"),
             serde_json::to_vec_pretty(&report).unwrap(),
@@ -506,6 +513,7 @@ fn main() -> Result<()> {
     let mut snapshot = None;
     let mut reference = None;
     let mut pre_roll = 120;
+    let mut stats_overlay = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--fixture" => path = Some(PathBuf::from(args.next().ok_or("Missing fixture")?)),
@@ -524,6 +532,7 @@ fn main() -> Result<()> {
                         .parse::<usize>()?,
                 )
             }
+            "--stats-overlay" => stats_overlay = true,
             "--pre-roll" => pre_roll = args.next().ok_or("Missing pre-roll")?.parse::<usize>()?,
             _ => return Err(format!("Unknown argument: {arg}").into()),
         }
@@ -598,6 +607,7 @@ fn main() -> Result<()> {
             focused_mode: UpdateMode::Continuous,
             unfocused_mode: UpdateMode::Continuous,
         })
+        .insert_resource(stats::Stats::new(stats_overlay))
         .insert_resource(fixture)
         .insert_resource(ground)
         .insert_resource(Run {
@@ -640,9 +650,9 @@ fn main() -> Result<()> {
                 .disable::<PipelinedRenderingPlugin>(),
         )
         .add_plugins(MaterialPlugin::<SurfaceMaterial>::default())
-        .add_systems(Startup, setup)
+        .add_systems(Startup, (setup, stats::setup))
         .add_systems(First, begin)
-        .add_systems(Update, update)
+        .add_systems(Update, (update, stats::update).chain())
         .add_systems(Last, finish);
     app.sub_app_mut(RenderApp).add_systems(
         Render,

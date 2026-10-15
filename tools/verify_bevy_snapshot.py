@@ -33,10 +33,11 @@ def verify(fixture_path,output,exe):
         if clip[3]<=0:continue
         x=int((clip[0]/clip[3]+1)*width/2);y=int((clip[1]/clip[3]+1)*height/2)
         if 0<=x<width and 0<=y<height:coordinates.add((x,y))
-    counts=dict(world=0,proxy=0,background=0,texture_boundary_skips=0);failures=[];max_error=0
+    counts=dict(world=0,proxy=0,background=0,texture_boundary_skips=0,overlay_skips=0);failures=[];max_error=0
     def srgb(v):
         v/=255.;return v/12.92 if v<=.04045 else ((v+.055)/1.055)**2.4
     for x,y in sorted(coordinates):
+        if meta.get('overlay') and 12<=x<480 and 12<=y<300:counts['overlay_skips']+=1;continue
         world=(0,0,1.,None,None);winner=None
         for source in sources:
             hit=ray(rows,source[0],x,y,width,height)
@@ -54,7 +55,22 @@ def verify(fixture_path,output,exe):
         expected=[encode(v) for v in linear];actual=list(image.getpixel((x,y))[:3]);error=max(abs(a-b) for a,b in zip(actual,expected));max_error=max(max_error,error)
         counts[kind]+=1
         if error>2:failures.append(dict(pixel=[x,y],kind=kind,expected=expected,actual=actual,error=error))
-    result=dict(passed=not failures,frame=frame,players=fixture['players'],selected=selected,probes=counts,max_rgb_error=max_error,failures=failures)
+    hud_proof=None
+    if meta.get('overlay'):
+        require(width>=480 and height>=300,'Stats capture needs the full panel visible')
+        lines=meta['hud_text'].splitlines()
+        require(len(lines)==11 and lines[0]=='BEVY STATS' and lines[3]=='GPU MS N/A' and lines[4]=='PROXIES '+str(fixture['players']) and lines[5]=='REGIONS 4' and lines[6]=='CHUNKS 8 PRELOADED' and lines[9]=='SOURCE FRAME '+str(frame) and lines[10]=='STREAM REPLAY','HUD text/configuration differs')
+        # Font rasterization is Bevy's own. Verify row coverage and the panel
+        # background independently; do not claim exact glyph-shape verification.
+        ink=[]
+        for row in range(11):
+            pixels=[image.getpixel((x,y)) for y in range(24+row*24,48+row*24) for x in range(24,468)]
+            ink.append(sum(1 for p in pixels if min(p[:3])>150))
+        require(all(count>20 for count in ink),'A native UI text row did not render')
+        background=tuple(encode(v) for v in [.01,.018,.03])
+        require(max(abs(a-b) for a,b in zip(image.getpixel((475,290))[:3],background))<=1,'Wrong HUD panel/background')
+        hud_proof=dict(rows=11,ink_pixels_per_row=ink,panel=[12,12,468,288],exact_glyph_oracle=False)
+    result=dict(passed=not failures,frame=frame,players=fixture['players'],selected=selected,probes=counts,max_rgb_error=max_error,failures=failures,hud=hud_proof)
     (output/'pixel-proof.json').write_text(json.dumps(result,indent=2)+'\n')
     require(not failures,'Bevy colour/source ray mismatch: '+str(failures[:3]))
     return result

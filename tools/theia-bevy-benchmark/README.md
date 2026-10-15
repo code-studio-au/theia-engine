@@ -9,7 +9,8 @@ It uses the exact cooked triangle/UV/texture/material data, shared readonly Rust
 camera/proxy motion functions, selected-source terrain heights, proxy near/far
 geometry and face colours/fog. Its custom unlit material supports Bevy's bindless
 path with ordinary bindings as a capability fallback. MSAA, tonemapping, dithering,
-lights and both benchmark overlays are disabled. Window extent and FIFO mode match.
+lights are disabled. Both overlays are disabled by default. Window extent and
+FIFO mode match.
 
 Bevy preloads all eight representations and replays a completed Theia run's
 per-frame selection. Theia's asynchronous streamer is **not ported** by this tool.
@@ -85,3 +86,44 @@ only while the window needs its initial present, outside recorded samples. It
 changes no registry/upstream sources and leaves timed frame rendering unchanged.
 
 [Executed qualification and limits](../../docs/validation/M4_BEVY_VISUAL_REFERENCE.md).
+
+## Compare the stats displays
+
+`--stats-overlay` on `run_bevy_comparison.py` enables Theia's existing GPU debug
+HUD and a native Bevy UI panel. Both occupy 468x288 pixels at (12,12), with eleven
+rows updated every frame. Bevy uses its default font, ordinary UI layout and
+shaped text. It shows live rolling FPS and previous CPU main-schedule time,
+requested proxies, active regions, preloaded chunks/world textures and source
+time/frame. GPU milliseconds display `N/A`: no GPU timing is fabricated or copied
+from Theia. These are corresponding stats panels, not identical glyph workloads.
+
+The Bevy panel labels its preload/replay scope. Its world-texture count excludes
+the white proxy texture and UI font atlas. Theia's labels retain their existing
+selected/current/pending asset scopes. CPU timing labels likewise retain their
+different meanings. The feature does not implement Theia's planned M6 UI.
+
+For paired overlay-off/on observations in both engines:
+
+```sh
+VK_DRIVER_FILES=/usr/share/vulkan/icd.d/radeon_icd.json \
+python3 tools/compare_stats_display.py \
+  --scene build/qualification/chunk-fallback-cook/scene.json \
+  --players 10000 --frames 660 --warmup 60 --route-frames 600 \
+  --skip-build --headless --headless-dri-prime pci-0000_03_00_0 --gpu 7900
+```
+
+Build the reference again after enabling its new UI/default-font features before
+using `--skip-build`. Output includes both control traces and
+`stats-comparison.html` / `.json`. Summaries retain only measured frames with the
+same logical time and selected geometry. They report each engine against its own
+control; GPU/CPU rows with different scopes are not compared as rankings.
+
+Theia's HUD replaces scene shading inside its panel; Bevy draws UI after scene
+rendering. Observed changes therefore include avoided scene resolve work in
+Theia, different fonts/metrics and the optional HUD descriptor profile. FIFO and
+run-to-run clock/scheduler variation remain. This is a stats-display profile
+comparison, not an isolated font microbenchmark or a general UI speed ranking.
+Bevy's UI plugins/default font remain available in the disabled control, but no
+stats nodes or per-frame text formatting are created there.
+
+[Stats-display qualification](../../docs/validation/M4_STATS_DISPLAY_COMPARISON.md).

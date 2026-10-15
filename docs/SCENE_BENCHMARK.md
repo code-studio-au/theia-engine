@@ -502,3 +502,10 @@ preloaded representations and CPU ECS proxy updates; this is not an equivalent
 streaming implementation or a total-engine performance ranking.
 [Usage and interpretation](../tools/theia-bevy-benchmark/README.md),
 [executed evidence](validation/M4_BEVY_VISUAL_REFERENCE.md).
+
+The comparison now also accepts `--stats-overlay`, enabling Theia's fixed GPU
+HUD and a corresponding native Bevy UI text panel. `compare_stats_display.py`
+records both engines with their displays disabled/enabled and filters summaries
+to matching source selections. Their fonts, available metrics and pipeline
+placement differ; no general UI ranking is implied.
+[Stats profile and evidence](validation/M4_STATS_DISPLAY_COMPARISON.md).

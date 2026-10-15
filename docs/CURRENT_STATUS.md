@@ -4,6 +4,17 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-16.
 
+## Optional stats-display comparison — locally qualified (2026-10-16)
+
+Theia's fixed GPU debug HUD and a corresponding Bevy UI text panel can now run
+with paired disabled/enabled controls. Validated zero/10000-proxy pairs and six
+captures pass all eleven UI-row checks plus 583 scene pixels outside the panel.
+Four separate timing runs each record 600 measured samples; summaries use matching
+geometry selections and keep GPU/CPU scopes distinct. Bevy GPU time is `N/A`.
+This does not implement Theia's general UI or establish a UI performance ranking.
+[Usage](../tools/theia-bevy-benchmark/README.md#compare-the-stats-displays),
+[evidence and interpretation](validation/M4_STATS_DISPLAY_COMPARISON.md).
+
 ## Optional native Bevy visual reference — locally qualified (2026-10-16)
 
 The current cooked scene/camera/proxy workload now runs in a separate Bevy 0.19.1

@@ -6,7 +6,7 @@ publish = false
 
 # Comparison executable only; Theia's shipped runtime does not depend on Bevy.
 [dependencies]
-bevy = { version = "=0.19.1", default-features = false, features = ["std", "async_executor", "multi_threaded", "bevy_asset", "bevy_log", "bevy_winit", "bevy_render", "bevy_core_pipeline", "bevy_pbr", "bevy_window", "bevy_camera", "bevy_image", "bevy_mesh", "bevy_shader", "bevy_color", "x11", "wayland"] }
+bevy = { version = "=0.19.1", default-features = false, features = ["std", "async_executor", "multi_threaded", "bevy_asset", "bevy_log", "bevy_winit", "bevy_render", "bevy_core_pipeline", "bevy_pbr", "bevy_window", "bevy_camera", "bevy_image", "bevy_mesh", "bevy_shader", "bevy_color", "x11", "wayland", "bevy_ui", "bevy_ui_render", "bevy_text", "default_font"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ash = "0.38"

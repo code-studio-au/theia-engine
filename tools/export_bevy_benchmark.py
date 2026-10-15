@@ -12,11 +12,11 @@ from qualify_world_retirement import resources
 from world_camera_reference import require
 
 
-def export(scene_path,report_path,output,renderer):
+def export(scene_path,report_path,output,renderer,allow_overlay=False):
     scene=json.loads(scene_path.read_bytes());report=json.loads(report_path.read_bytes())
     require(scene.get('passed') and scene.get('cooked'),'Need a checked cooked scene')
     require(report.get('launcher',{}).get('source_manifest_sha256')==hashlib.sha256(scene_path.read_bytes()).hexdigest(),'Source report and scene manifest differ')
-    require(report['workload']=='theia-streamed-mmo-v1' and not report['overlay'],'Export a completed streamed report with --no-overlay for matching visual scope')
+    require(report['workload']=='theia-streamed-mmo-v1' and (not report['overlay'] or allow_overlay),'Export a completed streamed report with --no-overlay for matching visual scope')
     require(report['samples'] and all(s['extent']==report['samples'][0]['extent'] for s in report['samples']),'Reference requires a fixed actual extent')
     require(report['frames']==len(report['samples']) and report['players']<=10000,'Incomplete source route')
     require(len(scene['quadrants'])==len(scene['fallbacks'])==4,'Need eight source graphs')
@@ -46,7 +46,7 @@ def export(scene_path,report_path,output,renderer):
         require(sample['frame']==index and abs(reference['time']-sample['scene_time'])<1e-5,'Source timeline differs from shared route')
         frames.append(dict(frame=index,time=sample['scene_time'],selected=sample['world']['selected'],eye=reference['eye'],rows=reference['rows']))
     result=dict(schema=1,workload='theia-streamed-visual-replay-v1',players=report['players'],
-        extent=report['samples'][0]['extent'],warmup=report['warmup_frames'],frames=frames,chunks=chunks,
+        source_overlay=report['overlay'],extent=report['samples'][0]['extent'],warmup=report['warmup_frames'],frames=frames,chunks=chunks,
         source_manifest=str(scene_path.resolve()),source_manifest_sha256=hashlib.sha256(scene_path.read_bytes()).hexdigest(),
         source_report=str(report_path.resolve()),source_report_sha256=hashlib.sha256(report_path.read_bytes()).hexdigest(),source_resources=source_files,
         streaming=False,scope='All eight graphs preloaded; replayed selection. No streaming throughput or memory equivalence claim.')
@@ -57,6 +57,7 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--scene',type=Path,required=True);parser.add_argument('--report',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--allow-overlay',action='store_true',help='explicitly allow an overlay-enabled source report')
     parser.add_argument('--renderer',type=Path,default=Path('apps/theia-render-lab/target/release/theia-render-lab'))
-    args=parser.parse_args();result=export(args.scene,args.report,args.output,args.renderer)
+    args=parser.parse_args();result=export(args.scene,args.report,args.output,args.renderer,args.allow_overlay)
     print('Exported',len(result['frames']),'frames and',result['players'],'proxies to',args.output)

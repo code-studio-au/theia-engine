@@ -254,3 +254,10 @@ scoped CPU measurements cannot establish relative maximum throughput, GPU cost,
 streaming or VRAM efficiency. Initial presentation diagnostics required a
 reference-only first-surface clear; corrected native Wayland runs pass.
 [Evidence and limits](validation/M4_BEVY_VISUAL_REFERENCE.md).
+
+Stats-display on/off profiles now compare the existing fixed GPU font with a
+corresponding Bevy UI panel. Theia replaces scene shading under the HUD, whereas
+Bevy draws UI after the scene; glyph workloads and available metrics differ.
+Matched-selection summaries preserve these limits, differing CPU scopes and
+missing Bevy GPU timestamps. This is not evidence about Theia's planned M6 UI.
+[Evidence and observed profile changes](validation/M4_STATS_DISPLAY_COMPARISON.md).
