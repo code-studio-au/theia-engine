@@ -1229,6 +1229,22 @@ impl Renderer {
                     .unwrap()
                     .enable_retirement(options.world_covered_report.clone())?;
             }
+            if options.world_covered_reload {
+                renderer.scene.as_mut().unwrap().enable_reload(
+                    [
+                        options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
+                        options.texture_budget.unwrap_or(4 * 1024 * 1024),
+                    ],
+                    crate::bundle_streaming::Gpu {
+                        device: renderer.ctx.device.as_ref().unwrap(),
+                        memory: &memory,
+                        family: renderer.ctx.graphics_family,
+                        queue: renderer.ctx.graphics,
+                        limits,
+                        image_limits,
+                    },
+                )?;
+            }
         } else if let Some(second) = &options.world_bundle_pair {
             // SAFETY: Context retains this selected physical device and instance.
             let (memory, limits, image_limits) = unsafe {
@@ -1913,6 +1929,28 @@ impl Renderer {
             .retirement_published(eviction, self.presented)?;
         Ok(())
     }
+    fn tick_covered_reload(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let Some(scene) = &mut self.scene else {
+            return Ok(());
+        };
+        let Some(ready) = scene.tick_reload(self.presented)? else {
+            return Ok(());
+        };
+        if let Some(chain) = &mut self.chain {
+            chain.retire()?;
+        }
+        drop(self.chain.take());
+        let staged = self.scene.as_mut().unwrap().prepare_refinement(ready)?;
+        self.recreate = true;
+        self.rebuild(size)?;
+        if self.recreate {
+            return Err("Fine reload graphics generation unavailable".into());
+        }
+        self.scene
+            .as_mut()
+            .unwrap()
+            .refinement_published(staged, self.presented)
+    }
     fn tick_world_bundle(&mut self, size: PhysicalSize<u32>) -> Result<()> {
         let active = [
             self.bundle_resource_bytes(),
@@ -2220,6 +2258,7 @@ impl Renderer {
         self.tick_bundle(size)?;
         self.tick_world_bundle(size)?;
         self.tick_covered_retirement(size)?;
+        self.tick_covered_reload(size)?;
         self.tick_texture_refinement(size)?;
         let cooked_stats = (self.benchmark.is_some() && self.mode == RenderMode::AssetResolve)
             .then(|| crate::benchmark::CookedStats {

@@ -483,3 +483,10 @@ epoch publication. Prefix boundaries, partial-startup coverage and fatal rebuild
 cleanup qualify locally; replay checks actual coarse contents after reuse.
 Next qualify bounded fine reload while coarse coverage stays visible, then connect
 camera demand and the timed crowd scene. [Evidence](validation/M4_RETAINED_COARSE_REACTIVATION.md).
+
+One bounded asynchronous fine reload now completes after coarse reactivation,
+including pending-ready shutdown and exact/short coexistence caps. Transfers and
+prior graphics users retire before the new descriptor/CPU generation publishes;
+coarse coverage survives deferred capacity. Next generalize the region request
+and connect actual camera demand/repeated transitions, then integrate the timed
+crowd route. [Evidence](validation/M4_ASYNC_FINE_RELOAD.md).

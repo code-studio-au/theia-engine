@@ -4,6 +4,17 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 one asynchronous fine reload — locally qualified (2026-10-15)
+
+The covered-world reload profile now uses one bounded file worker and GPU pending
+set to reload fine region 2 while coarse coverage remains visible. Complete
+transfers and old graphics readers retire before descriptor/CPU publication;
+short caps cancel partial work and retain coarse selection. Sixteen native cases
+pass with zero diagnostics, including ready-pending shutdown and source/rebuild
+failure; seven replays pass 1641 ray/colour probes. History stays at most six rows.
+This is one scripted request, with camera-driven scheduling still open.
+[Scope and evidence](validation/M4_ASYNC_FINE_RELOAD.md).
+
 ## M4 retained coarse reactivation — locally qualified (2026-10-15)
 
 A controlled retirement schedule now reuses protected coarse GPU resources after
@@ -11,7 +22,7 @@ fine selection. Frame/presentation readers retire and new descriptors build befo
 CPU selection publishes and old fine owners release. Thirteen native cases pass
 with zero diagnostics, including failure cleanup; seven replays pass 1632 ray/colour
 probes and verify all four coarse graphs after reactivation. Renderer 28 tests,
-Clippy and Windows GNU/Wine checks pass. Fine reload/camera demand remain open. [Scope](validation/M4_RETAINED_COARSE_REACTIVATION.md).
+Clippy and Windows GNU/Wine checks pass. Repeated/camera-driven loads remain open. [Scope](validation/M4_RETAINED_COARSE_REACTIVATION.md).
 
 ## M4 protected coarse GPU startup — locally qualified (2026-10-15)
 

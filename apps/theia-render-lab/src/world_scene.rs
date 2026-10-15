@@ -20,8 +20,9 @@ enum CpuOwners {
     Covered { _world: ProtectedWorld },
 }
 struct Retirement {
-    history: Vec<serde_json::Value>, // Initial state + at most four retirements.
+    history: Vec<serde_json::Value>, // Initial state + four retirements + at most one fine reload.
     report: Option<PathBuf>,
+    completed: [bool; CHUNKS],
 }
 pub(super) struct Eviction {
     slot: usize,
@@ -38,7 +39,9 @@ pub(super) struct Scene {
     // Encoded sources outlive every GPU owner.
     _protected: [Option<Set>; CHUNKS],
     retirement: Option<Retirement>,
+    reload: Option<crate::world_refinement::Reload>,
     _cpu: CpuOwners,
+    reload_source: Option<PathBuf>,
 }
 impl Scene {
     pub fn load(
@@ -139,7 +142,9 @@ impl Scene {
                 .map_err(|_| "Wrong scene resource count")?,
             _protected: std::array::from_fn(|_| None),
             retirement: None,
+            reload: None,
             _cpu: CpuOwners::Fixed { _world: cpu },
+            reload_source: None,
         })
     }
     fn load_covered(
@@ -301,7 +306,7 @@ impl Scene {
                 "root_buffers":snapshot.world().chunk_count()*4,
                 "images":resources.iter().map(|s|s.images.len()).sum::<usize>()+protected.iter().flatten().map(|s|s.images.len()).sum::<usize>(),
                 "deferred_cpu":deferred_cpu,"deferred_gpu":deferred_gpu,
-                "fine_loads_at_startup_only":true,"camera_demand":false,"authority":false,
+                "startup_phase":true,"camera_demand":false,"authority":false,
             })
         );
         Ok(Self {
@@ -311,7 +316,13 @@ impl Scene {
                 .map_err(|_| "Wrong protected resource count")?,
             _protected: protected,
             retirement: None,
+            reload: None,
             _cpu: CpuOwners::Covered { _world: cpu },
+            reload_source: Some(PathBuf::from(
+                scene["quadrants"][2]["cook"]["bundle"]["path"]
+                    .as_str()
+                    .ok_or("Missing reload source")?,
+            )),
         })
     }
     pub fn enable_retirement(&mut self, report: Option<PathBuf>) -> Result<()> {
@@ -321,6 +332,7 @@ impl Scene {
         self.retirement = Some(Retirement {
             history: vec![self.covered_stats(0)?],
             report,
+            completed: std::array::from_fn(|i| self._protected[i].is_none()),
         });
         self.retirement_report(0, false)?;
         println!(
@@ -331,7 +343,10 @@ impl Scene {
     pub fn next_retirement(&self, frame: u64) -> Option<usize> {
         self.retirement.as_ref()?;
         self._protected.iter().enumerate().find_map(|(slot, set)| {
-            (set.is_some() && frame >= (slot as u64 + 1) * 20).then_some(slot)
+            (!self.retirement.as_ref().unwrap().completed[slot]
+                && set.is_some()
+                && frame >= (slot as u64 + 1) * 20)
+                .then_some(slot)
         })
     }
     /// Sole frame fence and previous graphics/presentation generation must retire
@@ -386,6 +401,7 @@ impl Scene {
         }
         println!("Protected fine region {slot} retired; coarse reactivated: {stats}");
         history.push(stats);
+        self.retirement.as_mut().unwrap().completed[slot] = true;
         self.retirement_report(frame, false)?;
         Ok(())
     }
@@ -417,17 +433,118 @@ impl Scene {
                 path,
                 serde_json::to_vec_pretty(&serde_json::json!({
                     "completed":completed,"history":retirement.history,"final":self.covered_stats(frame)?,
-                    "retirements":retirement.history.len()-1,"camera_demand":false,"fine_reload":false,
+                    "retirements":retirement.completed.iter().enumerate().filter(|(i,done)|**done && retirement.history[0]["selected"][*i]==*i).count(),
+                "camera_demand":false,"fine_reload":self.reload.is_some(),"reload":self.reload.as_ref().map(|r|r.stats()).transpose()?,
                 }))?,
             )?;
         }
         Ok(())
     }
     pub fn qualification_complete(&self, frame: u64) -> Result<()> {
-        if self.retirement.is_some() && frame >= 81 && self._protected.iter().any(Option::is_some) {
-            return Err("Scheduled fine retirement left a fine selection active".into());
+        if self.retirement.is_some()
+            && frame >= 81
+            && self
+                .retirement
+                .as_ref()
+                .unwrap()
+                .completed
+                .iter()
+                .any(|v| !*v)
+        {
+            return Err("Scheduled fine retirement did not complete".into());
         }
         self.retirement_report(frame, true)
+    }
+    pub fn enable_reload(&mut self, budgets: [u64; 2], gpu: Gpu<'_>) -> Result<()> {
+        if self.retirement.is_none() {
+            return Err("Fine reload requires the retirement schedule".into());
+        }
+        let path = self
+            .reload_source
+            .clone()
+            .ok_or("Missing protected fine reload source")?;
+        self.reload = Some(crate::world_refinement::Reload::new(path, budgets, gpu));
+        self.retirement_report(0, false)
+    }
+    pub fn tick_reload(&mut self, frame: u64) -> Result<Option<crate::world_refinement::Ready>> {
+        let active = [self.physical_bytes(), self.image_bytes()];
+        let CpuOwners::Covered { _world: cpu } = &mut self._cpu else {
+            return Ok(None);
+        };
+        let Some(reload) = &mut self.reload else {
+            return Ok(None);
+        };
+        let (changed, ready) = reload.tick(frame, cpu, active)?;
+        if changed && ready.is_none() {
+            self.retirement_report(frame, false)?;
+        }
+        Ok(ready)
+    }
+    pub fn prepare_refinement(
+        &mut self,
+        ready: crate::world_refinement::Ready,
+    ) -> Result<theia_assets::bundle_residency::StagedBundle> {
+        let CpuOwners::Covered { _world: cpu } = &self._cpu else {
+            return Err("Missing fine publication owner".into());
+        };
+        if self._protected[2].is_some() || cpu.snapshot().world().chunk(2).is_some() {
+            return Err("Fine reload region is already selected".into());
+        }
+        let [geometry, materials, uvs, table] = ready.set.buffers;
+        let old_geometry = self.work[2].replace_asset(geometry);
+        let old = std::mem::replace(
+            &mut self.resources[2],
+            PresentationSet {
+                materials,
+                uvs,
+                table,
+                images: ready.set.images,
+            },
+        );
+        self._protected[2] = Some(Set {
+            buffers: [old_geometry, old.materials, old.uvs, old.table],
+            images: old.images,
+        });
+        Ok(ready.staged)
+    }
+    pub fn refinement_published(
+        &mut self,
+        staged: theia_assets::bundle_residency::StagedBundle,
+        frame: u64,
+    ) -> Result<()> {
+        let CpuOwners::Covered { _world: cpu } = &mut self._cpu else {
+            return Err("Missing fine acknowledgement owner".into());
+        };
+        cpu.publish_fine(vec![(2, staged)], &[])?;
+        self.reload
+            .as_mut()
+            .ok_or("Missing fine reload acknowledgement")?
+            .published = true;
+        let stats = self.covered_stats(frame)?;
+        let history = &mut self.retirement.as_mut().unwrap().history;
+        if history.len() > CHUNKS + 1 {
+            return Err("Fine reload history bound exceeded".into());
+        }
+        println!("Protected fine region 2 reloaded: {stats}");
+        history.push(stats);
+        self.retirement_report(frame, false)
+    }
+    pub fn image_bytes(&self) -> u64 {
+        self.resources
+            .iter()
+            .map(|s| {
+                s.images
+                    .iter()
+                    .map(|v| v.image.allocated_bytes)
+                    .sum::<u64>()
+            })
+            .sum::<u64>()
+            + self
+                ._protected
+                .iter()
+                .flatten()
+                .map(Set::image_bytes)
+                .sum::<u64>()
     }
     pub fn physical_bytes(&self) -> u64 {
         self._protected

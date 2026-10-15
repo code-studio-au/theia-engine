@@ -1183,3 +1183,25 @@ Post-retirement replay verifies the actual retained coarse contents once active,
 including the two-to-four selected image-count transition. This finite schedule
 does not load fine data again or connect camera demand. [Qualification and
 ledger](validation/M4_RETAINED_COARSE_REACTIVATION.md).
+
+## One bounded asynchronous fine reload
+
+`--world-covered-reload-test` includes the retirement schedule and requests fine
+region 2 after frame 100, publishing no earlier than 110. It requires covered
+startup and uses the same optional bounded history report. One capacity-one file
+worker reads/checks the immutable source; one GPU pending set retains its complete
+CPU reservation until all transfer fences retire. The renderer thread submits GPU
+work, with selected coarse coverage unchanged during reading/transfers.
+
+After retiring prior graphics/presentation users, ready fine resources replace
+the selected coarse bindings, the original coarse GPU graph returns to protected
+ownership, and a complete new descriptor generation must build before fine CPU
+publication. CPU/physical/image cap failures cancel partial work and keep coarse
+selection. Other source/target errors stop the renderer safely, without false CPU
+acknowledgement. Worker join has no hard I/O latency/cancellation deadline.
+
+History holds at most six committed selection rows. Pending metadata reports its
+own physical/image bytes and fence readiness; CPU live bytes include pending
+reservations. Published graph counts/physical bytes remain separate. This finite
+single request does not implement repeated or camera-driven scheduling.
+[Qualification](validation/M4_ASYNC_FINE_RELOAD.md).

@@ -182,7 +182,13 @@ Protected startup coverage keeps unselected coarse GPU owners. A separate finite
 retirement schedule now qualifies coarse reactivation, including its actual raw
 contents after becoming active. RenderDoc 1.46 exposes inactive allocation
 metadata without saving unused storage-buffer initial contents, so current
-oracles distinguish retained inventory from selected payloads. Fine reload,
-camera-driven publication and larger lifetime/latency workloads remain open.
+oracles distinguish retained inventory from selected payloads. One bounded fine reload now qualifies; repeated/camera-driven publication and
+larger lifetime/latency workloads remain open.
 [Startup scope](validation/M4_PROTECTED_GPU_STARTUP.md),
 [reactivation evidence](validation/M4_RETAINED_COARSE_REACTIVATION.md).
+
+The fine-reload worker is byte-bounded and joined on shutdown, with no hard I/O
+latency deadline. Pending CPU reservations and GPU allocations are reported
+separately from published graphs; failed partial candidates are cleaned up but
+not included in a peak-memory claim. Current coverage tests exercise a finite
+request, not a repeated world scheduler. [Scope](validation/M4_ASYNC_FINE_RELOAD.md).

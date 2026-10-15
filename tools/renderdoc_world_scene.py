@@ -55,13 +55,15 @@ def qualify(report):
     factors=[material_factors(cook) for cook in cooks]
     view=int(os.environ.get('THEIA_WORLD_SCENE_VIEW','2'))
     frame=int(os.environ.get('THEIA_WORLD_SCENE_FRAME','10'))
-    require(0<=frame<90,'Invalid capture frame')
-    retire=os.environ.get('THEIA_WORLD_SCENE_RETIRE')=='1'
+    frames=int(os.environ.get('THEIA_WORLD_SCENE_FRAMES','90'))
+    require(0<=frame<frames<=2000,'Invalid capture frame/run length')
+    reload=os.environ.get('THEIA_WORLD_SCENE_RELOAD')=='1'
+    retire=os.environ.get('THEIA_WORLD_SCENE_RETIRE')=='1' or reload
     exe=Path('apps/theia-render-lab/target/debug/theia-render-lab').resolve()
-    args=['--world-covered-test' if covered else '--world-scene-test',str(scene_path),'--frames','90','--work-items',str(view),'--no-validation','--gpu','7900']
+    args=['--world-covered-test' if covered else '--world-scene-test',str(scene_path),'--frames',str(frames),'--work-items',str(view),'--no-validation','--gpu','7900']
     if retire:
         require(covered,'Retirement requires protected selection')
-        args+=['--world-covered-retire-test','--world-covered-report',str(out/'retirement.json')]
+        args+=['--world-covered-reload-test' if reload else '--world-covered-retire-test','--world-covered-report',str(out/'retirement.json')]
     if os.environ.get('THEIA_WORLD_SCENE_CAPS'):
         cpu,gpu,images=json.loads(os.environ['THEIA_WORLD_SCENE_CAPS'])
         args+=['--bundle-byte-budget',str(cpu),'--bundle-gpu-budget',str(gpu),'--texture-budget',str(images)]
