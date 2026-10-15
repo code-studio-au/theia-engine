@@ -1372,6 +1372,15 @@ impl Options {
             result.frames = Some(120);
         }
         if result.world_camera_timings.is_some() {
+            if result
+                .benchmark_width
+                .is_some_and(|v| !(64..=8192).contains(&v))
+                || result
+                    .benchmark_height
+                    .is_some_and(|v| !(64..=8192).contains(&v))
+            {
+                return Err("World benchmark extent must be 64..8192 per axis".into());
+            }
             if result.world_camera_timings == result.world_camera_report {
                 return Err("World timing and camera reports require different paths".into());
             }
@@ -1555,8 +1564,8 @@ impl Options {
                 result.mode = Some(RenderMode::Benchmark);
             }
         } else if result.benchmark_no_overlay
-            || result.benchmark_width.is_some()
-            || result.benchmark_height.is_some()
+            || (result.world_camera_timings.is_none()
+                && (result.benchmark_width.is_some() || result.benchmark_height.is_some()))
             || result.benchmark_players.is_some()
             || result.benchmark_warmup.is_some()
             || result.benchmark_seconds.is_some()
@@ -1602,6 +1611,8 @@ impl ApplicationHandler for App {
                     Window::default_attributes()
                         .with_title(if self.options.network_address.is_some() {
                             "Theia network viewer — Connecting"
+                        } else if self.options.world_camera_timings.is_some() {
+                            "Theia — streamed MMO visual benchmark"
                         } else if self.options.world_camera {
                             "Theia — camera-driven fine world residency"
                         } else if self.options.world_covered {
@@ -1621,14 +1632,21 @@ impl ApplicationHandler for App {
                         } else {
                             "Theia Render Lab — M0-D mesh triangle"
                         })
-                        .with_inner_size(if self.options.benchmark {
-                            PhysicalSize::new(
-                                self.options.benchmark_width.unwrap_or(1280),
-                                self.options.benchmark_height.unwrap_or(720),
-                            )
-                        } else {
-                            PhysicalSize::new(960, 540)
-                        }),
+                        .with_inner_size(
+                            if self.options.benchmark || self.options.world_camera_timings.is_some()
+                            {
+                                PhysicalSize::new(
+                                    self.options
+                                        .benchmark_width
+                                        .unwrap_or(if self.options.benchmark { 1280 } else { 960 }),
+                                    self.options
+                                        .benchmark_height
+                                        .unwrap_or(if self.options.benchmark { 720 } else { 540 }),
+                                )
+                            } else {
+                                PhysicalSize::new(960, 540)
+                            },
+                        ),
                 )?,
             );
             let mut renderer =

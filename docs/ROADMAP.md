@@ -535,3 +535,10 @@ counts, pending data and frame-zero defaults. Next expose the streamed profile
 through the benchmark launcher/cooker for repeatable user runs, then continue
 independent per-view LOD, larger catalogs and virtualized-content gates.
 [Evidence](validation/M4_STREAMED_WORLD_HUD.md).
+
+The public benchmark launcher now exposes the streamed world/HUD route with
+optional automatic eight-graph cooking/admission and JSON/CSV/interactive HTML.
+Native legacy and streamed routes, tight repeated demand, export fidelity and
+failure cleanup pass. Next separate per-view geometry choice from fine residency;
+larger catalogs and virtualized geometry/textures remain M4 gates.
+[Launcher evidence](validation/M4_STREAMED_BENCHMARK_LAUNCHER.md).

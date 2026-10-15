@@ -1,4 +1,76 @@
-# Theia procedural MMO scene benchmark v1
+# Theia MMO scene benchmarks
+
+The launcher supports procedural, resident cooked and camera-streamed profiles.
+For the latest integrated sequence use `--streamed-world`: four protected coarse
+regions, camera-driven fine publication, GPU-grounded visual proxies and live
+stats. The original procedural profile remains the default for compatibility.
+
+## Streamed world quick start
+
+```sh
+python3 tools/run_scene_benchmark.py --streamed-world \
+  --slangc /path/to/slangc
+```
+
+This builds the renderer and validates 52 shader modules, cooks/checks eight
+fine/coarse graphs, then runs **10000 proxies** at a requested 1280x720 with the
+HUD enabled. It uses the already qualified offline meshoptimizer 1.3/KTX 4.4.2
+cache at the paths shown in the cooking section below; it does not download or
+install native tools. Missing prerequisites fail with their paths. This cached
+preparation layout is Linux-qualified. On other setups prepare the eight-graph
+manifest with `cook_benchmark_scene.py --chunk-fallbacks` and supply its path:
+
+```sh
+python3 tools/run_scene_benchmark.py --streamed-world \
+  --cooked-scene build/qualification/chunk-fallback-cook/scene.json \
+  --skip-build --players 10000 --frames 3660 --warmup 60
+```
+
+Without `--cooked-scene`, each invocation freshly prepares assets under
+`<output>/assets/`, including source-to-cook and Rust CPU admission proof. Reuse
+that `assets/scene.json` to avoid cooking again. `--skip-build` reuses compiled
+renderer/shaders/importer; the source/admission checker still invokes Cargo.
+Automatic preparation does not produce a whole-world bundle for resident mode.
+
+Native desktop execution opens the sequence; add `--headless` for an owned
+private compositor, with the dependency/device setup described below. For example:
+
+```sh
+VK_DRIVER_FILES=/usr/share/vulkan/icd.d/radeon_icd.json \
+python3 tools/run_scene_benchmark.py --streamed-world --skip-build \
+  --cooked-scene build/qualification/chunk-fallback-cook/scene.json \
+  --headless --headless-dri-prime pci-0000_03_00_0 --gpu 7900 \
+  --validation --frames 240 --warmup 30
+```
+
+The streamed camera starts moving at frame zero. Warmup excludes samples from
+summaries; it does not delay the route. `--route-frames` sets a repeating period
+(default `--frames`); every period spans 60 logical seconds. `--seconds` currently
+accepts only 60 for this profile. `--fine-slots 1..4` defaults to two. Aggregate
+`--bundle-byte-budget`, `--bundle-gpu-budget` and `--texture-budget` cover encoded
+CPU graphs, current/pending GPU graphs plus the fixed ground table, and physical
+image bytes respectively. Work arenas, staging, offscreen targets and driver
+allocations have separate scopes. `--no-overlay` selects the 16-storage-buffer
+fragment profile; the live HUD needs 21 and checks the device limit.
+
+The HUD shows recent completed CPU/GPU time, presentation-call FPS, GPU
+meshlet/proxy/detail counts, selected texture bindings, asset/draw MiB and fine
+publication/retirement/deferral counters. [Full legend](validation/M4_STREAMED_WORLD_HUD.md).
+Each `NN-streamed-N-proxies/` directory contains `report.json`, `report.csv`,
+interactive `report.html`, `camera.json`, a manifest snapshot and `run.log`.
+HTML can plot GPU/CPU time, asset/encoded CPU MiB and residency counters, with
+frame selection/epoch in the tooltip. CSV includes all per-frame timing samples
+and explicit current/pending/fixed memory columns. `suite.json` publishes only
+when all requested populations complete.
+
+These are opaque unlit fixture graphs and visual mock proxies. GPU frame queries
+exclude earlier uploads/graphics rebuilds; CPU draw wall includes synchronous
+renderer costs. FIFO presentation and one frame in flight limit interpretation.
+The scene does not establish gameplay authority, character animation, general
+streaming, independent per-view LOD or production performance capacity.
+[Launcher qualification](validation/M4_STREAMED_BENCHMARK_LAUNCHER.md).
+
+## Original procedural workload
 
 This is an integrated rendering workload for M4, created following the request for
 a small repeatable MMO-style benchmark sequence. It runs inside Render Lab using

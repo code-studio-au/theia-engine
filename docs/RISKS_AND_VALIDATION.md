@@ -232,3 +232,10 @@ or next depth code with exact stored/source agreement. It rejects wider gaps,
 foreign identities and wrong primitives; ordinary depth/colour limits remain.
 Frame-zero replay separates startup staging metadata and selects current targets
 from actual shader bindings. [Evidence and bounds](validation/M4_STREAMED_WORLD_HUD.md).
+
+The public streamed launcher qualifies automated fixture preparation, native
+routes and export fidelity. The cached native-tool layout is Linux-qualified;
+prepared manifests support other layouts without implying native Windows GPU
+execution. The launcher adds no new streaming policy or performance-capacity
+claim; timing/memory scopes and independent per-view LOD limitations remain.
+[Launcher evidence](validation/M4_STREAMED_BENCHMARK_LAUNCHER.md).

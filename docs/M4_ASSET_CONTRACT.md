@@ -1274,3 +1274,10 @@ optional profile binds 21 fragment storage descriptors and checks a 128-byte
 push range; other world profiles retain 16 descriptors. No extra persistent GPU
 buffer or work-sizing readback is added. The benchmark font is not engine UI.
 [Legend, binding/ABI and qualification](validation/M4_STREAMED_WORLD_HUD.md).
+
+The benchmark launcher now connects this profile through `--streamed-world`,
+with optional fresh eight-graph preparation/source/admission checks, default
+10000 proxies/HUD, explicit frame/route/fine-slot options, and per-sample
+JSON/CSV/HTML exports. This is fixture orchestration, with unchanged graph
+schemas and runtime ownership/selection policy.
+[Launcher evidence](validation/M4_STREAMED_BENCHMARK_LAUNCHER.md).

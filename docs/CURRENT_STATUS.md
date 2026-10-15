@@ -4,6 +4,17 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 streamed benchmark launcher — locally qualified (2026-10-15)
+
+`run_scene_benchmark.py --streamed-world` now prepares/checks eight fine/coarse
+bundles or reuses a manifest, then runs 10000 proxies with the HUD at 1280x720.
+Native route/export checks pass for streamed, tight repeated, procedural, resident
+and mixed modes, including failed-rerun cleanup. Actual automatic cooking and the
+normal 52-module build/run path pass. CSV and interactive HTML expose scoped
+memory/residency data; renderer 30 tests and Windows GNU/Wine checks pass.
+[Usage](SCENE_BENCHMARK.md#streamed-world-quick-start),
+[evidence and limits](validation/M4_STREAMED_BENCHMARK_LAUNCHER.md).
+
 ## M4 live streamed-world HUD — locally qualified (2026-10-15)
 
 An opt-in HUD now reads current world/proxy work counts directly on the GPU and
