@@ -490,3 +490,12 @@ prior graphics users retire before the new descriptor/CPU generation publishes;
 coarse coverage survives deferred capacity. Next generalize the region request
 and connect actual camera demand/repeated transitions, then integrate the timed
 crowd route. [Evidence](validation/M4_ASYNC_FINE_RELOAD.md).
+
+Camera-driven fine demand now qualifies repeated asynchronous publication,
+retirement, obsolete ready-upload cancellation and bounded capacity deferral over
+protected coarse GPU coverage. Nine replays verify live ownership and rendered
+results; a repeated 1320-frame route exercises 88 publications/86 retirements.
+Next define proxy ground heights over mixed selected terrain and integrate this
+route with the timed crowd/HUD workload. Independent per-view LOD, general asset
+catalogs and virtualized geometry/textures remain separate gates.
+[Scope](validation/M4_CAMERA_WORLD_DEMAND.md).

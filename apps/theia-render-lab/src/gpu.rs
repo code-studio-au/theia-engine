@@ -1058,7 +1058,7 @@ impl Renderer {
             footprint: None,
             texture_tail: None,
             work_items: options.work_items.unwrap_or(2),
-            cycle_work: options.smoke,
+            cycle_work: options.smoke && !options.world_camera,
             presented: 0,
             last_input: None,
             probes: RecoveryProbes::new(options.wsi_smoke),
@@ -1221,6 +1221,7 @@ impl Renderer {
                     options.texture_budget.unwrap_or(4 * 1024 * 1024),
                 ),
                 options.world_covered,
+                options.world_camera,
             )?);
             if options.world_covered_retire {
                 renderer
@@ -1231,6 +1232,29 @@ impl Renderer {
             }
             if options.world_covered_reload {
                 renderer.scene.as_mut().unwrap().enable_reload(
+                    [
+                        options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
+                        options.texture_budget.unwrap_or(4 * 1024 * 1024),
+                    ],
+                    crate::bundle_streaming::Gpu {
+                        device: renderer.ctx.device.as_ref().unwrap(),
+                        memory: &memory,
+                        family: renderer.ctx.graphics_family,
+                        queue: renderer.ctx.graphics,
+                        limits,
+                        image_limits,
+                    },
+                )?;
+            }
+            if options.world_camera {
+                renderer.scene.as_mut().unwrap().enable_camera(
+                    (
+                        options
+                            .world_camera_period
+                            .unwrap_or(options.frames.unwrap_or(240)),
+                        options.world_camera_slots.unwrap_or(2),
+                        options.world_camera_report.clone(),
+                    ),
                     [
                         options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
                         options.texture_budget.unwrap_or(4 * 1024 * 1024),
@@ -1951,6 +1975,45 @@ impl Renderer {
             .unwrap()
             .refinement_published(staged, self.presented)
     }
+    fn tick_world_camera(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let Some(scene) = &mut self.scene else {
+            return Ok(());
+        };
+        let Some(change) = scene.tick_camera(self.presented)? else {
+            return Ok(());
+        };
+        if let Some(chain) = &mut self.chain {
+            chain.retire()?;
+        }
+        drop(self.chain.take());
+        match change {
+            crate::world_camera::Change::Evict(slot) => {
+                let eviction = self.scene.as_mut().unwrap().prepare_retirement(slot)?;
+                self.recreate = true;
+                self.rebuild(size)?;
+                if self.recreate {
+                    return Err("Camera coarse generation unavailable".into());
+                }
+                self.scene
+                    .as_mut()
+                    .unwrap()
+                    .retirement_published(eviction, self.presented)?;
+            }
+            crate::world_camera::Change::Refine(ready) => {
+                let publication = self.scene.as_mut().unwrap().prepare_refinement(*ready)?;
+                self.recreate = true;
+                self.rebuild(size)?;
+                if self.recreate {
+                    return Err("Camera fine generation unavailable".into());
+                }
+                self.scene
+                    .as_mut()
+                    .unwrap()
+                    .refinement_published(publication, self.presented)?;
+            }
+        }
+        Ok(())
+    }
     fn tick_world_bundle(&mut self, size: PhysicalSize<u32>) -> Result<()> {
         let active = [
             self.bundle_resource_bytes(),
@@ -2259,6 +2322,7 @@ impl Renderer {
         self.tick_world_bundle(size)?;
         self.tick_covered_retirement(size)?;
         self.tick_covered_reload(size)?;
+        self.tick_world_camera(size)?;
         self.tick_texture_refinement(size)?;
         let cooked_stats = (self.benchmark.is_some() && self.mode == RenderMode::AssetResolve)
             .then(|| crate::benchmark::CookedStats {
@@ -2282,8 +2346,16 @@ impl Renderer {
                 )
             })
             .transpose()?;
+        let world_camera_rows = self
+            .scene
+            .as_ref()
+            .map(|s| s.camera_rows(self.presented, chain.extent.width, chain.extent.height))
+            .transpose()?
+            .flatten();
         let camera_rows = if let Some((_, rows)) = benchmark_push {
             Some(rows)
+        } else if world_camera_rows.is_some() {
+            world_camera_rows
         } else if self.world_work.is_some() || self.scene.is_some() {
             Some(crate::camera::world_pair_rows(
                 chain.extent.width,

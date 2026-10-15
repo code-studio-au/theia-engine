@@ -1,4 +1,4 @@
-//! Bounded four-chunk resident world fixture. No camera demand or live replacement.
+//! Bounded four-region world fixture with isolated fixed, covered and camera-driven profiles.
 use crate::{
     Result,
     bundle_streaming::{Gpu, Input},
@@ -24,6 +24,10 @@ struct Retirement {
     report: Option<PathBuf>,
     completed: [bool; CHUNKS],
 }
+pub(super) struct FinePublication {
+    region: usize,
+    staged: theia_assets::bundle_residency::StagedBundle,
+}
 pub(super) struct Eviction {
     slot: usize,
     // Graphics retired before these old GPU owners release; encoded owners last.
@@ -40,8 +44,9 @@ pub(super) struct Scene {
     _protected: [Option<Set>; CHUNKS],
     retirement: Option<Retirement>,
     reload: Option<crate::world_refinement::Reload>,
+    demand: Option<crate::world_camera::Stream>,
     _cpu: CpuOwners,
-    reload_source: Option<PathBuf>,
+    fine_sources: Option<[PathBuf; CHUNKS]>,
 }
 impl Scene {
     pub fn load(
@@ -50,6 +55,7 @@ impl Scene {
         shaders: &Path,
         budgets: (usize, u64, u64),
         covered: bool,
+        camera_mode: bool,
     ) -> Result<Self> {
         let mut bytes = Vec::new();
         std::fs::File::open(path)?
@@ -60,7 +66,7 @@ impl Scene {
         }
         let scene: serde_json::Value = serde_json::from_slice(&bytes)?;
         if covered {
-            return Self::load_covered(&scene, gpu, shaders, budgets);
+            return Self::load_covered(&scene, gpu, shaders, budgets, camera_mode);
         }
         let entries = scene["quadrants"]
             .as_array()
@@ -144,7 +150,8 @@ impl Scene {
             retirement: None,
             reload: None,
             _cpu: CpuOwners::Fixed { _world: cpu },
-            reload_source: None,
+            fine_sources: None,
+            demand: None,
         })
     }
     fn load_covered(
@@ -152,6 +159,7 @@ impl Scene {
         gpu: Gpu<'_>,
         shaders: &Path,
         budgets: (usize, u64, u64),
+        camera_mode: bool,
     ) -> Result<Self> {
         let mut inputs = Vec::new();
         for role in ["fallbacks", "quadrants"] {
@@ -248,6 +256,9 @@ impl Scene {
         let mut protected: [Option<Set>; CHUNKS] = std::array::from_fn(|_| None);
         let (mut deferred_cpu, mut deferred_gpu) = (Vec::new(), Vec::new());
         for (i, input) in inputs[1].iter().enumerate() {
+            if camera_mode {
+                break;
+            }
             let staged = match cpu.stage(
                 &input.manifest,
                 theia_assets::content_id(&input.manifest),
@@ -306,7 +317,7 @@ impl Scene {
                 "root_buffers":snapshot.world().chunk_count()*4,
                 "images":resources.iter().map(|s|s.images.len()).sum::<usize>()+protected.iter().flatten().map(|s|s.images.len()).sum::<usize>(),
                 "deferred_cpu":deferred_cpu,"deferred_gpu":deferred_gpu,
-                "startup_phase":true,"camera_demand":false,"authority":false,
+                "startup_phase":true,"camera_demand":camera_mode,"authority":false,
             })
         );
         Ok(Self {
@@ -318,11 +329,22 @@ impl Scene {
             retirement: None,
             reload: None,
             _cpu: CpuOwners::Covered { _world: cpu },
-            reload_source: Some(PathBuf::from(
-                scene["quadrants"][2]["cook"]["bundle"]["path"]
-                    .as_str()
-                    .ok_or("Missing reload source")?,
-            )),
+            fine_sources: Some(
+                scene["quadrants"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|entry| {
+                        entry["cook"]["bundle"]["path"]
+                            .as_str()
+                            .map(PathBuf::from)
+                            .ok_or("Missing fine source path")
+                    })
+                    .collect::<std::result::Result<Vec<_>, _>>()?
+                    .try_into()
+                    .map_err(|_| "Wrong fine source count")?,
+            ),
+            demand: None,
         })
     }
     pub fn enable_retirement(&mut self, report: Option<PathBuf>) -> Result<()> {
@@ -390,6 +412,11 @@ impl Scene {
         cpu.publish_fine(vec![], &[slot as u64])?;
         // Drop old GPU buffers/images before releasing their retained CPU reader.
         drop(eviction);
+        if let Some(demand) = &mut self.demand {
+            demand.evicted();
+            self.camera_event(frame, "evicted")?;
+            return Ok(());
+        }
         let stats = self.covered_stats(frame)?;
         let history = &mut self
             .retirement
@@ -453,16 +480,69 @@ impl Scene {
         {
             return Err("Scheduled fine retirement did not complete".into());
         }
-        self.retirement_report(frame, true)
+        self.retirement_report(frame, true)?;
+        if let Some(demand) = &self.demand {
+            demand.report(self.covered_stats(frame)?, true)?;
+        }
+        Ok(())
+    }
+    pub fn enable_camera(
+        &mut self,
+        route: (u64, usize, Option<PathBuf>),
+        budgets: [u64; 2],
+        gpu: Gpu<'_>,
+    ) -> Result<()> {
+        let sources = self
+            .fine_sources
+            .clone()
+            .ok_or("Camera demand requires protected source catalog")?;
+        self.demand = Some(crate::world_camera::Stream::new(
+            sources, budgets, route, gpu,
+        )?);
+        self.camera_event(0, "initial")
+    }
+    fn camera_event(&mut self, frame: u64, kind: &str) -> Result<()> {
+        let row = self.covered_stats(frame)?;
+        self.demand.as_mut().unwrap().record(row, kind)?;
+        self.demand
+            .as_ref()
+            .unwrap()
+            .report(self.covered_stats(frame)?, false)
+    }
+    pub fn camera_rows(
+        &self,
+        frame: u64,
+        width: u32,
+        height: u32,
+    ) -> Result<Option<[[f32; 4]; 4]>> {
+        self.demand
+            .as_ref()
+            .map(|s| s.rows(frame, width, height))
+            .transpose()
+    }
+    pub fn tick_camera(&mut self, frame: u64) -> Result<Option<crate::world_camera::Change>> {
+        let active = [self.physical_bytes(), self.image_bytes()];
+        let CpuOwners::Covered { _world: cpu } = &mut self._cpu else {
+            return Ok(None);
+        };
+        let Some(demand) = &mut self.demand else {
+            return Ok(None);
+        };
+        let tick = demand.tick(frame, cpu, active)?;
+        if let Some(event) = tick.event {
+            self.camera_event(frame, event)?;
+        }
+        Ok(tick.change)
     }
     pub fn enable_reload(&mut self, budgets: [u64; 2], gpu: Gpu<'_>) -> Result<()> {
         if self.retirement.is_none() {
             return Err("Fine reload requires the retirement schedule".into());
         }
         let path = self
-            .reload_source
-            .clone()
-            .ok_or("Missing protected fine reload source")?;
+            .fine_sources
+            .as_ref()
+            .ok_or("Missing protected fine reload source")?[2]
+            .clone();
         self.reload = Some(crate::world_refinement::Reload::new(path, budgets, gpu));
         self.retirement_report(0, false)
     }
@@ -483,17 +563,21 @@ impl Scene {
     pub fn prepare_refinement(
         &mut self,
         ready: crate::world_refinement::Ready,
-    ) -> Result<theia_assets::bundle_residency::StagedBundle> {
+    ) -> Result<FinePublication> {
+        let slot = ready.region;
+        if slot >= CHUNKS {
+            return Err("Fine request region outside profile".into());
+        }
         let CpuOwners::Covered { _world: cpu } = &self._cpu else {
             return Err("Missing fine publication owner".into());
         };
-        if self._protected[2].is_some() || cpu.snapshot().world().chunk(2).is_some() {
+        if self._protected[slot].is_some() || cpu.snapshot().world().chunk(slot as u64).is_some() {
             return Err("Fine reload region is already selected".into());
         }
         let [geometry, materials, uvs, table] = ready.set.buffers;
-        let old_geometry = self.work[2].replace_asset(geometry);
+        let old_geometry = self.work[slot].replace_asset(geometry);
         let old = std::mem::replace(
-            &mut self.resources[2],
+            &mut self.resources[slot],
             PresentationSet {
                 materials,
                 uvs,
@@ -501,21 +585,26 @@ impl Scene {
                 images: ready.set.images,
             },
         );
-        self._protected[2] = Some(Set {
+        self._protected[slot] = Some(Set {
             buffers: [old_geometry, old.materials, old.uvs, old.table],
             images: old.images,
         });
-        Ok(ready.staged)
+        Ok(FinePublication {
+            region: slot,
+            staged: ready.staged,
+        })
     }
-    pub fn refinement_published(
-        &mut self,
-        staged: theia_assets::bundle_residency::StagedBundle,
-        frame: u64,
-    ) -> Result<()> {
+    pub fn refinement_published(&mut self, publication: FinePublication, frame: u64) -> Result<()> {
         let CpuOwners::Covered { _world: cpu } = &mut self._cpu else {
             return Err("Missing fine acknowledgement owner".into());
         };
-        cpu.publish_fine(vec![(2, staged)], &[])?;
+        let slot = publication.region;
+        cpu.publish_fine(vec![(slot as u64, publication.staged)], &[])?;
+        if let Some(demand) = &mut self.demand {
+            demand.published(slot)?;
+            self.camera_event(frame, "published")?;
+            return Ok(());
+        }
         self.reload
             .as_mut()
             .ok_or("Missing fine reload acknowledgement")?

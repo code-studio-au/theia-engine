@@ -192,3 +192,14 @@ latency deadline. Pending CPU reservations and GPU allocations are reported
 separately from published graphs; failed partial candidates are cleaned up but
 not included in a peak-memory claim. Current coverage tests exercise a finite
 request, not a repeated world scheduler. [Scope](validation/M4_ASYNC_FINE_RELOAD.md).
+
+Camera-driven four-region demand now qualifies repeated fine/coarse transitions,
+obsolete ready-upload cancellation and bounded capacity deferral while preserving
+protected coarse coverage. This profile still prevalidates all eight sources at
+startup, couples fine rendering to committed residency, and retires whole graphics
+generations on publication. Worker cancellation has no hard latency deadline;
+fatal source/descriptor failures clean up without rollback. Its bounded history
+and complete-current/pending allocation counters do not establish streaming
+throughput or total VRAM. Independent per-view LOD and proxy ground-height
+consistency need separate integration gates before timed crowd claims.
+[Evidence](validation/M4_CAMERA_WORLD_DEMAND.md).

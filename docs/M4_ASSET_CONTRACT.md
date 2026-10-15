@@ -1205,3 +1205,21 @@ own physical/image bytes and fence readiness; CPU live bytes include pending
 reservations. Published graph counts/physical bytes remain separate. This finite
 single request does not implement repeated or camera-driven scheduling.
 [Qualification](validation/M4_ASYNC_FINE_RELOAD.md).
+
+## Bounded camera-driven protected world profile
+
+`--world-camera-test <scene.json>` bootstraps only coarse owners, then uses actual
+committed fine residency and camera distance (20 m load / 35 m retain) with
+`--world-camera-slots <1..4>`. `--world-camera-period <frames>` repeats the route;
+`--world-camera-report <json>` records a 64-event ring plus dropped count, pending
+metadata and current/complete-pending peaks. One immutable-file worker/pending GPU
+graph is permitted. Obsolete requests cancel before publication; fine evictions
+precede requests. Capacity-blocked regions retry after a committed epoch change.
+
+Complete transfers and prior graphics readers retire before descriptor/CPU
+publication. Coarse owners remain protected at epoch 1. Startup still reads all
+eight inputs for a small catalog; later fine requests reread sources. Fine
+residency selects the rendered representation only in this prototype. Independent
+per-view LOD, production catalog streaming and timed crowd integration remain
+open. This profile keeps its optional descriptor capabilities isolated.
+[Evidence and accounting scope](validation/M4_CAMERA_WORLD_DEMAND.md).

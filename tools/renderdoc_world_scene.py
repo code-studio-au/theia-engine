@@ -41,7 +41,8 @@ def qualify(report):
     out=Path(os.environ['THEIA_WORLD_SCENE_OUTPUT']).resolve();out.mkdir(parents=True,exist_ok=True)
     scene_path=Path(os.environ['THEIA_WORLD_SCENE'])
     scene=json.loads(scene_path.read_bytes());cooks=[e['cook'] for e in scene['quadrants']]
-    covered=os.environ.get('THEIA_WORLD_SCENE_COVERED')
+    camera=os.environ.get('THEIA_WORLD_SCENE_CAMERA')=='1'
+    covered=os.environ.get('THEIA_WORLD_SCENE_COVERED') or ('[4,5,6,7]' if camera else None)
     selected=json.loads(covered) if covered else list(range(4))
     if covered:
         require(len(selected)==4 and all(v in (i,i+4) for i,v in enumerate(selected)), 'Invalid protected selection')
@@ -60,7 +61,11 @@ def qualify(report):
     reload=os.environ.get('THEIA_WORLD_SCENE_RELOAD')=='1'
     retire=os.environ.get('THEIA_WORLD_SCENE_RETIRE')=='1' or reload
     exe=Path('apps/theia-render-lab/target/debug/theia-render-lab').resolve()
-    args=['--world-covered-test' if covered else '--world-scene-test',str(scene_path),'--frames',str(frames),'--work-items',str(view),'--no-validation','--gpu','7900']
+    args=['--world-camera-test' if camera else '--world-covered-test' if covered else '--world-scene-test',str(scene_path),'--frames',str(frames),'--work-items',str(view),'--no-validation','--gpu','7900']
+    if camera:
+        args=args[:args.index('--work-items')]+args[args.index('--work-items')+2:]
+        args+=['--world-camera-period',os.environ.get('THEIA_WORLD_SCENE_PERIOD',str(frames)),
+            '--world-camera-slots',os.environ.get('THEIA_WORLD_SCENE_SLOTS','2'),'--world-camera-report',str(out/'camera.json')]
     if retire:
         require(covered,'Retirement requires protected selection')
         args+=['--world-covered-reload-test' if reload else '--world-covered-retire-test','--world-covered-report',str(out/'retirement.json')]
@@ -92,23 +97,43 @@ def qualify(report):
         require(retirement['completed'],'Retirement run incomplete')
         events=[e for e in retirement['history'] if e['frame']<=frame]
         require(events and events[-1]['selected']==selected,'Captured selection differs from published CPU history')
+    camera_report=None;camera_state=None;staging_models=[]
+    if camera:
+        camera_report=json.loads((out/'camera.json').read_bytes())
+        require(camera_report['completed'],'Camera run incomplete')
+        events=[e for e in camera_report['history'] if e['frame']<=frame]
+        require(events,'Missing camera state at captured frame')
+        camera_state=events[-1];selected=camera_state['selected']
+        require(len(selected)==4 and all(v in (i,i+4) for i,v in enumerate(selected)),'Bad committed camera selection')
+        cooks=[scene['quadrants' if value<4 else 'fallbacks'][i]['cook'] for i,value in enumerate(selected)]
+        inventory_cooks=[entry['cook'] for entry in scene['fallbacks']]+[scene['quadrants'][i]['cook'] for i,value in enumerate(selected) if value<4]
+        pending=camera_state['pending']
+        if pending and pending['pending']:
+            future=scene['quadrants'][pending['region']]['cook'];inventory_cooks.append(future);staging_models=[decode(future)]
+        models=[decode(cook) for cook in cooks];inventory_models=[decode(cook) for cook in inventory_cooks]
+        pixel_tables=[material_pixels(cook,model[3]) for cook,model in zip(cooks,models)]
+        factors=[material_factors(cook) for cook in cooks]
     cap=rd.OpenCaptureFile();controller=None
     try:
         success(cap.OpenFile(capture,'',None));result,controller=cap.OpenCapture(rd.ReplayOptions(),None);success(result)
         actions=list(walk(controller.GetRootActions()))
         draws=[a for a in actions if a.flags&rd.ActionFlags.MeshDispatch and a.flags&rd.ActionFlags.Indirect and not a.flags&rd.ActionFlags.MultiAction]
-        if view:require(len(draws)==4,'Expected four fixed indirect draws')
+        indirect_calls=[a for a in actions if a.flags&rd.ActionFlags.PushMarker and a.flags&rd.ActionFlags.MultiAction and a.GetName(controller.GetStructuredFile()).startswith('vkCmdDrawMeshTasksIndirectCountEXT(')]
+        require(len(indirect_calls)==4,'Expected four fixed indirect count calls')
         present=next(a for a in actions if a.flags&rd.ActionFlags.Present)
         controller.SetFrameEvent(present.eventId,True)
         textures=controller.GetTextures();buffers=controller.GetBuffers()
         color=next(t for t in textures if t.resourceId==present.copyDestination);width,height=color.width,color.height
-        rows=json.loads(subprocess.check_output([str(exe),'--world-pair-reference',str(width),str(height),str(view)]))['rows']
+        rows=json.loads(subprocess.check_output([str(exe),'--benchmark-reference','0',str(frame%camera_report['route_frames']),str(camera_report['route_frames']),str(width),str(height)]))['rows'] if camera else json.loads(subprocess.check_output([str(exe),'--world-pair-reference',str(width),str(height),str(view)]))['rows']
         if covered:
             # refAllResources retains inactive allocation metadata, but RenderDoc
             # 1.46 does not save unused buffer initial contents. Check the exact
             # live inventory separately; payload/raster checks cover selected sets.
             expected_buffers=Counter(len(blob) for model in inventory_models for blob in model[0])
             expected_buffers[256]+=4
+            for model in staging_models:
+                expected_buffers.update(len(blob) for blob in model[0])
+                expected_buffers.update(len(pixels) for pixels in model[3])
             require(Counter(b.length for b in buffers)==expected_buffers,'Protected live buffer inventory differs')
         for model in models:
             for blob in model[0]:
@@ -125,6 +150,7 @@ def qualify(report):
             if b.length==256:
                 work=controller.GetBufferData(b.resourceId,0,256)
                 count,mask=struct.unpack_from('<2I',work,36)
+                require(struct.unpack_from('<4I',work,0)==(int(count>0),1,1,int(count>0)),'Indirect command/count disagrees with compaction')
                 require(count<=32,'Work compaction exceeds profile')
                 ids=sorted(struct.unpack_from('<%dI'%count,work,64));actual.append((count,mask,ids))
         require(len(actual)==4,'Expected four independent work arenas')
@@ -139,6 +165,7 @@ def qualify(report):
                 if common==0:ids.append(index)
             visible.append(set(ids));expected.append((len(ids),sum(1<<i for i in ids),ids))
         require(sorted(actual)==sorted(expected),'World GPU compactions differ')
+        require(len(draws)==sum(int(count>0) for count,_,_ in expected),'Indirect subdraw count differs from nonempty compactions')
         identity=next(t for t in textures if t.format.compType==rd.CompType.UInt and t.format.compCount==2)
         depth=next(t for t in textures if t.format.compType==rd.CompType.Depth)
         identities=controller.GetTextureData(identity.resourceId,rd.Subresource())
@@ -154,7 +181,7 @@ def qualify(report):
                 require(chunk<4 and local>0 and local-1 in visible[chunk] and primitive<limits[chunk][local] and d<1,
                         'Invalid world identity/primitive namespace')
                 populations[chunk]+=1
-        require(all(populations) if view else not any(populations),'Incomplete world coverage')
+        require(any(populations) if camera else all(populations) if view else not any(populations),'Incomplete world coverage')
         probes={(int(width*x/12),int(height*y/10)) for x in range(1,12) for y in range(1,10)}
         for model in models:
             for triangle in model[1][::max(1,len(model[1])//32)]:
@@ -188,7 +215,7 @@ def qualify(report):
             samples.append(dict(pixel=[x,y],identity=actual,color=actual_rgb))
         save=rd.TextureSave();save.resourceId=color.resourceId;save.destType=rd.FileType.PNG
         success(controller.SaveTexture(save,str(out/'preview.png')))
-        report.update(passed=True,capture=capture,view=view,frame=frame,retirement=retirement,pixels=populations,images=len(images),
+        report.update(passed=True,capture=capture,view=view,frame=frame,retirement=retirement,camera=camera_report,camera_state=camera_state,pixels=populations,images=len(images),
             protected_owners=bool(covered),selected_chunks=selected,root_buffers=len(inventory_models)*4,
             retained_inventory_verified=bool(covered),payload_scope="selected_graphs",
             compactions_verified=True,identity_depth_bounds_verified=True,sampled_materials=sorted(materials),

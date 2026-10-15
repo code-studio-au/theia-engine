@@ -4,6 +4,17 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 camera-driven protected world residency — locally qualified (2026-10-15)
+
+A bounded camera scheduler now loads and retires fine chunks over four protected
+coarse graphs. One file/upload request cancels when obsolete; CPU/GPU/image
+capacity defers retain coarse coverage. Nineteen debug native cases pass with
+zero diagnostics; nine corrected replays pass 1534 ray/colour probes. A repeated
+1320-frame route performs 88 fine publications/86 retirements with a 64-event
+history bound. Renderer tests, Clippy and Windows GNU/Wine checks pass. This is a
+correctness profile; timed crowd integration and independent per-view LOD remain
+open. [Evidence and limitations](validation/M4_CAMERA_WORLD_DEMAND.md).
+
 ## M4 one asynchronous fine reload — locally qualified (2026-10-15)
 
 The covered-world reload profile now uses one bounded file worker and GPU pending

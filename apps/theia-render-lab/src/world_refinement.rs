@@ -1,5 +1,5 @@
-//! One bounded immutable-file worker and GPU pending set for region-2 fine reload.
-//! Qualification requests after frame 100 and publishes no earlier than frame 110.
+//! One bounded immutable-file worker and GPU pending set per fine request.
+//! The scripted constructor uses region 2 at frames 100/110; camera requests supply their region/timing.
 use crate::{
     Result,
     bundle_streaming::{Gpu, Input},
@@ -29,19 +29,49 @@ struct Pending {
     staged: StagedBundle,
 }
 pub(super) struct Ready {
+    pub region: usize,
     pub set: Set,
     pub staged: StagedBundle,
 }
-pub(super) struct Reload {
-    pending: Option<Pending>,
-    loader: Option<Loader>,
+#[derive(Clone)]
+pub(super) struct Profile {
     device: ash::Device,
     memory: vk::PhysicalDeviceMemoryProperties,
     limits: vk::PhysicalDeviceLimits,
     image_limits: vk::ImageFormatProperties,
     family: u32,
     queue: vk::Queue,
+}
+impl Profile {
+    pub fn new(gpu: Gpu<'_>) -> Self {
+        Self {
+            device: gpu.device.clone(),
+            memory: *gpu.memory,
+            limits: gpu.limits,
+            image_limits: gpu.image_limits,
+            family: gpu.family,
+            queue: gpu.queue,
+        }
+    }
+    pub fn gpu(&self) -> Gpu<'_> {
+        Gpu {
+            device: &self.device,
+            memory: &self.memory,
+            limits: self.limits,
+            image_limits: self.image_limits,
+            family: self.family,
+            queue: self.queue,
+        }
+    }
+}
+pub(super) struct Reload {
+    pending: Option<Pending>,
+    loader: Option<Loader>,
+    profile: Profile,
     path: PathBuf,
+    region: usize,
+    request_frame: u64,
+    publication_frame: u64,
     budgets: [u64; 2],
     started: bool,
     pub published: bool,
@@ -53,18 +83,41 @@ impl Reload {
         Self {
             pending: None,
             loader: None,
-            device: gpu.device.clone(),
-            memory: *gpu.memory,
-            limits: gpu.limits,
-            image_limits: gpu.image_limits,
-            family: gpu.family,
-            queue: gpu.queue,
+            profile: Profile::new(gpu),
             path,
+            region: 2,
+            request_frame: 100,
+            publication_frame: 110,
             budgets,
             started: false,
             published: false,
             cpu_deferrals: 0,
             gpu_deferrals: 0,
+        }
+    }
+    pub fn request(
+        region: usize,
+        path: PathBuf,
+        budgets: [u64; 2],
+        gpu: Gpu<'_>,
+        frame: u64,
+    ) -> Self {
+        let mut request = Self::new(path, budgets, gpu);
+        request.region = region;
+        request.request_frame = frame;
+        request.publication_frame = frame;
+        request
+    }
+    pub fn region(&self) -> usize {
+        self.region
+    }
+    pub fn deferred(&self) -> Option<bool> {
+        if self.cpu_deferrals > 0 {
+            Some(true)
+        } else if self.gpu_deferrals > 0 {
+            Some(false)
+        } else {
+            None
         }
     }
     /// Caller has retired its sole frame fence. Returned complete sets still need
@@ -76,11 +129,12 @@ impl Reload {
         active: [u64; 2],
     ) -> Result<(bool, Option<Ready>)> {
         if let Some(pending) = &self.pending {
-            if frame >= 110 && pending.uploads.ready()? {
+            if frame >= self.publication_frame && pending.uploads.ready()? {
                 let pending = self.pending.take().unwrap();
                 return Ok((
                     true,
                     Some(Ready {
+                        region: self.region,
                         set: pending.uploads.finish()?,
                         staged: pending.staged,
                     }),
@@ -118,14 +172,7 @@ impl Reload {
             let images = self.budgets[1]
                 .checked_sub(active[1])
                 .ok_or("Protected reload image ledger exceeds cap")?;
-            let gpu = Gpu {
-                device: &self.device,
-                memory: &self.memory,
-                family: self.family,
-                queue: self.queue,
-                limits: self.limits,
-                image_limits: self.image_limits,
-            };
+            let gpu = self.profile.gpu();
             match PendingSet::begin(&input, &gpu, remaining, images) {
                 Ok(uploads) => self.pending = Some(Pending { uploads, staged }),
                 Err(error) if world_upload::budget_rejection(error.as_ref()) => {
@@ -136,7 +183,7 @@ impl Reload {
             }
             return Ok((true, None));
         }
-        if frame >= 100 && !self.started {
+        if frame >= self.request_frame && !self.started {
             let path = self.path.clone();
             let (sender, receiver) = mpsc::sync_channel(1);
             let worker = std::thread::Builder::new()
@@ -161,7 +208,7 @@ impl Reload {
             "pending_gpu_bytes":self.pending.as_ref().map_or(0,|p|p.uploads.physical_bytes()),
             "pending_image_bytes":self.pending.as_ref().map_or(0,|p|p.uploads.image_bytes()),
             "pending_ready":self.pending.as_ref().map(|p|p.uploads.ready()).transpose()?,
-            "region":2,"earliest_request_frame":100,"earliest_publication_frame":110}),
+            "region":self.region,"earliest_request_frame":self.request_frame,"earliest_publication_frame":self.publication_frame}),
         )
     }
 }
