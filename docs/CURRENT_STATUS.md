@@ -6,6 +6,14 @@ update is 2026-10-15.
 
 ## M4 integrated procedural scene benchmark — independently executed (2026-10-15)
 
+The next offline prerequisite now cooks a four-quadrant static-world fixture:
+2048 triangles, four diagnostic textures and unchanged indexed bundles. Each
+quadrant has 10–11 meshlets within the existing 32-meshlet profile. Independent
+source/import/cooked coverage, winding, UV, material/texture mapping and texel
+checks plus strict Rust bundle admission pass. This source fixture is not yet
+connected to the procedural benchmark or world streaming.
+[Workflow](SCENE_BENCHMARK.md#cooked-static-world-source-offline-prerequisite).
+
 A repeatable three-phase camera route now renders continuous ground, 64 buildings,
 128 tree proxies and 0..10000 moving visual proxies through GPU culling/detail,
 indirect task/mesh draws and visibility/deferred resolve. An optional on-screen

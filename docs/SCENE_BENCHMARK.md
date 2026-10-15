@@ -165,3 +165,55 @@ apart from float representation tolerance. Culling and detail thresholds are
 checked against the actual generated positions, avoiding a false mismatch when
 small arithmetic differences cross a decision boundary. This is a qualified
 numeric profile, not a cross-vendor conformance theorem.
+
+## Cooked static-world source (offline prerequisite)
+
+`tools/cook_benchmark_scene.py` generates four independently cooked quadrants of
+the same 128×128 metre ground/village layout: 256 continuous ground tiles, 64
+roofed buildings and 128 pyramid tree proxies, totalling 2048 triangles. Four
+64×64 opaque diagnostic checker textures exercise material-selected sampling.
+These are synthetic test assets, not production art. Tree geometry differs from
+the procedural cube/roof proxy. Player motion remains in the existing benchmark.
+
+```sh
+cargo build --locked --manifest-path tools/theia-gltf-import/Cargo.toml
+python3 tools/cook_benchmark_scene.py \
+  --output build/qualification/benchmark-world \
+  --importer tools/theia-gltf-import/target/debug/theia-gltf-import \
+  --library build/qualification/meshoptimizer/lib-build/libmeshoptimizer.so \
+  --meshoptimizer-source build/qualification/meshoptimizer/meshoptimizer-1.3.tar.gz \
+  --ktx build/qualification/ktx-tool/source-build/Release/ktx \
+  --ktx-build build/qualification/ktx-tool/source-build \
+  --ktx-source build/qualification/ktx-tool/ktx-source-v4.4.2.tar.gz
+python3 tools/qualify_benchmark_scene.py \
+  --scene build/qualification/benchmark-world/scene.json \
+  --output build/qualification/benchmark-world-proof
+```
+
+After building Render Lab, add `--gpu-smoke --headless-dri-prime
+pci-0000_03_00_0` with `VK_DRIVER_FILES` selecting RADV to run owned headless
+Wayland checks. These load each quadrant and alternate quadrants 0/3. Six pressure
+cases use measured exact/one-byte-short GPU/image and deduplicated encoded CPU
+budgets. They check publication versus clean deferral and zero diagnostics through
+teardown. They use the existing small asset-viewer camera, not the benchmark route;
+they do not establish whole-world framebuffer correctness or performance.
+
+`--source-only --output <directory>` generates portable glTF/PNG sources without
+the native toolchain. Full cooking uses the existing bounded Rust glTF importer,
+pinned offline meshoptimizer and KTX tools, and unchanged indexed bundle formats.
+The qualifier independently checks source/normalized positions, indices, UVs,
+cooked winding/coverage/material assignments, texture bindings and every texel,
+then runs strict Rust complete-bundle admission. Ground topology tests check exact
+shared vertices and a complete rectangle across all quadrant boundaries.
+
+Read `scene.json` for each hash-named bundle path. Failed cooking/qualification
+writes a failed summary; it cannot leave a previous successful summary in place.
+The existing texture-table provenance hashes source assignment paths: complete
+bundle hashes repeat at a fixed output location, but change across output roots.
+Geometry, material, UV and texture hashes repeat across roots with the same tools.
+Encoded-byte totals are deduplicated file bytes, not physical GPU allocations.
+
+**The procedural `--benchmark` has not yet adopted these bundles.** World rendering,
+multi-quadrant residency/pressure, representative art, geometry LOD and texture mip
+integration remain subsequent work. This offline result is not streaming or GPU
+performance evidence.

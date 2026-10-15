@@ -13,6 +13,33 @@ cooked content streaming, texture residency, general meshlet hierarchies, GI,
 navigation or gameplay authority. Ten thousand executed visual proxies are not
 evidence for ten thousand networked players.
 
+## Cooked-world prerequisite and resource pressure (2026-10-15)
+
+`build/qualification/benchmark-world-final/report.json` passes source-to-import
+and cooked geometry/UV/material/texture binding checks, strict Rust admission of
+four indexed bundles and 65536 decoded texel comparisons. Quadrants contain
+624/624/619/629 vertices, 11/11/10/11 meshlets and 512/512/508/516 triangles.
+All 29 offline Python tests pass, including three new scene topology/texture tests.
+Ground edges form one 128×128 rectangle with identical shared vertices. Complete
+bundles repeat at a fixed cook destination; table provenance makes bundle hashes
+depend on the output root. Source/normalized and geometry/material/UV/texture
+hashes agree across roots. A deliberately incorrect texture dependency rejects and
+replaces a previous successful qualification summary with a failed summary.
+
+Four native headless Wayland bundle loads and seven alternating-bundle runs each
+present 120 frames with zero Vulkan warnings/errors including teardown. For
+quadrants 0/3, active+pending buffer/image charge is 89376+89520 = **178896 bytes**;
+image-only charge is **131072 bytes**, and unique encoded CPU owners cost
+**117320 bytes**. Each exact cap permits five complete publications; each
+one-byte-short cap produces five deferrals, zero publications and continued
+presentation. These charges exclude work/targets/staging/driver allocations as
+documented by the existing bundle-streaming contract.
+
+These are synthetic opaque unlit nearest-mip-zero assets. Checks use the existing
+asset-viewer camera; there is no whole-world pixel oracle, benchmark-route content
+integration, multi-quadrant scheduler, crowd mixture, geometry LOD or performance
+claim for this prerequisite. No renderer, shader or binary format changed.
+
 ## Independently executed
 
 Linux Mint 22.3, RX 7900 XTX, RADV Mesa 26.2.4, Slang 2026.19, RenderDoc 1.46.
