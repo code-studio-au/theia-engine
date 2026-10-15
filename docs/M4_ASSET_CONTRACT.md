@@ -1162,3 +1162,24 @@ live GPU/CPU generation publication. All input graphs must be available/valid.
 Replay verifies all live allocation inventory and selected payloads; inactive
 storage initial contents are not preserved by the current replay tool.
 [Evidence and limits](validation/M4_PROTECTED_GPU_STARTUP.md).
+
+
+## Controlled fine retirement and retained coarse reuse
+
+`--world-covered-retire-test` requires covered startup and retires fine regions
+0..3 after 20/40/60/80 presented frames. Optional `--world-covered-report <json>`
+records at most five history rows. Already-coarse startup regions are skipped;
+prefix runs record their actual partial selection and normal completion status.
+
+The sole frame fence and old presentation/graphics generation retire before
+stored coarse buffers/images move into the selected work/material bindings.
+Work arenas/layouts remain stable. An eviction guard retains old fine GPU owners
+and a CPU snapshot while the complete new descriptor generation builds. Only
+then does fine CPU removal publish; old GPU owners release before their CPU
+reader. Failed target construction is fatal and cleans up, with the report left
+incomplete; no rollback is claimed. No coarse geometry/image reupload is needed.
+
+Post-retirement replay verifies the actual retained coarse contents once active,
+including the two-to-four selected image-count transition. This finite schedule
+does not load fine data again or connect camera demand. [Qualification and
+ledger](validation/M4_RETAINED_COARSE_REACTIVATION.md).

@@ -6,7 +6,10 @@ use crate::{
     world_upload::{self, PresentationSet, Set},
 };
 use ash::vk;
-use std::{io::Read, path::Path};
+use std::{
+    io::Read,
+    path::{Path, PathBuf},
+};
 use theia_assets::{
     bundle_residency::WorldResidency,
     world_coverage::{ProtectedWorld, Region},
@@ -16,6 +19,16 @@ enum CpuOwners {
     Fixed { _world: WorldResidency },
     Covered { _world: ProtectedWorld },
 }
+struct Retirement {
+    history: Vec<serde_json::Value>, // Initial state + at most four retirements.
+    report: Option<PathBuf>,
+}
+pub(super) struct Eviction {
+    slot: usize,
+    // Graphics retired before these old GPU owners release; encoded owners last.
+    _retired: Set,
+    _reader: theia_assets::world_coverage::Snapshot,
+}
 pub const CHUNKS: usize = 4;
 pub const MAX_IMAGES: usize = CHUNKS * theia_assets::texture_table::MAX_TEXTURES;
 
@@ -23,7 +36,8 @@ pub(super) struct Scene {
     pub work: [IndirectWork; CHUNKS],
     pub resources: [PresentationSet; CHUNKS],
     // Encoded sources outlive every GPU owner.
-    _protected: Vec<Set>,
+    _protected: [Option<Set>; CHUNKS],
+    retirement: Option<Retirement>,
     _cpu: CpuOwners,
 }
 impl Scene {
@@ -123,7 +137,8 @@ impl Scene {
             resources: resources
                 .try_into()
                 .map_err(|_| "Wrong scene resource count")?,
-            _protected: Vec::new(),
+            _protected: std::array::from_fn(|_| None),
+            retirement: None,
             _cpu: CpuOwners::Fixed { _world: cpu },
         })
     }
@@ -225,7 +240,7 @@ impl Scene {
         }
         cpu.publish(staged, &[])?;
         let mut cpu = ProtectedWorld::new(cpu, &regions)?;
-        let mut protected = Vec::new();
+        let mut protected: [Option<Set>; CHUNKS] = std::array::from_fn(|_| None);
         let (mut deferred_cpu, mut deferred_gpu) = (Vec::new(), Vec::new());
         for (i, input) in inputs[1].iter().enumerate() {
             let staged = match cpu.stage(
@@ -259,7 +274,7 @@ impl Scene {
             image_remaining = image_remaining
                 .checked_sub(set.image_bytes())
                 .ok_or("Protected fine image accounting underflow")?;
-            protected.push(std::mem::replace(&mut sets[i], set));
+            protected[i] = Some(std::mem::replace(&mut sets[i], set));
         }
         let (mut work, mut resources) = (Vec::new(), Vec::new());
         for set in sets {
@@ -284,9 +299,9 @@ impl Scene {
                 "cpu_epoch":snapshot.world().epoch(),"cpu_unique_bytes":cpu.live_bytes(),
                 "physical_bytes":budgets.1-remaining,"image_bytes":budgets.2-image_remaining,
                 "root_buffers":snapshot.world().chunk_count()*4,
-                "images":resources.iter().map(|s|s.images.len()).sum::<usize>()+protected.iter().map(|s|s.images.len()).sum::<usize>(),
+                "images":resources.iter().map(|s|s.images.len()).sum::<usize>()+protected.iter().flatten().map(|s|s.images.len()).sum::<usize>(),
                 "deferred_cpu":deferred_cpu,"deferred_gpu":deferred_gpu,
-                "live_publication":false,"camera_demand":false,"authority":false,
+                "fine_loads_at_startup_only":true,"camera_demand":false,"authority":false,
             })
         );
         Ok(Self {
@@ -295,11 +310,131 @@ impl Scene {
                 .try_into()
                 .map_err(|_| "Wrong protected resource count")?,
             _protected: protected,
+            retirement: None,
             _cpu: CpuOwners::Covered { _world: cpu },
         })
     }
+    pub fn enable_retirement(&mut self, report: Option<PathBuf>) -> Result<()> {
+        if !matches!(self._cpu, CpuOwners::Covered { .. }) {
+            return Err("Fine retirement needs protected startup".into());
+        }
+        self.retirement = Some(Retirement {
+            history: vec![self.covered_stats(0)?],
+            report,
+        });
+        self.retirement_report(0, false)?;
+        println!(
+            "Protected fine retirement enabled: slots 0..3 after presented frames 20/40/60/80; retained coarse buffers reused"
+        );
+        Ok(())
+    }
+    pub fn next_retirement(&self, frame: u64) -> Option<usize> {
+        self.retirement.as_ref()?;
+        self._protected.iter().enumerate().find_map(|(slot, set)| {
+            (set.is_some() && frame >= (slot as u64 + 1) * 20).then_some(slot)
+        })
+    }
+    /// Sole frame fence and previous graphics/presentation generation must retire
+    /// before replacing descriptors or returning old GPU owners for destruction.
+    pub fn prepare_retirement(&mut self, slot: usize) -> Result<Eviction> {
+        let CpuOwners::Covered { _world: cpu } = &self._cpu else {
+            return Err("Retirement requires protected CPU owners".into());
+        };
+        let reader = cpu.snapshot();
+        let set = self
+            ._protected
+            .get_mut(slot)
+            .and_then(Option::take)
+            .ok_or("No retained coarse set for selected fine region")?;
+        let [geometry, materials, uvs, table] = set.buffers;
+        let old_geometry = self.work[slot].replace_asset(geometry);
+        let old = std::mem::replace(
+            &mut self.resources[slot],
+            PresentationSet {
+                materials,
+                uvs,
+                table,
+                images: set.images,
+            },
+        );
+        Ok(Eviction {
+            slot,
+            _retired: Set {
+                buffers: [old_geometry, old.materials, old.uvs, old.table],
+                images: old.images,
+            },
+            _reader: reader,
+        })
+    }
+    /// New complete graphics generation is ready; publish matching CPU selection.
+    pub fn retirement_published(&mut self, eviction: Eviction, frame: u64) -> Result<()> {
+        let CpuOwners::Covered { _world: cpu } = &mut self._cpu else {
+            return Err("Missing protected publication owner".into());
+        };
+        let slot = eviction.slot;
+        cpu.publish_fine(vec![], &[slot as u64])?;
+        // Drop old GPU buffers/images before releasing their retained CPU reader.
+        drop(eviction);
+        let stats = self.covered_stats(frame)?;
+        let history = &mut self
+            .retirement
+            .as_mut()
+            .ok_or("Missing retirement schedule")?
+            .history;
+        if history.len() > CHUNKS {
+            return Err("Retirement history bound exceeded".into());
+        }
+        println!("Protected fine region {slot} retired; coarse reactivated: {stats}");
+        history.push(stats);
+        self.retirement_report(frame, false)?;
+        Ok(())
+    }
+    fn covered_stats(&self, frame: u64) -> Result<serde_json::Value> {
+        let CpuOwners::Covered { _world: cpu } = &self._cpu else {
+            return Err("Missing protected stats owner".into());
+        };
+        let snapshot = cpu.snapshot();
+        Ok(
+            serde_json::json!({"frame":frame,"epoch":snapshot.world().epoch(),
+            "selected":snapshot.selections().iter().map(|s|s.chunk).collect::<Vec<_>>(),
+            "protected_epochs":(4..8).map(|id|snapshot.world().chunk(id).unwrap().epoch()).collect::<Vec<_>>(),
+            "owned_chunks":snapshot.world().chunk_count(),"cpu_unique_bytes":cpu.live_bytes(),
+            "physical_bytes":self.physical_bytes(),"image_bytes":self.resources.iter().map(|s|s.images.iter().map(|v|v.image.allocated_bytes).sum::<u64>()).sum::<u64>()+
+                self._protected.iter().flatten().map(Set::image_bytes).sum::<u64>(),
+            "images":self.resources.iter().map(|s|s.images.len()).sum::<usize>()+self._protected.iter().flatten().map(|s|s.images.len()).sum::<usize>()}),
+        )
+    }
+    fn retirement_report(&self, frame: u64, completed: bool) -> Result<()> {
+        if let Some(retirement) = &self.retirement
+            && let Some(path) = &retirement.report
+        {
+            if let Some(parent) = path.parent()
+                && !parent.as_os_str().is_empty()
+            {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(
+                path,
+                serde_json::to_vec_pretty(&serde_json::json!({
+                    "completed":completed,"history":retirement.history,"final":self.covered_stats(frame)?,
+                    "retirements":retirement.history.len()-1,"camera_demand":false,"fine_reload":false,
+                }))?,
+            )?;
+        }
+        Ok(())
+    }
+    pub fn qualification_complete(&self, frame: u64) -> Result<()> {
+        if self.retirement.is_some() && frame >= 81 && self._protected.iter().any(Option::is_some) {
+            return Err("Scheduled fine retirement left a fine selection active".into());
+        }
+        self.retirement_report(frame, true)
+    }
     pub fn physical_bytes(&self) -> u64 {
-        self._protected.iter().map(Set::bytes).sum::<u64>()
+        self._protected
+            .iter()
+            .flatten()
+            .map(Set::bytes)
+            .sum::<u64>()
             + self
                 .work
                 .iter()

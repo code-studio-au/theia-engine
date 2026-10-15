@@ -1222,6 +1222,13 @@ impl Renderer {
                 ),
                 options.world_covered,
             )?);
+            if options.world_covered_retire {
+                renderer
+                    .scene
+                    .as_mut()
+                    .unwrap()
+                    .enable_retirement(options.world_covered_report.clone())?;
+            }
         } else if let Some(second) = &options.world_bundle_pair {
             // SAFETY: Context retains this selected physical device and instance.
             let (memory, limits, image_limits) = unsafe {
@@ -1882,6 +1889,30 @@ impl Renderer {
         }
         Ok(())
     }
+    fn tick_covered_retirement(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let Some(slot) = self
+            .scene
+            .as_ref()
+            .and_then(|scene| scene.next_retirement(self.presented))
+        else {
+            return Ok(());
+        };
+        if let Some(chain) = &mut self.chain {
+            chain.retire()?;
+        }
+        drop(self.chain.take());
+        let eviction = self.scene.as_mut().unwrap().prepare_retirement(slot)?;
+        self.recreate = true;
+        self.rebuild(size)?;
+        if self.recreate {
+            return Err("Protected retirement target generation unavailable".into());
+        }
+        self.scene
+            .as_mut()
+            .unwrap()
+            .retirement_published(eviction, self.presented)?;
+        Ok(())
+    }
     fn tick_world_bundle(&mut self, size: PhysicalSize<u32>) -> Result<()> {
         let active = [
             self.bundle_resource_bytes(),
@@ -2188,6 +2219,7 @@ impl Renderer {
         }
         self.tick_bundle(size)?;
         self.tick_world_bundle(size)?;
+        self.tick_covered_retirement(size)?;
         self.tick_texture_refinement(size)?;
         let cooked_stats = (self.benchmark.is_some() && self.mode == RenderMode::AssetResolve)
             .then(|| crate::benchmark::CookedStats {
@@ -2677,6 +2709,9 @@ impl Renderer {
         }
         if let Some(refinement) = &self.texture_refinement {
             refinement.check_complete(self.presented)?;
+        }
+        if let Some(scene) = &self.scene {
+            scene.qualification_complete(self.presented)?;
         }
         Ok(())
     }

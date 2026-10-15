@@ -54,8 +54,14 @@ def qualify(report):
     pixel_tables=[material_pixels(cook,model[3]) for cook,model in zip(cooks,models)]
     factors=[material_factors(cook) for cook in cooks]
     view=int(os.environ.get('THEIA_WORLD_SCENE_VIEW','2'))
+    frame=int(os.environ.get('THEIA_WORLD_SCENE_FRAME','10'))
+    require(0<=frame<90,'Invalid capture frame')
+    retire=os.environ.get('THEIA_WORLD_SCENE_RETIRE')=='1'
     exe=Path('apps/theia-render-lab/target/debug/theia-render-lab').resolve()
     args=['--world-covered-test' if covered else '--world-scene-test',str(scene_path),'--frames','90','--work-items',str(view),'--no-validation','--gpu','7900']
+    if retire:
+        require(covered,'Retirement requires protected selection')
+        args+=['--world-covered-retire-test','--world-covered-report',str(out/'retirement.json')]
     if os.environ.get('THEIA_WORLD_SCENE_CAPS'):
         cpu,gpu,images=json.loads(os.environ['THEIA_WORLD_SCENE_CAPS'])
         args+=['--bundle-byte-budget',str(cpu),'--bundle-gpu-budget',str(gpu),'--texture-budget',str(images)]
@@ -71,13 +77,19 @@ def qualify(report):
         require(target is not None,'Missing target control')
         capture=None
         try:
-            target.QueueCapture(10,1)
+            target.QueueCapture(frame,1)
             deadline=time.monotonic()+60
             while target.Connected() and time.monotonic()<deadline:
                 message=target.ReceiveMessage(None)
                 if message.type==rd.TargetControlMessageType.NewCapture:capture=message.newCapture.path
             require(not target.Connected() and capture,'Missing capture or target timeout')
         finally:target.Shutdown()
+    retirement=None
+    if retire:
+        retirement=json.loads((out/'retirement.json').read_bytes())
+        require(retirement['completed'],'Retirement run incomplete')
+        events=[e for e in retirement['history'] if e['frame']<=frame]
+        require(events and events[-1]['selected']==selected,'Captured selection differs from published CPU history')
     cap=rd.OpenCaptureFile();controller=None
     try:
         success(cap.OpenFile(capture,'',None));result,controller=cap.OpenCapture(rd.ReplayOptions(),None);success(result)
@@ -174,7 +186,7 @@ def qualify(report):
             samples.append(dict(pixel=[x,y],identity=actual,color=actual_rgb))
         save=rd.TextureSave();save.resourceId=color.resourceId;save.destType=rd.FileType.PNG
         success(controller.SaveTexture(save,str(out/'preview.png')))
-        report.update(passed=True,capture=capture,view=view,pixels=populations,images=len(images),
+        report.update(passed=True,capture=capture,view=view,frame=frame,retirement=retirement,pixels=populations,images=len(images),
             protected_owners=bool(covered),selected_chunks=selected,root_buffers=len(inventory_models)*4,
             retained_inventory_verified=bool(covered),payload_scope="selected_graphs",
             compactions_verified=True,identity_depth_bounds_verified=True,sampled_materials=sorted(materials),

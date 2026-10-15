@@ -178,9 +178,11 @@ and requalify compiler/driver combinations before changing that expression.
 Camera-driven publication, protected fallback and cross-vendor execution remain
 open. [Evidence](validation/M4_FOUR_RESIDENT_CHUNKS.md).
 
-Protected startup coverage keeps unselected coarse GPU owners, but live fallback
-reactivation has not yet been qualified. RenderDoc 1.46 exposes retained allocation
-metadata without saving initial contents for unused storage buffers. Current
-oracles check all live buffer/image inventory and selected payloads, with separate
-coarse-selected captures. Do not infer inactive-byte readback or post-retirement
-reuse from those checks. [Scope](validation/M4_PROTECTED_GPU_STARTUP.md).
+Protected startup coverage keeps unselected coarse GPU owners. A separate finite
+retirement schedule now qualifies coarse reactivation, including its actual raw
+contents after becoming active. RenderDoc 1.46 exposes inactive allocation
+metadata without saving unused storage-buffer initial contents, so current
+oracles distinguish retained inventory from selected payloads. Fine reload,
+camera-driven publication and larger lifetime/latency workloads remain open.
+[Startup scope](validation/M4_PROTECTED_GPU_STARTUP.md),
+[reactivation evidence](validation/M4_RETAINED_COARSE_REACTIVATION.md).

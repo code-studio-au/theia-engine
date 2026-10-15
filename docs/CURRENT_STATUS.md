@@ -4,13 +4,23 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 retained coarse reactivation — locally qualified (2026-10-15)
+
+A controlled retirement schedule now reuses protected coarse GPU resources after
+fine selection. Frame/presentation readers retire and new descriptors build before
+CPU selection publishes and old fine owners release. Thirteen native cases pass
+with zero diagnostics, including failure cleanup; seven replays pass 1632 ray/colour
+probes and verify all four coarse graphs after reactivation. Renderer 28 tests,
+Clippy and Windows GNU/Wine checks pass. Fine reload/camera demand remain open. [Scope](validation/M4_RETAINED_COARSE_REACTIVATION.md).
+
 ## M4 protected coarse GPU startup — locally qualified (2026-10-15)
 
 The isolated covered-world startup profile retains four coarse GPU owners while
 admitting fine chunks within remaining CPU/physical/image caps. Eighteen native
 cases pass with zero diagnostics; seven replays pass 1616 ray/colour probes,
 selected payloads and retained allocation inventory. Renderer 28 tests, Clippy
-and Windows GNU/Wine checks pass. Inactive bytes await a reactivation gate.
+and Windows GNU/Wine checks pass. Retained coarse bytes are checked by the
+separate reactivation gate above.
 This is synchronous fixed startup, with no live camera-driven selection.
 [Scope](validation/M4_PROTECTED_GPU_STARTUP.md).
 

@@ -475,3 +475,11 @@ fine candidates within remaining caps. Successful complete transfers retire
 before fine CPU publication; short capacity keeps coarse drawing. This fixed
 startup slice precedes live fine removal/fallback reactivation, camera-driven
 requests and crowd-route integration. [Scope](validation/M4_PROTECTED_GPU_STARTUP.md).
+
+
+A finite fine-retirement schedule now reactivates all four retained coarse GPU
+graphs with graphics retirement, complete descriptor rebuild and matching CPU
+epoch publication. Prefix boundaries, partial-startup coverage and fatal rebuild
+cleanup qualify locally; replay checks actual coarse contents after reuse.
+Next qualify bounded fine reload while coarse coverage stays visible, then connect
+camera demand and the timed crowd scene. [Evidence](validation/M4_RETAINED_COARSE_REACTIVATION.md).
