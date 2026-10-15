@@ -170,3 +170,19 @@ The human level 1–20 racial arc moves from local supply theft and ordinary hum
 **Political constraint:** The human King rules the inland human kingdom, while Covenant's hereditary High Ruler belongs to a separate branch of the royal dynasty and governs from the distinct multicultural coastal alliance capital. Do not conflate these offices or capitals. The King's identity, the deceased adviser's name, the new adviser's name, the royal investigator and marshal are not yet approved.
 
 **Later racial questlines:** Each people retains continuing local and political stories after the shared campaign opens. Covenant and Dominion remain hostile; characters can discover different pieces of the Unmade conspiracy without a public cross-alliance partnership. The eight other opening designs, their precise local antagonists and their relation (if any) to the Unmade are still to be developed.
+
+## Creator-approved five-act launch campaign (15 October 2026)
+
+The racial level 1–20 stories are **Act I**, not a separate prologue. They introduce the world, its political conflicts and early hints of the wider mystery. The approved narrative planning structure is:
+
+| Act | Levels | Working title | Focus |
+| --- | --- | --- | --- |
+| **I** | **1–20** | **Racial Origins** | Eight distinct racial stories, local conflicts, first clues; for humans, the royal adviser betrayal |
+| **II** | **20–30** | **Shadows of Conflict** | Alliance warfare, covert manipulation, Minor Resonators |
+| **III** | **30–40** | **The Hidden Design** | Guardians, Kel'vari, First Anchor, The Binding, Unmade and Regional Anchors |
+| **IV** | **40–50** | **Echoes of the Sundering** | First Shroud expedition near level 40, introduction to dedicated WvW, deeper Kel'vari and Oth'varen revelations |
+| **V** | **50–60** | **The Severed Chain** | Major Anchor network, resonance inversion, limited launch victory without defeating Nhal |
+
+The titles remain working titles. Each act has a meaningful **solo-accessible story dungeon or equivalent climax**, with eight distinct racial climaxes possible in Act I. Story-mode dungeons and solo quests provide the full essential narrative; organised raids and challenging group dungeons are optional, adding rewards and supplementary lore without gating progression. Racial questlines continue beyond level 20 alongside the main story, and ordinary levelling remains possible independently. Later acts can contain progressively more overall content as XP requirements increase, without requiring proportionally more mandatory story quests. The act bands are narrative planning ranges, not rigid level gates.
+
+The first Shroud expedition is proposed for the transition into Act IV, after players learn enough about the Guardians, Kel'vari, Unmade and The Binding to understand its significance. WvW in a dedicated Shroud frontier must not gate solo story progression. Exact Passage access, PvP systems, story dungeon locations, bosses and act endings remain open for development.
