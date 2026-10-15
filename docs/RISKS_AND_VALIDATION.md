@@ -203,3 +203,13 @@ and complete-current/pending allocation counters do not establish streaming
 throughput or total VRAM. Independent per-view LOD and proxy ground-height
 consistency need separate integration gates before timed crowd claims.
 [Evidence](validation/M4_CAMERA_WORLD_DEMAND.md).
+
+The combined camera-world/crowd correctness gate now checks all 10000 GPU poses
+against selected source terrain and verifies two-way occlusion. Its persistent
+40704-byte terrain table retains both levels even for nonresident fine graphs and
+is charged separately before graph admissions. This fixture-wide metadata cost
+needs a different policy at larger scale. Mock boxes sample terrain beneath their
+centers; no slope-conforming animation, foot IK or transition morphing is claimed.
+The current path has no timed recorder/HUD, and its correctness results do not
+establish production streaming throughput or networked-player capacity.
+[Evidence and scope](validation/M4_STREAMED_WORLD_CROWD.md).

@@ -512,3 +512,11 @@ qualified source data. Next integrate the table with explicit allocation charges
 and query it from GPU proxy generation, then qualify shared streamed-world/crowd
 visibility, resolve and HUD/timing. No per-frame readback is intended in that path.
 [Evidence](validation/M4_GPU_SELECTED_TERRAIN_HEIGHTS.md).
+
+The actual camera-streamed world now renders together with up to 10000 GPU
+proxies grounded on its committed fine/coarse triangles. Explicit table charges,
+23 native cases and eight replays qualify ownership, placement, culling, detail
+and two-way occlusion. Next connect timed recording and a live HUD for this
+combined path, preserving graph/pending/fixed allocation scope. Broader catalogs,
+independent per-view LOD and virtualized geometry/textures remain open.
+[Evidence](validation/M4_STREAMED_WORLD_CROWD.md).

@@ -1,3 +1,7 @@
+#ifdef THEIA_WORLD_GROUND
+#define THEIA_GROUND_BINDING 1
+#include "world_ground_query.slang"
+#endif
 // Visual-only deterministic workload. Dense records; no gameplay authority.
 static const uint STATIC_OBJECTS=448, MAX_OBJECTS=10448, INSTANCE_OFFSET=41824;
 [[vk::binding(0,0)]] RWByteAddressBuffer benchmarkWork;
@@ -21,7 +25,15 @@ void benchmarkCompute(uint3 thread:SV_DispatchThreadID) {
     else if(id<STATIC_OBJECTS) {uint i=id-320;float a=float((i*2654435761u)>>16)*(6.283185307179586/65536);p=float2(sin(a),cos(a))*55;extent=float3(0.7,0.7,2);kind=2;}
     // Integer phase hash keeps trigonometric arguments bounded for all 10000 IDs.
     else {uint i=id-STATIC_OBJECTS;float a=float((i*2654435761u)>>16)*(6.283185307179586/65536)+bench.eyeTime.w*(0.12+float(i%7)*0.01);float r=sqrt(float(i+1)/max(1.0,float(bench.counts.x)))*22;p=float2(cos(a)*r,25+sin(a)*r);extent=float3(0.3,0.3,0.8);kind=3;}
-    float3 center=float3(p,(mixed ? coarseTerrain(p):terrain(p))+(kind==0 ? 0:extent.z));
+    float ground;
+#ifdef THEIA_WORLD_GROUND
+    uint4 query=queryGround(p,bench.counts.w);
+    // A failed height query stays explicit in its record for replay qualification.
+    ground=query.z==0 ? asfloat(query.x):asfloat(0x7fc00000u);
+#else
+    ground=mixed ? coarseTerrain(p):terrain(p);
+#endif
+    float3 center=float3(p,ground+(kind==0 ? 0:extent.z));
     bool near=kind!=0 && dot(center-bench.eyeTime.xyz,center-bench.eyeTime.xyz)<35*35;
     uint offset=INSTANCE_OFFSET+id*32;
     benchmarkWork.Store3(offset,asuint(center));benchmarkWork.Store(offset+12,kind|(mixed ? 0x80000000u:0u));

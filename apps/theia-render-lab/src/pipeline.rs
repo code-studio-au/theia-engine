@@ -278,7 +278,9 @@ impl Pipeline {
             ShaderStages {
                 mesh: "resolve.mesh.spv",
                 task: None,
-                fragment: if scene {
+                fragment: if scene && mixed {
+                    "world.crowd.resolve.frag.spv"
+                } else if scene {
                     "world.scene.resolve.frag.spv"
                 } else if world_textures {
                     "world.pair.textured.resolve.frag.spv"
@@ -351,6 +353,7 @@ impl Pipeline {
                             96
                         } else if shaders.fragment == "asset.texture.tail.resolve.frag.spv"
                             || shaders.fragment == "world.scene.resolve.frag.spv"
+                            || shaders.fragment == "world.crowd.resolve.frag.spv"
                             || shaders.mesh == "world.scene.visibility.mesh.spv"
                         {
                             80

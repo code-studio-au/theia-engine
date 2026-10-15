@@ -4,6 +4,17 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 streamed world with 10000 grounded proxies — locally qualified (2026-10-15)
+
+The camera-driven four-region world now shares visibility/depth with up to 10000
+moving GPU proxies. Ground queries follow committed fine/coarse terrain; the fixed
+40704-byte table is charged before fine admission. Debug and release each pass
+23 native cases with zero diagnostics; eight replays pass 1581 image probes,
+all proxy poses/counts, pending uploads and two-way world/crowd occlusion. Shader
+profiles validate 51 modules; renderer 30 tests and Windows GNU/Wine checks pass.
+This is a correctness profile; timed recording and HUD integration remain open.
+[Evidence and limits](validation/M4_STREAMED_WORLD_CROWD.md).
+
 ## M4 selected terrain heights — GPU batch qualified (2026-10-15)
 
 The isolated Slang compute profile now verifies 569680 selected fine/coarse

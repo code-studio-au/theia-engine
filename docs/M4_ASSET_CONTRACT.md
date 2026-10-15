@@ -1239,3 +1239,20 @@ Its runtime-generated table retains all eight terrain surfaces, with one mask pe
 query; no bundle format changes. Persistent query-table budget integration and
 GPU-generated crowd queries remain separate gates.
 [Encoding, native evidence and limits](validation/M4_GPU_SELECTED_TERRAIN_HEIGHTS.md).
+
+## Camera-streamed world plus grounded visual proxies
+
+`--world-camera-crowd <0..10000>` requires the camera-world profile and generates
+proxy poses/culling/detail on the GPU. One committed four-region selection mask
+selects the same fine/coarse terrain in proxy queries and world draws. Four world
+work lists plus one proxy list share visibility/depth; bit 31 tags proxy IDs while
+bits 29..30 retain world region tags. The mixed fragment resolve keeps the 16-SBO
+world profile; proxy colours require no extra fragment buffer.
+
+The stable ground table is deducted from the physical cap before coarse startup
+and pending fine admissions. Reports expose fixed bytes and graph-plus-table
+peaks alongside graph-only counters. Work/staging/targets/driver allocations and
+generated CPU table metadata remain outside that cap. The table retains both
+terrain levels for this fixture; it is not a new asset schema or virtualized
+query streamer. The path renders visual mock proxies without gameplay authority,
+timed recording or HUD. [Evidence](validation/M4_STREAMED_WORLD_CROWD.md).

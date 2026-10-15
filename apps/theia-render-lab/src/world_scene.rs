@@ -491,6 +491,7 @@ impl Scene {
         route: (u64, usize, Option<PathBuf>),
         budgets: [u64; 2],
         gpu: Gpu<'_>,
+        fixed_gpu_bytes: u64,
     ) -> Result<()> {
         let sources = self
             .fine_sources
@@ -499,6 +500,7 @@ impl Scene {
         self.demand = Some(crate::world_camera::Stream::new(
             sources, budgets, route, gpu,
         )?);
+        self.demand.as_mut().unwrap().fixed_gpu_bytes = fixed_gpu_bytes;
         self.camera_event(0, "initial")
     }
     fn camera_event(&mut self, frame: u64, kind: &str) -> Result<()> {
@@ -508,6 +510,33 @@ impl Scene {
             .as_ref()
             .unwrap()
             .report(self.covered_stats(frame)?, false)
+    }
+    pub fn proxy_push(
+        &self,
+        frame: u64,
+        width: u32,
+        height: u32,
+        players: u32,
+    ) -> Result<[u8; 96]> {
+        let CpuOwners::Covered { _world: cpu } = &self._cpu else {
+            return Err("World proxies require covered camera world".into());
+        };
+        let mask =
+            cpu.snapshot()
+                .selections()
+                .iter()
+                .enumerate()
+                .fold(0u32, |mask, (slot, selection)| {
+                    mask | if selection.chunk == slot as u64 {
+                        1 << slot
+                    } else {
+                        0
+                    }
+                });
+        self.demand
+            .as_ref()
+            .ok_or("Missing camera world demand")?
+            .proxy_push(frame, width, height, players, mask)
     }
     pub fn camera_rows(
         &self,

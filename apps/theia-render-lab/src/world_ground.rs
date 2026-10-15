@@ -141,7 +141,7 @@ fn read_json(path: &Path, limit: u64) -> Result<serde_json::Value> {
     }
     Ok(serde_json::from_slice(&bytes)?)
 }
-fn load(scene: &Path, queries: &Path) -> Result<(Vec<Surface>, Vec<[f32; 2]>)> {
+fn surfaces(scene: &Path) -> Result<Vec<Surface>> {
     let scene = read_json(scene, 1024 * 1024)?;
     if scene["passed"] != true {
         return Err("Ground reference requires checked fixture".into());
@@ -156,6 +156,10 @@ fn load(scene: &Path, queries: &Path) -> Result<(Vec<Surface>, Vec<[f32; 2]>)> {
             surfaces.push(surface(entry, slot)?);
         }
     }
+    Ok(surfaces)
+}
+fn load(scene: &Path, queries: &Path) -> Result<(Vec<Surface>, Vec<[f32; 2]>)> {
+    let surfaces = surfaces(scene)?;
     let points: Vec<[f32; 2]> = serde_json::from_value(read_json(queries, 4 * 1024 * 1024)?)?;
     if points.is_empty() || points.len() > 50000 {
         return Err("Ground reference requires 1..50000 points".into());
@@ -212,8 +216,10 @@ pub(super) struct GpuInput {
     pub expected: Vec<(f32, u32)>,
     pub points: usize,
 }
-pub(super) fn gpu_input(scene: &Path, queries: &Path) -> Result<GpuInput> {
-    let (surfaces, points) = load(scene, queries)?;
+pub(super) fn table(scene: &Path) -> Result<Vec<u8>> {
+    Ok(encode(&surfaces(scene)?))
+}
+fn encode(surfaces: &[Surface]) -> Vec<u8> {
     // Eight 32-byte headers: origin XY, triangle/offset/reference byte addresses,
     // triangle/reference counts, reserved. Triangles are three float4 records.
     let mut table = vec![0u8; 8 * 32];
@@ -248,6 +254,11 @@ pub(super) fn gpu_input(scene: &Path, queries: &Path) -> Result<GpuInput> {
             table[index * 32 + i * 4..index * 32 + i * 4 + 4].copy_from_slice(&word.to_le_bytes());
         }
     }
+    table
+}
+pub(super) fn gpu_input(scene: &Path, queries: &Path) -> Result<GpuInput> {
+    let (surfaces, points) = load(scene, queries)?;
+    let table = encode(&surfaces);
     let mut queries = Vec::with_capacity(points.len() * 16 * 16);
     let mut expected = Vec::with_capacity(points.len() * 16);
     for mask in 0..16u32 {

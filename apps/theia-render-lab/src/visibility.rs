@@ -248,7 +248,6 @@ impl Target {
                 || !(4..=crate::world_scene::MAX_IMAGES as u32).contains(&scene.count)
                 || buffers.world_geometry.is_some()
                 || buffers.world_textures.is_some()
-                || buffers.proxy_work.is_some()
                 || buffers.cooked_hud_work.is_some()
                 || buffers.benchmark
                 || buffers.materials.is_some()
@@ -426,7 +425,7 @@ impl Target {
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
-            if buffers.proxy_work.is_some() {
+            if buffers.proxy_work.is_some() && buffers.scene.is_none() {
                 bindings.push(
                     vk::DescriptorSetLayoutBinding::default()
                         .binding(11)
@@ -483,7 +482,7 @@ impl Target {
             if buffers.cooked_hud_work.is_some() {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
-            if buffers.proxy_work.is_some() {
+            if buffers.proxy_work.is_some() && buffers.scene.is_none() {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
             if buffers.world_geometry.is_some() {
@@ -648,7 +647,10 @@ impl Target {
                         .buffer_info(info),
                 );
             }
-            let proxy_work = buffers.proxy_work.map(|(_, v)| [v]);
+            let proxy_work = buffers
+                .proxy_work
+                .filter(|_| buffers.scene.is_none())
+                .map(|(_, v)| [v]);
             if let Some(info) = &proxy_work {
                 writes.push(
                     vk::WriteDescriptorSet::default()
@@ -980,21 +982,6 @@ impl Target {
                 self.push_slot(command, visibility.layout, 0);
             }
             work.draw(command, visibility.layout, mesh);
-            if let Some(proxy) = proxy {
-                let pipeline = self.proxy_visibility.as_ref().unwrap();
-                self.device.cmd_bind_pipeline(
-                    command,
-                    vk::PipelineBindPoint::GRAPHICS,
-                    pipeline.handle,
-                );
-                self.push_rows(
-                    command,
-                    pipeline.layout,
-                    vk::ShaderStageFlags::MESH_EXT,
-                    rows.unwrap(),
-                );
-                proxy.draw(command, pipeline.layout, mesh);
-            }
             match world {
                 WorldDraws::None => {}
                 WorldDraws::Pair(world) => {
@@ -1018,6 +1005,21 @@ impl Target {
                         work.draw(command, visibility.layout, mesh);
                     }
                 }
+            }
+            if let Some(proxy) = proxy {
+                let pipeline = self.proxy_visibility.as_ref().unwrap();
+                self.device.cmd_bind_pipeline(
+                    command,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline.handle,
+                );
+                self.push_rows(
+                    command,
+                    pipeline.layout,
+                    vk::ShaderStageFlags::MESH_EXT,
+                    rows.unwrap(),
+                );
+                proxy.draw(command, pipeline.layout, mesh);
             }
             self.device.cmd_end_rendering(command);
             let end = [

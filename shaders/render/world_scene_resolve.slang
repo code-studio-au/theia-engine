@@ -48,6 +48,17 @@ bool reconstructWorldUV(float4 pixel, uint2 identity, uint chunk, out float2 res
 [shader("fragment")]
 float4 worldSceneResolve(float4 pixel : SV_Position) : SV_Target0 {
     uint2 identity=visibilityImage.Load(int3(uint2(pixel.xy),0));
+#ifdef THEIA_WORLD_CROWD
+    if ((identity.x&0x80000000u)!=0) {
+        uint id=(identity.x&0x7fffffffu)-1,primitive=identity.y;
+        float3 color=lerp(float3(.15,.3,.8),float3(.8,.15,.05),float(id%5)/4);
+        float light[6]={.35,1,.55,.8,.5,.75};
+        float lighting=primitive<12 ? light[primitive/2]:.7;
+        float depth=depthImage.Load(int3(uint2(pixel.xy),0));
+        float distance=25./max(.1,250.-depth*249.9);
+        return float4(lerp(color*lighting,float3(.12,.23,.35),clamp(distance/180.,0,.7)),1);
+    }
+#endif
     if (identity.x==0) return float4(0.025,0.07,0.12,1);
     uint chunk=identity.x>>29;
     identity.x &= 0x1fffffffu;

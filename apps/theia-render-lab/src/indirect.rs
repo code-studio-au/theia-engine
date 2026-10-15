@@ -53,7 +53,7 @@ impl IndirectWork {
             mode,
             asset.map(|(bytes, arena)| GeometryInput::Encoded(bytes, arena)),
             queue,
-            coarse,
+            (coarse, None),
         )
     }
     pub fn resident(
@@ -69,7 +69,23 @@ impl IndirectWork {
             RenderMode::AssetResolve,
             Some(GeometryInput::Resident(geometry)),
             (0, vk::Queue::null(), 0),
+            (None, None),
+        )
+    }
+    pub fn world_proxies(
+        device: &ash::Device,
+        memory: &vk::PhysicalDeviceMemoryProperties,
+        shaders: &Path,
+        ground: vk::DescriptorBufferInfo,
+    ) -> Result<Self> {
+        Self::configured(
+            device,
+            memory,
+            shaders,
+            RenderMode::Benchmark,
             None,
+            (0, vk::Queue::null(), 0),
+            (None, Some(ground)),
         )
     }
     fn configured(
@@ -79,8 +95,9 @@ impl IndirectWork {
         mode: RenderMode,
         asset: Option<GeometryInput<'_>>,
         queue: (u32, vk::Queue, u64),
-        coarse: Option<&[u8]>,
+        extra_buffers: (Option<&[u8]>, Option<vk::DescriptorBufferInfo>),
     ) -> Result<Self> {
+        let (coarse, ground) = extra_buffers;
         let has_asset = asset.is_some();
         let spatial = mode == RenderMode::Spatial;
         let lod = mode == RenderMode::AssetLod;
@@ -102,7 +119,9 @@ impl IndirectWork {
         };
         let shader = ShaderModule::load(
             device,
-            &shader_dir.join(if mode == RenderMode::Benchmark {
+            &shader_dir.join(if ground.is_some() {
+                "world.crowd.compute.spv"
+            } else if mode == RenderMode::Benchmark {
                 "benchmark.compute.spv"
             } else if lod {
                 "asset.lod.compute.spv"
@@ -225,6 +244,15 @@ impl IndirectWork {
                         ),
                 );
             }
+            if ground.is_some() {
+                bindings.push(
+                    vk::DescriptorSetLayoutBinding::default()
+                        .binding(1)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .descriptor_count(1)
+                        .stage_flags(vk::ShaderStageFlags::COMPUTE),
+                );
+            }
             work.descriptor_layout = device.create_descriptor_set_layout(
                 &vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings),
                 None,
@@ -233,7 +261,7 @@ impl IndirectWork {
                 .ty(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(if coarse.is_some() {
                     3
-                } else if has_asset {
+                } else if has_asset || ground.is_some() {
                     2
                 } else {
                     1
@@ -262,6 +290,16 @@ impl IndirectWork {
                     .buffer_info(&buffers)],
                 &[],
             );
+            if let Some(info) = ground {
+                device.update_descriptor_sets(
+                    &[vk::WriteDescriptorSet::default()
+                        .dst_set(work.set)
+                        .dst_binding(1)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .buffer_info(std::slice::from_ref(&info))],
+                    &[],
+                );
+            }
             if let Some(asset) = &work.asset {
                 let info = [vk::DescriptorBufferInfo::default()
                     .buffer(asset.handle)

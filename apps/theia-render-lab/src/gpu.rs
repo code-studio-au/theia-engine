@@ -937,6 +937,8 @@ pub struct Renderer {
     benchmark: Option<crate::benchmark::Recorder>,
     work: Option<IndirectWork>,
     proxy_work: Option<IndirectWork>,
+    ground_table: Option<crate::asset::Buffer>,
+    world_crowd: Option<u32>,
     world_work: Option<IndirectWork>,
     world_resources: Option<crate::world_upload::PresentationSet>,
     scene: Option<crate::world_scene::Scene>,
@@ -1067,6 +1069,8 @@ impl Renderer {
             mode: options.render_mode(),
             work: None,
             proxy_work: None,
+            ground_table: None,
+            world_crowd: options.world_camera_crowd,
             world_work: None,
             world_resources: None,
             scene: None,
@@ -1227,6 +1231,53 @@ impl Renderer {
                     )?,
                 )
             };
+            let mut world_gpu_budget = options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024);
+            if let Some(players) = options.world_camera_crowd {
+                // SAFETY: Context owns the selected physical device for this query.
+                let mut mesh = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
+                let mut properties = vk::PhysicalDeviceProperties2::default().push_next(&mut mesh);
+                unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties2(renderer.ctx.physical, &mut properties);
+                }
+                if (limits.max_storage_buffer_range as u64) < crate::benchmark::WORK_BYTES
+                    || limits.max_push_constants_size < 96
+                    || mesh.max_task_work_group_count[0] < players
+                    || mesh.max_task_work_group_total_count < players
+                    || mesh.max_mesh_output_vertices < 48
+                    || mesh.max_mesh_output_primitives < 16
+                {
+                    return Err("Camera crowd exceeds benchmark work/mesh limits".into());
+                }
+                let bytes = crate::world_ground::table(path)?;
+                renderer.ground_table = Some(crate::asset::Buffer::upload(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    &bytes,
+                    renderer.ctx.graphics_family,
+                    renderer.ctx.graphics,
+                    world_gpu_budget,
+                    None,
+                )?);
+                let table = renderer.ground_table.as_ref().unwrap();
+                world_gpu_budget = world_gpu_budget
+                    .checked_sub(table.allocated_bytes)
+                    .ok_or("Camera crowd ground table exceeds physical cap")?;
+                renderer.proxy_work = Some(IndirectWork::world_proxies(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    renderer.shader_dir.as_deref().unwrap(),
+                    descriptor(table),
+                )?);
+                println!(
+                    "Camera crowd persistent ground allocation: {}",
+                    serde_json::json!({"players":players,"encoded_bytes":bytes.len(),"physical_bytes":table.allocated_bytes,"world_graph_gpu_budget":world_gpu_budget,"aggregate_gpu_budget":options.bundle_gpu_budget.unwrap_or(32*1024*1024),"work_bytes_excluded":crate::benchmark::WORK_BYTES})
+                );
+            }
             renderer.scene = Some(crate::world_scene::Scene::load(
                 path,
                 crate::bundle_streaming::Gpu {
@@ -1240,7 +1291,7 @@ impl Renderer {
                 renderer.shader_dir.as_deref().unwrap(),
                 (
                     options.bundle_byte_budget.unwrap_or(64 * 1024 * 1024),
-                    options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
+                    world_gpu_budget,
                     options.texture_budget.unwrap_or(4 * 1024 * 1024),
                 ),
                 options.world_covered,
@@ -1256,7 +1307,7 @@ impl Renderer {
             if options.world_covered_reload {
                 renderer.scene.as_mut().unwrap().enable_reload(
                     [
-                        options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
+                        world_gpu_budget,
                         options.texture_budget.unwrap_or(4 * 1024 * 1024),
                     ],
                     crate::bundle_streaming::Gpu {
@@ -1279,7 +1330,7 @@ impl Renderer {
                         options.world_camera_report.clone(),
                     ),
                     [
-                        options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
+                        world_gpu_budget,
                         options.texture_budget.unwrap_or(4 * 1024 * 1024),
                     ],
                     crate::bundle_streaming::Gpu {
@@ -1290,6 +1341,10 @@ impl Renderer {
                         limits,
                         image_limits,
                     },
+                    renderer
+                        .ground_table
+                        .as_ref()
+                        .map_or(0, |v| v.allocated_bytes),
                 )?;
             }
         } else if let Some(second) = &options.world_bundle_pair {
@@ -1867,7 +1922,8 @@ impl Renderer {
         Ok(renderer)
     }
     fn bundle_resource_bytes(&self) -> u64 {
-        self.work.as_ref().map_or(0, IndirectWork::resident_bytes)
+        self.ground_table.as_ref().map_or(0, |v| v.allocated_bytes)
+            + self.work.as_ref().map_or(0, IndirectWork::resident_bytes)
             + self
                 .scene
                 .as_ref()
@@ -2369,6 +2425,17 @@ impl Renderer {
                 )
             })
             .transpose()?;
+        let world_proxy_push = self
+            .world_crowd
+            .map(|players| {
+                self.scene.as_ref().unwrap().proxy_push(
+                    self.presented,
+                    chain.extent.width,
+                    chain.extent.height,
+                    players,
+                )
+            })
+            .transpose()?;
         let world_camera_rows = self
             .scene
             .as_ref()
@@ -2510,13 +2577,14 @@ impl Renderer {
                 world.generate(ctx.command, input, camera_rows, None);
             }
             if let Some(proxy) = &self.proxy_work {
-                let mut push = benchmark_push.as_ref().unwrap().0;
-                push[88..92].copy_from_slice(&1u32.to_ne_bytes());
-                proxy.generate_benchmark(
-                    ctx.command,
-                    &push,
-                    self.benchmark.as_ref().unwrap().config.players,
-                );
+                let (push, players) = if let Some(push) = world_proxy_push {
+                    (push, self.world_crowd.unwrap())
+                } else {
+                    let mut push = benchmark_push.as_ref().unwrap().0;
+                    push[88..92].copy_from_slice(&1u32.to_ne_bytes());
+                    (push, self.benchmark.as_ref().unwrap().config.players)
+                };
+                proxy.generate_benchmark(ctx.command, &push, players);
             }
             if let Some(benchmark) = &self.benchmark {
                 benchmark.mark(ctx.command, 1);
@@ -2861,6 +2929,7 @@ impl Drop for Renderer {
         drop(self.benchmark.take());
         drop(self.work.take());
         drop(self.proxy_work.take());
+        drop(self.ground_table.take());
         drop(self.world_work.take());
         drop(self.world_resources.take());
         drop(self.scene.take());

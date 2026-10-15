@@ -16,6 +16,7 @@ import renderdoc as rd
 sys.path.insert(0,str(Path.cwd()/'tools'))
 from cooked_benchmark_reference import decode,ray,dot,material_pixels,material_factors
 from proxy_benchmark_reference import encode
+import world_crowd_reference as crowd_reference
 
 
 def require(value,message):
@@ -42,6 +43,8 @@ def qualify(report):
     scene_path=Path(os.environ['THEIA_WORLD_SCENE'])
     scene=json.loads(scene_path.read_bytes());cooks=[e['cook'] for e in scene['quadrants']]
     camera=os.environ.get('THEIA_WORLD_SCENE_CAMERA')=='1'
+    crowd=int(os.environ['THEIA_WORLD_SCENE_CROWD']) if 'THEIA_WORLD_SCENE_CROWD' in os.environ else None
+    require(crowd is None or (camera and 0<=crowd<=10000),'Crowd requires camera profile')
     covered=os.environ.get('THEIA_WORLD_SCENE_COVERED') or ('[4,5,6,7]' if camera else None)
     selected=json.loads(covered) if covered else list(range(4))
     if covered:
@@ -66,6 +69,7 @@ def qualify(report):
         args=args[:args.index('--work-items')]+args[args.index('--work-items')+2:]
         args+=['--world-camera-period',os.environ.get('THEIA_WORLD_SCENE_PERIOD',str(frames)),
             '--world-camera-slots',os.environ.get('THEIA_WORLD_SCENE_SLOTS','2'),'--world-camera-report',str(out/'camera.json')]
+    if crowd is not None:args+=['--world-camera-crowd',str(crowd)]
     if retire:
         require(covered,'Retirement requires protected selection')
         args+=['--world-covered-reload-test' if reload else '--world-covered-retire-test','--world-covered-report',str(out/'retirement.json')]
@@ -119,18 +123,20 @@ def qualify(report):
         actions=list(walk(controller.GetRootActions()))
         draws=[a for a in actions if a.flags&rd.ActionFlags.MeshDispatch and a.flags&rd.ActionFlags.Indirect and not a.flags&rd.ActionFlags.MultiAction]
         indirect_calls=[a for a in actions if a.flags&rd.ActionFlags.PushMarker and a.flags&rd.ActionFlags.MultiAction and a.GetName(controller.GetStructuredFile()).startswith('vkCmdDrawMeshTasksIndirectCountEXT(')]
-        require(len(indirect_calls)==4,'Expected four fixed indirect count calls')
+        require(len(indirect_calls)==4+int(crowd is not None),'Expected world/proxy indirect count calls')
         present=next(a for a in actions if a.flags&rd.ActionFlags.Present)
         controller.SetFrameEvent(present.eventId,True)
         textures=controller.GetTextures();buffers=controller.GetBuffers()
         color=next(t for t in textures if t.resourceId==present.copyDestination);width,height=color.width,color.height
         rows=json.loads(subprocess.check_output([str(exe),'--benchmark-reference','0',str(frame%camera_report['route_frames']),str(camera_report['route_frames']),str(width),str(height)]))['rows'] if camera else json.loads(subprocess.check_output([str(exe),'--world-pair-reference',str(width),str(height),str(view)]))['rows']
+        proxies=crowd_reference.verify(controller,buffers,scene,selected,exe,crowd,frame,camera_report['route_frames'],width,height) if crowd is not None else None
         if covered:
             # refAllResources retains inactive allocation metadata, but RenderDoc
             # 1.46 does not save unused buffer initial contents. Check the exact
             # live inventory separately; payload/raster checks cover selected sets.
             expected_buffers=Counter(len(blob) for model in inventory_models for blob in model[0])
             expected_buffers[256]+=4
+            if crowd is not None:expected_buffers.update([40704,376160])
             for model in staging_models:
                 expected_buffers.update(len(blob) for blob in model[0])
                 expected_buffers.update(len(pixels) for pixels in model[3])
@@ -165,17 +171,21 @@ def qualify(report):
                 if common==0:ids.append(index)
             visible.append(set(ids));expected.append((len(ids),sum(1<<i for i in ids),ids))
         require(sorted(actual)==sorted(expected),'World GPU compactions differ')
-        require(len(draws)==sum(int(count>0) for count,_,_ in expected),'Indirect subdraw count differs from nonempty compactions')
+        require(len(draws)==sum(int(count>0) for count,_,_ in expected)+int(crowd is not None),'Indirect subdraw count differs from world/proxy compactions')
         identity=next(t for t in textures if t.format.compType==rd.CompType.UInt and t.format.compCount==2)
         depth=next(t for t in textures if t.format.compType==rd.CompType.Depth)
         identities=controller.GetTextureData(identity.resourceId,rd.Subresource())
         depths=controller.GetTextureData(depth.resourceId,rd.Subresource());rgb=controller.GetTextureData(color.resourceId,rd.Subresource())
         limits=[{i:sum(t[0]==i for t in model[1]) for i in range(1,len(model[2])+1)} for model in models]
-        populations=[0]*4
+        populations=[0]*4;proxy_pixels=0
         for pixel in range(width*height):
             ident,primitive=struct.unpack_from('<2I',identities,pixel*8);d=struct.unpack_from('<f',depths,pixel*4)[0]
             require(math.isfinite(d) and 0<=d<=1,'Invalid world depth')
             if not ident:require(d==1,'Background depth changed')
+            elif ident&0x80000000:
+                local=(ident&0x7fffffff)-1
+                require(proxies is not None and local in proxies['visible'] and primitive<(16 if proxies['objects'][local][3] else 12) and d<1,'Invalid proxy identity/depth/detail')
+                proxy_pixels+=1
             else:
                 chunk,local=ident>>29,ident&0x1fffffff
                 require(chunk<4 and local>0 and local-1 in visible[chunk] and primitive<limits[chunk][local] and d<1,
@@ -190,13 +200,19 @@ def qualify(report):
                 if clip[3]>0:
                     x,y=[int((clip[a]/clip[3]+1)*.5*size) for a,size in enumerate((width,height))]
                     if 0<=x<width and 0<=y<height:probes.add((x,y))
-        samples=[];materials=set();occlusion=[0]*4;boundaries=0
+        if proxies:
+            for _,center,_,_ in proxies['rays'][::max(1,len(proxies['rays'])//32)]:
+                clip=[dot(row[:3],center)+row[3] for row in rows]
+                if clip[3]>0:
+                    x,y=[int((clip[a]/clip[3]+1)*.5*size) for a,size in enumerate((width,height))]
+                    if 0<=x<width and 0<=y<height:probes.add((x,y))
+        samples=[];materials=set();occlusion=[0]*4;boundaries=0;cross_occlusion=[0,0]
         for x,y in sorted(probes):
             hits=[ray(rows,model[1],x,y,width,height) for model in models]
             chunk=min(range(4),key=lambda i:hits[i][2]);ident,primitive,d,material,uv=hits[chunk]
             if sum(bool(h[0]) for h in hits)>1:occlusion[chunk]+=1
             if ident:
-                ident|=chunk<<29;materials.add((chunk,material))
+                ident|=chunk<<29
                 coordinates=[{math.floor(v*64+delta)%64 for delta in (-.002,.002)} for v in uv]
                 boundaries+=int(any(len(v)>1 for v in coordinates))
                 expected_rgb=[]
@@ -205,6 +221,13 @@ def qualify(report):
                         texel=pixel_tables[chunk][material][(ty*64+tx)*4:(ty*64+tx)*4+3]
                         expected_rgb.append([encode(linear(value)*factor) for value,factor in zip(texel,factors[chunk][material])])
             else:expected_rgb=[list(map(encode,[.025,.07,.12]))]
+            if proxies:
+                proxy_id,proxy_primitive,proxy_depth=crowd_reference.pixel_reference(rows,proxies['rays'],x,y,width,height)
+                if ident and proxy_id:cross_occlusion[int(proxy_depth<d)]+=1
+                if proxy_id and proxy_depth<d:
+                    ident,primitive,d=proxy_id|0x80000000,proxy_primitive,proxy_depth
+                    expected_rgb=[[encode(value) for value in crowd_reference.color_reference(proxy_id,primitive,d,3)]]
+            if ident and (ident&0x80000000)==0:materials.add((chunk,material))
             pixel=y*width+x;actual=struct.unpack_from('<2I',identities,pixel*8)
             require(actual==(ident,primitive) and abs(struct.unpack_from('<f',depths,pixel*4)[0]-d)<=2e-5,
                     'World ray/raster differs at %d,%d: %s vs %s'%(x,y,actual,(ident,primitive)))
@@ -215,7 +238,7 @@ def qualify(report):
             samples.append(dict(pixel=[x,y],identity=actual,color=actual_rgb))
         save=rd.TextureSave();save.resourceId=color.resourceId;save.destType=rd.FileType.PNG
         success(controller.SaveTexture(save,str(out/'preview.png')))
-        report.update(passed=True,capture=capture,view=view,frame=frame,retirement=retirement,camera=camera_report,camera_state=camera_state,pixels=populations,images=len(images),
+        report.update(passed=True,crowd=proxies['proof'] if proxies else None,proxy_pixels=proxy_pixels,cross_occlusion_probes=cross_occlusion,capture=capture,view=view,frame=frame,retirement=retirement,camera=camera_report,camera_state=camera_state,pixels=populations,images=len(images),
             protected_owners=bool(covered),selected_chunks=selected,root_buffers=len(inventory_models)*4,
             retained_inventory_verified=bool(covered),payload_scope="selected_graphs",
             compactions_verified=True,identity_depth_bounds_verified=True,sampled_materials=sorted(materials),

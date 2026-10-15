@@ -9,6 +9,9 @@ from world_camera_reference import require
 
 def failure_cases(args,out,runtime,scene):
     results=[]
+    crowd=getattr(args,"crowd",None)
+    crowd_flags=[] if crowd is None else ["--world-camera-crowd",str(crowd)]
+    resolve_shader="world.scene.resolve.frag.spv" if crowd is None else "world.crowd.resolve.frag.spv"
     for name in ('source-failure','generation-failure'):
         path=args.scene.resolve();extra=[];target=None
         if name=='source-failure':
@@ -22,11 +25,11 @@ def failure_cases(args,out,runtime,scene):
             for shader in Path('build/shaders').glob('*.spv'):
                 link=directory/shader.name
                 if not link.exists():link.symlink_to(shader.resolve())
-            target=directory/'world.scene.resolve.frag.spv';extra=['--shader-dir',str(directory)]
+            target=directory/resolve_shader;extra=['--shader-dir',str(directory)]
         log_path=out/(name+'.log');history=out/(name+'-history.json')
         with log_path.open('w') as log:
             child=subprocess.Popen([str(args.renderer.resolve()),'--world-camera-test',str(path),'--frames','240',
-                '--world-camera-report',str(history),*extra,'--gpu','7900'],env=runtime,stdout=log,stderr=subprocess.STDOUT)
+                '--world-camera-report',str(history),*crowd_flags,*extra,'--gpu','7900'],env=runtime,stdout=log,stderr=subprocess.STDOUT)
             try:
                 deadline=time.monotonic()+45
                 while child.poll() is None and time.monotonic()<deadline:
@@ -47,7 +50,7 @@ def failure_cases(args,out,runtime,scene):
         require(code!=0 and 'Validation totals (including teardown): 0 warnings, 0 errors' in text and
             not data['completed'] and data['final']['protected_epochs']==[1]*4 and
             data['final']['epoch']==1+data['publications']+data['evictions'],name+' cleanup/publication differs')
-        require(('source failed' if name=='source-failure' else 'world.scene.resolve.frag.spv') in text,'Wrong camera failure')
+        require(('source failed' if name=='source-failure' else resolve_shader) in text,'Wrong camera failure')
         if name=='source-failure':require(data['final']['selected'][0]==4,'Invalid source falsely published')
         results.append(dict(case=name,exit=code,incomplete_report=True));print('Verified camera failure:',name,flush=True)
     return results

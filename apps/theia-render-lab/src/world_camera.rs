@@ -37,6 +37,7 @@ pub(super) struct Stream {
     requests: u64,
     uploads: u64,
     peak_gpu: u64,
+    pub fixed_gpu_bytes: u64,
     peak_images: u64,
     peak_cpu: usize,
 }
@@ -85,6 +86,7 @@ impl Stream {
             requests: 0,
             uploads: 0,
             peak_gpu: 0,
+            fixed_gpu_bytes: 0,
             peak_images: 0,
             peak_cpu: 0,
         })
@@ -98,6 +100,21 @@ impl Stream {
     }
     pub fn rows(&self, frame: u64, width: u32, height: u32) -> Result<[[f32; 4]; 4]> {
         Ok(benchmark::push(&self.config, frame % self.config.frames, width, height)?.1)
+    }
+    pub fn proxy_push(
+        &self,
+        frame: u64,
+        width: u32,
+        height: u32,
+        players: u32,
+        mask: u32,
+    ) -> Result<[u8; 96]> {
+        let mut config = self.config.clone();
+        config.players = players;
+        let mut push = benchmark::push(&config, frame % config.frames, width, height)?.0;
+        push[88..92].copy_from_slice(&1u32.to_ne_bytes());
+        push[92..96].copy_from_slice(&mask.to_ne_bytes());
+        Ok(push)
     }
     pub fn pending(&self) -> Result<Option<serde_json::Value>> {
         self.request.as_ref().map(Reload::stats).transpose()
@@ -247,7 +264,7 @@ impl Stream {
                 "dropped_history":self.dropped,"final":final_state,"last_plan":self.plan,"pending":self.pending()?,"route_frames":self.config.frames,
                 "fine_slots":self.policy.slots,"load_radius":20,"retain_radius":35,"publications":self.publications,
                 "evictions":self.evictions,"requests":self.requests,"uploads":self.uploads,"cancellations":self.cancellations,"ready_cancellations":self.ready_cancellations,
-                "cpu_deferrals":self.deferrals_cpu,"gpu_deferrals":self.deferrals_gpu,"peak_gpu_bytes":self.peak_gpu,
+                "cpu_deferrals":self.deferrals_cpu,"gpu_deferrals":self.deferrals_gpu,"peak_gpu_bytes":self.peak_gpu,"fixed_gpu_bytes":self.fixed_gpu_bytes,"peak_total_gpu_bytes":self.peak_gpu+self.fixed_gpu_bytes,
                 "peak_image_bytes":self.peak_images,"peak_cpu_bytes":self.peak_cpu,"authority":false}),
                 )?,
             )?;
