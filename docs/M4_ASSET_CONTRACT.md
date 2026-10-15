@@ -204,6 +204,40 @@ bundle composition, protected fallback coverage and fence-gated independent
 publication remain to connect.
 [Evidence](validation/M4_WORLD_PAIR_RENDERING.md).
 
+### Two complete resident textured chunks
+
+`--world-bundle-pair <v2 bundle0> <v2 bundle1>` extends the isolated pair profile
+with both complete factor/UV/table/image graphs. It reuses the qualified complete
+upload helper and shared `WorldResidency` encoded pool. Both graphs are admitted
+and reserved, all transfer fences retire, then one CPU world transaction publishes
+the two named complete chunks before creating graphics descriptors. This is fixed
+startup residency, not background or camera-driven publication.
+
+The renderer retains each chunk's own geometry, factors, UVs, texture table and
+sampled images. Independent static storage bindings 4/5/6/9 and 12/13/14/15 plus
+image arrays 7/16 and samplers 8/17 select the correct graph from the frame-local
+bit-30 identity tag. Two indirect task/mesh draws still share identity/depth;
+UV reconstruction, material/table mapping and nearest mip-zero sampling run in
+one resolve. Each graph has <=32 meshlets and <=16 opaque images. Device limits
+must support eight fragment storage buffers, combined image counts plus four
+existing target/material images and three samplers; no storage-array indexing
+feature or new shader-language fallback is introduced.
+
+`--bundle-byte-budget` caps unique live encoded sources; `--bundle-gpu-budget`
+caps aggregate geometry/factor/UV/table and sampled-image physical allocations;
+`--texture-budget` additionally caps aggregate image allocations. Caps apply during
+initial construction, including coexisting sets and submitted pending transfers.
+GPU owners are independent even when CPU bytes share hashes. Work arenas, staging,
+targets, descriptors, samplers, queries and driver overhead are excluded from the
+bundle physical charge. No partially uploaded set is displayed on construction
+failure. Resident geometry can move directly into indirect work ownership without
+a duplicate upload. Renderer teardown retires graphics before resource/CPU owners.
+
+The geometry-only pair, normal cooked viewer and textured crowd benchmark remain
+separate. This slice has no crowd composition, live chunk replacement, protected
+fallback selection, geometry LOD or camera-driven residency.
+[Qualification](validation/M4_WORLD_TEXTURED_PAIR.md).
+
 ### Indexed bundle and multiple authored images
 
 THEIABND v2 retains the 176-byte four-root layout, replacing the final KTX2

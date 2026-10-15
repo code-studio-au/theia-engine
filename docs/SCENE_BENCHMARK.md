@@ -402,3 +402,11 @@ with diagnostic tints; `--work-items 0|1|2` chooses empty/angled/full cameras an
 and exports no benchmark timing score. These probes do not enable streamed world
 chunks in `--mixed-world` yet.
 [Two-chunk scope and qualification](validation/M4_WORLD_PAIR_RENDERING.md).
+
+
+`--world-bundle-pair <sha256.theia-bundle> <sha256.theia-bundle>` additionally
+composes two complete resident v2 graphs with their own textures. It uses the
+same isolated fixed cameras, supports the three independent CPU/bundle/image
+budget flags, and rejects streaming/benchmark modes. This is a world-rendering
+integration probe, separate from the timed `--mixed-world` crowd workload.
+[Complete-pair limits/evidence](validation/M4_WORLD_TEXTURED_PAIR.md).

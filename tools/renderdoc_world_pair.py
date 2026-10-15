@@ -41,7 +41,9 @@ def qualify(report):
     models = [decode(cook) for cook in cooks]
     view = int(os.environ.get('THEIA_WORLD_PAIR_VIEW', '2'))
     exe = Path('apps/theia-render-lab/target/debug/theia-render-lab').resolve()
-    args = ['--world-pair-test', *[c['path'] for c in cooks], '--frames', '90',
+    textured = os.environ.get('THEIA_WORLD_PAIR_TEXTURED') == '1'
+    mode = ['--world-bundle-pair', *[c['bundle']['path'] for c in cooks]] if textured else ['--world-pair-test', *[c['path'] for c in cooks]]
+    args = [*mode, '--frames', '90',
             '--work-items', str(view), '--no-validation', '--gpu', '7900']
     if os.environ.get('THEIA_WORLD_PAIR_SHADERS'):
         args += ['--shader-dir', os.environ['THEIA_WORLD_PAIR_SHADERS']]
@@ -80,9 +82,14 @@ def qualify(report):
                str(width), str(height), str(view)]))['rows']
         buffers = controller.GetBuffers()
         for model in models:
-            blob = model[0][0]
-            require(any(bytes(controller.GetBufferData(b.resourceId, 0, len(blob))) == blob
-                        for b in buffers if b.length == len(blob)), 'GPU geometry differs')
+            for blob in (model[0] if textured else model[0][:1]):
+                require(any(bytes(controller.GetBufferData(b.resourceId, 0, len(blob))) == blob
+                            for b in buffers if b.length == len(blob)), 'GPU cooked buffer differs')
+        if textured:
+            images = [t for t in textures if (t.width,t.height) == (64,64)]
+            expected_images = sorted(p for model in models for p in model[3])
+            require(len(images) == 8 and sorted(bytes(controller.GetTextureData(t.resourceId,rd.Subresource()))
+                    for t in images) == expected_images, 'Independent texture bytes differ')
         works = [controller.GetBufferData(b.resourceId, 0, 256) for b in buffers if b.length == 256]
         require(len(works) == 2, 'Expected two independent work arenas')
         expected_compactions = []
@@ -124,6 +131,8 @@ def qualify(report):
                 populations[chunk] += 1
         require(all(populations) if view else not any(populations), 'Missing expected chunk coverage')
         samples = []
+        materials = set()
+        boundaries = 0
         occlusion = [0, 0]
         probes = {(int(width*x/10), int(height*y/8)) for x in range(1,10) for y in range(1,8)}
         for model in models:
@@ -137,15 +146,22 @@ def qualify(report):
         for x,y in sorted(probes):
             hits = [ray(rows, model[1], x,y,width,height) for model in models]
             chunk = min(range(2), key=lambda i:hits[i][2])
-            ident, primitive, d, _, _ = hits[chunk]
+            ident, primitive, d, material, uv = hits[chunk]
             if all(h[0] for h in hits):
                 occlusion[chunk] += 1
             if ident:
                 ident |= chunk << 30
-                tint = [.18,.48,.24] if chunk == 0 else [.48,.24,.18]
-                expected_rgb = list(map(encode, [v*(.7 if primitive%2 else 1) for v in tint]))
+                if textured:
+                    materials.add((chunk,material))
+                    coordinates = [{math.floor(v*64+delta)%64 for delta in (-.002,.002)} for v in uv]
+                    boundaries += int(any(len(v)>1 for v in coordinates))
+                    expected_rgb = [list(models[chunk][3][material][(ty*64+tx)*4:(ty*64+tx)*4+3])
+                                    for tx in coordinates[0] for ty in coordinates[1]]
+                else:
+                    tint = [.18,.48,.24] if chunk == 0 else [.48,.24,.18]
+                    expected_rgb = [list(map(encode, [v*(.7 if primitive%2 else 1) for v in tint]))]
             else:
-                expected_rgb = list(map(encode, [.025,.07,.12]))
+                expected_rgb = [list(map(encode, [.025,.07,.12]))]
             pixel = y*width+x
             actual = struct.unpack_from('<2I', ids, pixel*8)
             actual_depth = struct.unpack_from('<f', depths, pixel*4)[0]
@@ -154,13 +170,15 @@ def qualify(report):
             actual_rgb = list(rgb[pixel*4:pixel*4+3])
             if color.format.BGRAOrder():
                 actual_rgb.reverse()
-            require(all(abs(a-b) <= 2 for a,b in zip(actual_rgb,expected_rgb)), 'World colour differs')
+            require(any(all(abs(a-b) <= 2 for a,b in zip(actual_rgb,expected)) for expected in expected_rgb), 'World colour differs at %d,%d: %s vs %s' % (x,y,actual_rgb,expected_rgb))
             samples.append(dict(pixel=[x,y], identity=actual, depth=actual_depth, color=actual_rgb))
         save = rd.TextureSave()
         save.resourceId, save.destType = color.resourceId, rd.FileType.PNG
         success(controller.SaveTexture(save, str(output / 'preview.png')))
         report.update(passed=True, capture=capture, chunks=indices, view=view,
                       shader_dir=os.environ.get('THEIA_WORLD_PAIR_SHADERS','build/shaders'),
+                      textured=textured, sampled_materials=sorted(materials),
+                      boundary_envelope_probes=boundaries,
                       pixels=populations, compactions_verified=True,
                       identity_depth_bounds_verified=True, ray_samples=samples,
                       occlusion_probes=occlusion)

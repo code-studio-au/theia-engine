@@ -158,8 +158,17 @@ impl Drop for Image {
         }
     }
 }
+#[derive(Clone, Copy)]
+pub struct WorldTextures {
+    pub materials: vk::DescriptorBufferInfo,
+    pub uvs: vk::DescriptorBufferInfo,
+    pub table: vk::DescriptorBufferInfo,
+    pub images: [vk::DescriptorImageInfo; theia_assets::texture_table::MAX_TEXTURES],
+    pub count: u32,
+}
 #[derive(Clone, Copy, Default)]
 pub struct ResolveBuffers {
+    pub world_textures: Option<WorldTextures>,
     pub world_geometry: Option<(vk::DescriptorSetLayout, vk::DescriptorBufferInfo)>,
     pub proxy_work: Option<(vk::DescriptorSetLayout, vk::DescriptorBufferInfo)>,
     pub cooked_hud_work: Option<vk::DescriptorBufferInfo>,
@@ -215,6 +224,13 @@ impl Target {
         cooked: bool,
     ) -> Result<Self> {
         let (work_layout, buffers) = work_info;
+        if let Some(world) = buffers.world_textures
+            && (buffers.world_geometry.is_none()
+                || buffers.texture_table.is_none()
+                || !(1..=theia_assets::texture_table::MAX_TEXTURES as u32).contains(&world.count))
+        {
+            return Err("Textured world resolve requires two complete indexed sets".into());
+        }
         let material_info = buffers.materials;
         let uv = buffers.uvs.is_some();
         let authored = material_info.is_some();
@@ -388,6 +404,21 @@ impl Target {
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
+            if let Some(world) = buffers.world_textures {
+                for binding in 13..=17 {
+                    bindings.push(
+                        vk::DescriptorSetLayoutBinding::default()
+                            .binding(binding)
+                            .descriptor_type(match binding {
+                                16 => vk::DescriptorType::SAMPLED_IMAGE,
+                                17 => vk::DescriptorType::SAMPLER,
+                                _ => vk::DescriptorType::STORAGE_BUFFER,
+                            })
+                            .descriptor_count(if binding == 16 { world.count } else { 1 })
+                            .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+                    );
+                }
+            }
             let mut flags = vec![
                 vk::DescriptorBindingFlags::empty(),
                 vk::DescriptorBindingFlags::empty(),
@@ -418,6 +449,9 @@ impl Target {
             if buffers.world_geometry.is_some() {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
+            if buffers.world_textures.is_some() {
+                flags.extend([vk::DescriptorBindingFlags::empty(); 5]);
+            }
             let mut binding_flags =
                 vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(&flags);
             target.layout = device.create_descriptor_set_layout(
@@ -429,10 +463,15 @@ impl Target {
             let mut sizes = vec![
                 vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::SAMPLED_IMAGE)
-                    .descriptor_count(4 + image_count),
+                    .descriptor_count(
+                        4 + image_count + buffers.world_textures.map_or(0, |w| w.count),
+                    ),
                 vk::DescriptorPoolSize::default()
                     .ty(vk::DescriptorType::SAMPLER)
-                    .descriptor_count(1 + u32::from(image_count > 0)),
+                    .descriptor_count(
+                        1 + u32::from(image_count > 0)
+                            + u32::from(buffers.world_textures.is_some()),
+                    ),
             ];
             if cooked || buffers.benchmark {
                 sizes.push(
@@ -444,7 +483,8 @@ impl Target {
                                 + u32::from(extra_storage.is_some())
                                 + u32::from(buffers.cooked_hud_work.is_some())
                                 + u32::from(buffers.proxy_work.is_some())
-                                + u32::from(buffers.world_geometry.is_some()),
+                                + u32::from(buffers.world_geometry.is_some())
+                                + 3 * u32::from(buffers.world_textures.is_some()),
                         ),
                 );
             }
@@ -584,6 +624,36 @@ impl Target {
                         .buffer_info(info),
                 );
             }
+            let world_buffers = buffers
+                .world_textures
+                .map(|w| [[w.materials], [w.uvs], [w.table]]);
+            if let Some(info) = &world_buffers {
+                for (index, buffer) in info.iter().enumerate() {
+                    writes.push(
+                        vk::WriteDescriptorSet::default()
+                            .dst_set(target.set)
+                            .dst_binding(13 + index as u32)
+                            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                            .buffer_info(buffer),
+                    );
+                }
+            }
+            if let Some(world) = &buffers.world_textures {
+                writes.push(
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(target.set)
+                        .dst_binding(16)
+                        .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                        .image_info(&world.images[..world.count as usize]),
+                );
+                writes.push(
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(target.set)
+                        .dst_binding(17)
+                        .descriptor_type(vk::DescriptorType::SAMPLER)
+                        .image_info(&world.images[..1]),
+                );
+            }
             device.update_descriptor_sets(&writes, &[]);
         }
         target.visibility = Some(if buffers.benchmark {
@@ -621,6 +691,7 @@ impl Target {
             target.layout,
             crate::pipeline::ResolveMode {
                 world_pair: buffers.world_geometry.is_some(),
+                world_textures: buffers.world_textures.is_some(),
                 mixed: buffers.proxy_work.is_some(),
                 cooked_hud: buffers.cooked_hud_work.is_some(),
                 cooked,

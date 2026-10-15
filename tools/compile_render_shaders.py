@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--spirv-dis', default='spirv-dis', help='shared-interface qualification disassembler')
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    shaders = [('asset_visibility.slang','assetVisibilityFragment','fragment','world.pair.visibility.frag.spv'),('world_pair_visibility.slang','assetVisibilityMesh','mesh','world.pair.visibility.mesh.spv'),
+    shaders = [('world_pair_textured_resolve.slang','worldPairTexturedResolve','fragment','world.pair.textured.resolve.frag.spv'),('asset_visibility.slang','assetVisibilityFragment','fragment','world.pair.visibility.frag.spv'),('world_pair_visibility.slang','assetVisibilityMesh','mesh','world.pair.visibility.mesh.spv'),
                ('world_pair_resolve.slang','worldPairResolve','fragment','world.pair.resolve.frag.spv'),('mixed_benchmark_resolve.slang','mixedBenchmarkResolve','fragment','mixed.benchmark.resolve.frag.spv'),
                ('mixed_benchmark_hud_resolve.slang','mixedBenchmarkResolve','fragment','mixed.benchmark.hud.resolve.frag.spv'),('cooked_benchmark_resolve.slang','cookedBenchmarkResolve','fragment','cooked.benchmark.resolve.frag.spv'),('benchmark.slang','benchmarkCompute','compute','benchmark.compute.spv'),
                ('benchmark.slang','benchmarkTask','amplification','benchmark.task.spv'),

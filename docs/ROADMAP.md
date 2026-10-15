@@ -421,3 +421,11 @@ resolve. Its frame-local chunk tag is unrelated to persistent world IDs. Next
 compose complete material/texture owners and prove independent publication plus
 fallback coverage before connecting camera demand. The textured crowd benchmark
 still uses its single resident world bundle.
+
+
+The isolated resident pair now composes both complete cooked material/UV/texture
+graphs using shared CPU ownership, independent GPU owners and construction-time
+aggregate physical/image caps. Distinct palettes expose accidental cross-chunk
+bindings. Next qualify independent complete-chunk replacement and protected
+fallback coverage before camera demand can drive rendered residency. The crowd
+benchmark remains a separate single-bundle workload.

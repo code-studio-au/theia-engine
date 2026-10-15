@@ -4,6 +4,21 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 two complete resident textured chunks — integration slice (2026-10-15)
+
+The isolated pair mode now composes both complete cooked graphs in one shared
+visibility/depth/resolve path. Shared CPU ownership, independent GPU owners and
+aggregate CPU/physical/image caps connect the preceding qualification slices.
+A distinct second-chunk palette makes cross-chunk texture mistakes detectable.
+Twelve native plans pass validation/budget/failure checks; five textured captures
+pass 579 ray/colour probes and all eight chunk/material combinations. Preserved
+geometry and mixed/HUD replays pass. Both shader profiles validate 45 modules;
+renderer 28 tests, Clippy and Windows GNU/Wine qualification pass.
+This remains fixed resident startup loading. Independent live publication,
+protected fallback and camera-driven world residency remain open.
+[Contract](M4_ASSET_CONTRACT.md#two-complete-resident-textured-chunks),
+[evidence](validation/M4_WORLD_TEXTURED_PAIR.md).
+
 ## M4 two resident geometry chunks — shared rendering slice (2026-10-15)
 
 An isolated two-input mode now gives each geometry chunk its own GPU culling/work

@@ -886,6 +886,12 @@ impl Drop for Swapchain {
         }
     }
 }
+fn descriptor(buffer: &crate::asset::Buffer) -> vk::DescriptorBufferInfo {
+    vk::DescriptorBufferInfo::default()
+        .buffer(buffer.handle)
+        .offset(buffer.offset)
+        .range(buffer.bytes)
+}
 fn color_range() -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange::default()
         .aspect_mask(vk::ImageAspectFlags::COLOR)
@@ -903,6 +909,7 @@ pub struct Renderer {
     work: Option<IndirectWork>,
     proxy_work: Option<IndirectWork>,
     world_work: Option<IndirectWork>,
+    world_resources: Option<crate::world_upload::PresentationSet>,
     lod: Option<crate::indirect::Lod>,
     materials: Option<crate::asset::Buffer>,
     uvs: Option<crate::asset::Buffer>,
@@ -911,6 +918,7 @@ pub struct Renderer {
     texture_table: Option<crate::asset::Buffer>,
     footprint: Option<crate::asset::Buffer>,
     texture_tail: Option<[u32; 4]>,
+    world_cpu: Option<theia_assets::bundle_residency::WorldResidency>,
     authority: Option<[u8; 64]>,
     pub recreate: bool,
     generations: u64,
@@ -984,6 +992,8 @@ impl Renderer {
             work: None,
             proxy_work: None,
             world_work: None,
+            world_resources: None,
+            world_cpu: None,
             lod: None,
             materials: None,
             uvs: None,
@@ -1120,7 +1130,55 @@ impl Renderer {
                 return Err("Device cannot support bounded authority mesh/push profile".into());
             }
         }
-        if matches!(
+        if let Some(second) = &options.world_bundle_pair {
+            // SAFETY: Context retains this selected physical device and instance.
+            let (memory, limits, image_limits) = unsafe {
+                let instance = renderer.ctx.instance.as_ref().unwrap();
+                (
+                    instance.get_physical_device_memory_properties(renderer.ctx.physical),
+                    instance
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits,
+                    instance.get_physical_device_image_format_properties(
+                        renderer.ctx.physical,
+                        vk::Format::R8G8B8A8_SRGB,
+                        vk::ImageType::TYPE_2D,
+                        vk::ImageTiling::OPTIMAL,
+                        vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                        vk::ImageCreateFlags::empty(),
+                    )?,
+                )
+            };
+            let pair = crate::world_upload::resident_pair(
+                [options.bundle.as_deref().unwrap(), second],
+                crate::bundle_streaming::Gpu {
+                    device: renderer.ctx.device.as_ref().unwrap(),
+                    memory: &memory,
+                    family: renderer.ctx.graphics_family,
+                    queue: renderer.ctx.graphics,
+                    limits,
+                    image_limits,
+                },
+                renderer.shader_dir.as_deref().unwrap(),
+                options.bundle_byte_budget.unwrap_or(64 * 1024 * 1024),
+                options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
+                options.texture_budget.unwrap_or(4 * 1024 * 1024),
+            )?;
+            let [primary, secondary] = pair.work;
+            let [first, second] = pair.resources;
+            renderer.work = Some(primary);
+            renderer.world_work = Some(secondary);
+            renderer.materials = Some(first.materials);
+            renderer.uvs = Some(first.uvs);
+            renderer.texture_table = Some(first.table);
+            renderer.textures = first.images;
+            renderer.world_resources = Some(second);
+            renderer.world_cpu = Some(pair.cpu);
+            println!(
+                "Resident pair renderer allocation ledger: {}",
+                renderer.bundle_resource_bytes()
+            );
+        } else if matches!(
             renderer.mode,
             RenderMode::Indirect
                 | RenderMode::Spatial
@@ -1635,6 +1693,14 @@ impl Renderer {
     }
     fn bundle_resource_bytes(&self) -> u64 {
         self.work.as_ref().map_or(0, IndirectWork::resident_bytes)
+            + self
+                .world_work
+                .as_ref()
+                .map_or(0, IndirectWork::resident_bytes)
+            + self
+                .world_resources
+                .as_ref()
+                .map_or(0, crate::world_upload::PresentationSet::bytes)
             + self.materials.as_ref().map_or(0, |v| v.allocated_bytes)
             + self.uvs.as_ref().map_or(0, |v| v.allocated_bytes)
             + self.texture_table.as_ref().map_or(0, |v| v.allocated_bytes)
@@ -1772,6 +1838,19 @@ impl Renderer {
             self.mode,
             self.work.as_ref().map(|work| work.descriptor_layout),
             crate::visibility::ResolveBuffers {
+                world_textures: self.world_resources.as_ref().map(|r| {
+                    crate::visibility::WorldTextures {
+                        materials: descriptor(&r.materials),
+                        uvs: descriptor(&r.uvs),
+                        table: descriptor(&r.table),
+                        images: std::array::from_fn(|i| {
+                            r.images
+                                .get(i)
+                                .map_or(vk::DescriptorImageInfo::default(), |v| v.descriptor())
+                        }),
+                        count: r.images.len() as u32,
+                    }
+                }),
                 world_geometry: self
                     .world_work
                     .as_ref()
@@ -2402,12 +2481,14 @@ impl Drop for Renderer {
         drop(self.work.take());
         drop(self.proxy_work.take());
         drop(self.world_work.take());
+        drop(self.world_resources.take());
         drop(self.materials.take());
         drop(self.uvs.take());
         drop(self.texture.take());
         self.textures.clear();
         drop(self.texture_table.take());
         drop(self.footprint.take());
+        drop(self.world_cpu.take());
         println!(
             "Render Lab teardown: {} swapchain generations",
             self.generations

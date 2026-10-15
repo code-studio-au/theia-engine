@@ -32,6 +32,10 @@ pub struct IndirectWork {
     lod: bool,
     cull: bool,
 }
+enum GeometryInput<'a> {
+    Encoded(&'a [u8], Option<&'a crate::asset::GeometryArena>),
+    Resident(crate::asset::Buffer),
+}
 impl IndirectWork {
     pub fn new(
         device: &ash::Device,
@@ -42,9 +46,45 @@ impl IndirectWork {
         queue: (u32, vk::Queue, u64),
         coarse: Option<&[u8]>,
     ) -> Result<Self> {
+        Self::configured(
+            device,
+            memory_properties,
+            shader_dir,
+            mode,
+            asset.map(|(bytes, arena)| GeometryInput::Encoded(bytes, arena)),
+            queue,
+            coarse,
+        )
+    }
+    pub fn resident(
+        device: &ash::Device,
+        memory_properties: &vk::PhysicalDeviceMemoryProperties,
+        shader_dir: &Path,
+        geometry: crate::asset::Buffer,
+    ) -> Result<Self> {
+        Self::configured(
+            device,
+            memory_properties,
+            shader_dir,
+            RenderMode::AssetResolve,
+            Some(GeometryInput::Resident(geometry)),
+            (0, vk::Queue::null(), 0),
+            None,
+        )
+    }
+    fn configured(
+        device: &ash::Device,
+        memory_properties: &vk::PhysicalDeviceMemoryProperties,
+        shader_dir: &Path,
+        mode: RenderMode,
+        asset: Option<GeometryInput<'_>>,
+        queue: (u32, vk::Queue, u64),
+        coarse: Option<&[u8]>,
+    ) -> Result<Self> {
+        let has_asset = asset.is_some();
         let spatial = mode == RenderMode::Spatial;
         let lod = mode == RenderMode::AssetLod;
-        if lod && (coarse.is_none() || asset.is_none()) {
+        if lod && (coarse.is_none() || !has_asset) {
             return Err("GPU LOD requires both geometry buffers".into());
         }
         let cull = matches!(
@@ -68,7 +108,7 @@ impl IndirectWork {
                 "asset.lod.compute.spv"
             } else if cull {
                 "asset.cull.compute.spv"
-            } else if asset.is_some() {
+            } else if has_asset {
                 "asset.compute.spv"
             } else if spatial {
                 "spatial.compute.spv"
@@ -138,16 +178,19 @@ impl IndirectWork {
                             },
                     ),
             ];
-            if let Some((bytes, arena)) = asset {
-                work.asset = Some(crate::asset::Buffer::upload(
-                    device,
-                    memory_properties,
-                    bytes,
-                    queue.0,
-                    queue.1,
-                    queue.2,
-                    arena,
-                )?);
+            if let Some(input) = asset {
+                work.asset = Some(match input {
+                    GeometryInput::Resident(buffer) => buffer,
+                    GeometryInput::Encoded(bytes, arena) => crate::asset::Buffer::upload(
+                        device,
+                        memory_properties,
+                        bytes,
+                        queue.0,
+                        queue.1,
+                        queue.2,
+                        arena,
+                    )?,
+                });
                 bindings.push(
                     vk::DescriptorSetLayoutBinding::default()
                         .binding(1)
@@ -190,7 +233,7 @@ impl IndirectWork {
                 .ty(vk::DescriptorType::STORAGE_BUFFER)
                 .descriptor_count(if coarse.is_some() {
                     3
-                } else if asset.is_some() {
+                } else if has_asset {
                     2
                 } else {
                     1
@@ -300,7 +343,7 @@ impl IndirectWork {
             println!(
                 "GPU meshlet frustum work initialized: 256-byte device-local command/count; visible count at 36, mask at 40, IDs at 64; no readback"
             );
-        } else if asset.is_some() {
+        } else if has_asset {
             println!(
                 "GPU cooked-mesh work initialized: 64-byte device-local command/count; meshlet count at 36; immutable geometry at binding 1; no count readback"
             );

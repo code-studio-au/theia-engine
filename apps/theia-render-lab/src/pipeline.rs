@@ -35,6 +35,7 @@ impl Drop for ShaderModule {
 #[derive(Clone, Copy)]
 pub struct ResolveMode {
     pub world_pair: bool,
+    pub world_textures: bool,
     pub mixed: bool,
     pub cooked_hud: bool,
     pub cooked: bool,
@@ -237,6 +238,7 @@ impl Pipeline {
     ) -> Result<Self> {
         let ResolveMode {
             world_pair,
+            world_textures,
             mixed,
             cooked_hud,
             cooked,
@@ -255,7 +257,9 @@ impl Pipeline {
             ShaderStages {
                 mesh: "resolve.mesh.spv",
                 task: None,
-                fragment: if world_pair {
+                fragment: if world_textures {
+                    "world.pair.textured.resolve.frag.spv"
+                } else if world_pair {
                     "world.pair.resolve.frag.spv"
                 } else if mixed && cooked_hud {
                     "mixed.benchmark.hud.resolve.frag.spv"

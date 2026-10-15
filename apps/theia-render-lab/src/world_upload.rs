@@ -1,5 +1,5 @@
-//! GPU ownership qualification only: complete chunks upload but are not drawn.
-//! Deliberately synchronous, with one local pending set and no graphics readers.
+//! Complete synchronous bundle upload shared by resident pairs and ownership probes.
+//! Transfers retire before returned owners can enter a graphics generation.
 use crate::{
     Result, asset,
     bundle_streaming::{Gpu, Input},
@@ -13,19 +13,92 @@ use std::{
 };
 use theia_assets::bundle_residency::{Snapshot, StagedBundle, WorldResidency};
 
-struct Set {
+pub(super) struct Set {
     // All transfer fences have retired before these resident owners are exposed.
-    buffers: Vec<asset::Buffer>,
-    images: Vec<texture::ResidentTexture>,
+    pub buffers: [asset::Buffer; 4],
+    pub images: Vec<texture::ResidentTexture>,
 }
 impl Set {
-    fn bytes(&self) -> u64 {
+    pub fn bytes(&self) -> u64 {
         self.buffers.iter().map(|b| b.allocated_bytes).sum::<u64>() + self.image_bytes()
     }
-    fn image_bytes(&self) -> u64 {
+    pub fn image_bytes(&self) -> u64 {
         self.images.iter().map(|i| i.image.allocated_bytes).sum()
     }
 }
+/// Upload one complete admitted indexed set within remaining physical caps.
+/// Caller keeps encoded ownership until this function retires every transfer.
+pub(super) fn upload(
+    input: &Input,
+    gpu: &Gpu<'_>,
+    mut remaining: u64,
+    mut image_remaining: u64,
+) -> Result<Set> {
+    if input
+        .roots
+        .iter()
+        .any(|b| b.len() > gpu.limits.max_storage_buffer_range as usize)
+    {
+        return Err("World upload root exceeds device storage limit".into());
+    }
+    // Transfers retire before returning a complete set or unwinding to the
+    // caller, which retains its source/staged CPU ownership through this call.
+    let mut buffers = Vec::new();
+    let mut pending_images = Vec::new();
+    for bytes in &input.roots {
+        let upload = asset::Upload::begin(
+            gpu.device, gpu.memory, bytes, gpu.family, gpu.queue, remaining, None,
+        )?;
+        remaining = remaining
+            .checked_sub(upload.resident_bytes())
+            .ok_or("World buffer accounting underflow")?;
+        buffers.push(upload);
+    }
+    for bytes in &input.leaves {
+        let image = theia_assets::texture::Texture::decode(
+            bytes,
+            None,
+            theia_assets::texture::DEFAULT_BUDGET,
+        )?;
+        if image.width > gpu.image_limits.max_extent.width
+            || image.height > gpu.image_limits.max_extent.height
+        {
+            return Err("World image exceeds device format limits".into());
+        }
+        let upload = texture::Upload::begin(
+            gpu.device,
+            gpu.memory,
+            &image,
+            gpu.family,
+            gpu.queue,
+            remaining.min(image_remaining),
+        )?;
+        remaining = remaining
+            .checked_sub(upload.resident_bytes())
+            .ok_or("World image accounting underflow")?;
+        image_remaining = image_remaining
+            .checked_sub(upload.resident_bytes())
+            .ok_or("World image-only accounting underflow")?;
+        pending_images.push(upload);
+    }
+    // finish waits each dedicated transfer fence; this is a blocking ownership
+    // probe, not an asynchronous frame-loop or upload/render overlap claim.
+    let buffers = buffers
+        .into_iter()
+        .map(asset::Upload::finish)
+        .collect::<Result<Vec<_>>>()?;
+    let images = pending_images
+        .into_iter()
+        .map(texture::Upload::finish)
+        .collect::<Result<Vec<_>>>()?;
+    Ok(Set {
+        buffers: buffers
+            .try_into()
+            .map_err(|_| "Wrong complete GPU root count")?,
+        images,
+    })
+}
+
 struct Ready {
     // GPU owners drop before the complete CPU reservation on cancellation/failure.
     gpu: Arc<Set>,
@@ -68,75 +141,18 @@ impl World {
             std::array::from_fn(|i| input.roots[i].as_slice()),
             &input.leaves.iter().map(Vec::as_slice).collect::<Vec<_>>(),
         )?;
-        if input
-            .roots
-            .iter()
-            .any(|b| b.len() > gpu.limits.max_storage_buffer_range as usize)
-        {
-            return Err("World upload root exceeds device storage limit".into());
-        }
         self.allocations.retain(|w| w.strong_count() != 0);
         let (active, images) = self.live();
-        let mut remaining = self
+        let remaining = self
             .byte_budget
             .checked_sub(active)
             .ok_or("World GPU ledger overflow")?;
-        let mut image_remaining = self
+        let image_remaining = self
             .image_budget
             .checked_sub(images)
             .ok_or("World image ledger overflow")?;
-        // Pending transfers are declared after staging, so unwind retires them
-        // before releasing encoded ownership. Only one call/pending set at a time.
-        let mut buffers = Vec::new();
-        let mut pending_images = Vec::new();
-        for bytes in &input.roots {
-            let upload = asset::Upload::begin(
-                gpu.device, gpu.memory, bytes, gpu.family, gpu.queue, remaining, None,
-            )?;
-            remaining = remaining
-                .checked_sub(upload.resident_bytes())
-                .ok_or("World buffer accounting underflow")?;
-            buffers.push(upload);
-        }
-        for bytes in &input.leaves {
-            let image = theia_assets::texture::Texture::decode(
-                bytes,
-                None,
-                theia_assets::texture::DEFAULT_BUDGET,
-            )?;
-            if image.width > gpu.image_limits.max_extent.width
-                || image.height > gpu.image_limits.max_extent.height
-            {
-                return Err("World image exceeds device format limits".into());
-            }
-            let upload = texture::Upload::begin(
-                gpu.device,
-                gpu.memory,
-                &image,
-                gpu.family,
-                gpu.queue,
-                remaining.min(image_remaining),
-            )?;
-            remaining = remaining
-                .checked_sub(upload.resident_bytes())
-                .ok_or("World image accounting underflow")?;
-            image_remaining = image_remaining
-                .checked_sub(upload.resident_bytes())
-                .ok_or("World image-only accounting underflow")?;
-            pending_images.push(upload);
-        }
-        // finish waits each dedicated transfer fence; this is a blocking ownership
-        // probe, not an asynchronous frame-loop or upload/render overlap claim.
-        let buffers = buffers
-            .into_iter()
-            .map(asset::Upload::finish)
-            .collect::<Result<Vec<_>>>()?;
-        let images = pending_images
-            .into_iter()
-            .map(texture::Upload::finish)
-            .collect::<Result<Vec<_>>>()?;
-        let set = Arc::new(Set { buffers, images });
-        assert_eq!(set.bytes(), self.byte_budget - remaining - active);
+        let set = Arc::new(upload(input, gpu, remaining, image_remaining)?);
+        assert!(set.bytes() <= remaining && set.image_bytes() <= image_remaining);
         self.allocations.push(Arc::downgrade(&set));
         Ok(Ready { gpu: set, staged })
     }
@@ -267,4 +283,107 @@ pub fn qualify(path: &Path, gpu: Gpu<'_>) -> Result<()> {
         "rendered_chunks":false,"asynchronous_streaming":false})
     );
     Ok(())
+}
+
+pub(super) struct PresentationSet {
+    pub materials: asset::Buffer,
+    pub uvs: asset::Buffer,
+    pub table: asset::Buffer,
+    pub images: Vec<texture::ResidentTexture>,
+}
+impl PresentationSet {
+    pub fn bytes(&self) -> u64 {
+        self.materials.allocated_bytes
+            + self.uvs.allocated_bytes
+            + self.table.allocated_bytes
+            + self
+                .images
+                .iter()
+                .map(|i| i.image.allocated_bytes)
+                .sum::<u64>()
+    }
+}
+pub(super) struct Pair {
+    pub work: [crate::indirect::IndirectWork; 2],
+    pub resources: [PresentationSet; 2],
+    pub cpu: WorldResidency,
+}
+pub(super) fn resident_pair(
+    paths: [&Path; 2],
+    gpu: Gpu<'_>,
+    shaders: &Path,
+    cpu_budget: usize,
+    mut byte_budget: u64,
+    mut image_budget: u64,
+) -> Result<Pair> {
+    let requested = (byte_budget, image_budget);
+    let inputs = paths
+        .map(Input::load)
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?;
+    let images: u32 = inputs.iter().map(|i| i.leaves.len() as u32).sum();
+    if gpu.limits.max_per_stage_descriptor_storage_buffers < 8
+        || gpu.limits.max_descriptor_set_storage_buffers < 8
+        || gpu.limits.max_per_stage_descriptor_sampled_images < images + 4
+        || gpu.limits.max_descriptor_set_sampled_images < images + 4
+        || gpu.limits.max_per_stage_descriptor_samplers < 3
+        || gpu.limits.max_descriptor_set_samplers < 3
+    {
+        return Err("Textured world pair exceeds storage/image/sampler descriptor limits".into());
+    }
+    let mut cpu = WorldResidency::new(cpu_budget, 2)?;
+    let mut staged = Vec::new();
+    for (id, input) in inputs.iter().enumerate() {
+        staged.push((
+            id as u64,
+            cpu.stage(
+                &input.manifest,
+                theia_assets::content_id(&input.manifest),
+                std::array::from_fn(|i| input.roots[i].as_slice()),
+                &input.leaves.iter().map(Vec::as_slice).collect::<Vec<_>>(),
+            )?,
+        ));
+    }
+    let mut work = Vec::new();
+    let mut resources = Vec::new();
+    for input in &inputs {
+        let set = upload(input, &gpu, byte_budget, image_budget)?;
+        byte_budget = byte_budget
+            .checked_sub(set.bytes())
+            .ok_or("Pair physical accounting underflow")?;
+        image_budget = image_budget
+            .checked_sub(set.image_bytes())
+            .ok_or("Pair image accounting underflow")?;
+        let [geometry, materials, uvs, table] = set.buffers;
+        work.push(crate::indirect::IndirectWork::resident(
+            gpu.device, gpu.memory, shaders, geometry,
+        )?);
+        resources.push(PresentationSet {
+            materials,
+            uvs,
+            table,
+            images: set.images,
+        });
+    }
+    let snapshot = cpu.publish(staged, &[])?;
+    println!(
+        "Resident textured pair ownership: {}",
+        serde_json::json!({
+        "chunks":2,"physical_bytes":requested.0-byte_budget,
+        "image_bytes":requested.1-image_budget,"cpu_unique_bytes":cpu.live_bytes(),
+        "root_buffers":8,"images":images,"cpu_epoch":snapshot.epoch()})
+    );
+
+    println!(
+        "Resident textured pair ready: 2 complete GPU chunks, {} CPU unique encoded bytes, CPU epoch {}; all transfers retired before graphics generation",
+        cpu.live_bytes(),
+        snapshot.epoch()
+    );
+    Ok(Pair {
+        work: work.try_into().map_err(|_| "Wrong pair work count")?,
+        resources: resources
+            .try_into()
+            .map_err(|_| "Wrong pair resource count")?,
+        cpu,
+    })
 }

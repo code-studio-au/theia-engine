@@ -144,3 +144,12 @@ None of these results proves multi-chunk rendering, protected fallback coverage,
 asynchronous world demand scheduling or descriptor/frame retirement. Those gates
 must precede replacing the mixed benchmark's single resident representation.
 [Upload evidence](validation/M4_WORLD_UPLOAD_OWNERSHIP.md).
+
+
+Two complete resident chunks now share identity/depth and textured resolve, with
+separate static bindings and combined descriptor-limit checks. Palette-variant
+replay probes distinguish their image sets. These tiny opaque nearest/mip-zero
+fixtures do not establish production material complexity, texture filtering/LOD,
+streaming latency or representative art quality. Construction-time caps exclude
+work/staging/targets/driver resources and are not total VRAM measurements.
+[Evidence](validation/M4_WORLD_TEXTURED_PAIR.md).
