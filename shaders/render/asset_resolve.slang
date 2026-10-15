@@ -2,6 +2,9 @@
 [[vk::binding(4,0)]] ByteAddressBuffer resolveGeometry;
 struct SceneCameraRows {
     float4 row0; float4 row1; float4 row2; float4 row3;
+#ifdef THEIA_COOKED_HUD
+    uint4 hudPerf; uint4 hudScene; uint4 hudCounts;
+#endif
 #ifdef THEIA_TEXTURE_MIP_TAIL
     uint4 textureTail; // original width/height, first resident source level, source count
 #endif

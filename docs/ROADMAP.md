@@ -371,8 +371,8 @@ capacity evidence. A separate cooked-bundle mode now shares the route/recorder,
 with four checked quadrant assets, diagnostic textures and exact/short CPU/GPU/
 image pressure on periodic whole-bundle replacement. Next combine simultaneous
 world quadrants and moving proxies, then representative art, geometry LOD, texture
-mips and camera-driven residency in this same benchmark framework. Cooked HUD
-integration is also outstanding; the procedural stats panel remains available.
+mips and camera-driven residency in this same benchmark framework. Both cooked
+and procedural profiles now have optional, independently checked debug stats.
 Richer lighting/temporal rendering and animated characters expand it across M5/M6;
 server-controlled bots and replication/load instrumentation expand it across M7–M9.
 This adds an integration/profiling target without closing those milestones.
@@ -383,3 +383,8 @@ A complete resident cooked village now fits the current bounded viewer in one
 buildings/trees. It shares the camera/timing framework and has three-phase replay
 evidence. This closes the single-quadrant visual gap for a fixed resident asset;
 independent quadrant residency and integration with moving proxies remain next.
+
+Cooked stats now read GPU meshlet counts directly and display host-owned active
+allocation/texture/publication metadata plus completed timings. Exact/short budget
+states and the original crowd panel pass pixel checks. This diagnostic UI retains
+the existing separation from the planned general engine text/UI system.

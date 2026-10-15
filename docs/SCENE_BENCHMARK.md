@@ -246,7 +246,7 @@ complete bundle and reports deferrals. Add `--validation` for diagnostic runs.
 The route and four-query timing recorder are shared with the procedural benchmark.
 Reports identify `theia-cooked-bundle-route-v1`, source bundle paths, requested
 budgets, driver/device context and final publication/deferral counts. No visual
-player proxies, near/far geometry selection or HUD runs in this profile. The JSON
+player proxies or near/far geometry selection runs in this profile. The JSON
 uses zero players and a null procedural static-object count. HTML describes the
 actual cooked workload; JSON/CSV/HTML export and executable/shader digests remain
 available through the launcher.
@@ -312,4 +312,41 @@ Add `--whole-world` to `qualify_cooked_benchmark.py` to run the resident world r
 and three camera-phase replays. It checks the same immutable buffer/texel, hull,
 identity/depth and ray/colour invariants. The original quadrant/pressure suite
 remains its default. No new renderer/shader implementation, moving proxies,
-cooked HUD, dynamic LOD or independent world-chunk scheduling is added here.
+dynamic LOD or independent world-chunk scheduling is added by this asset step.
+
+## Cooked benchmark stats overlay
+
+Cooked benchmark runs now enable an optional GPU debug panel by default, for both
+quadrants and the complete resident world. Direct runs accept
+`--benchmark-no-overlay`; the launcher accepts `--no-overlay`. Normal cooked asset
+viewing outside benchmark mode keeps its existing pipeline.
+
+The panel displays:
+
+- Previous completed CPU/GPU frame times and a recent submission-cadence FPS value.
+- Current conservative visible meshlets/total meshlets and resident texture count.
+- `BUNDLE MIB`: active cooked geometry/material/UV/table buffers and images, from
+  actual host-owned Vulkan allocation charges, with three decimal places.
+- `DRAW MIB`: work/visibility/depth/dummy resolve-image allocations, with one
+  decimal place, matching the existing draw-allocation trace.
+- Completed bundle publications, budget deferrals and camera phase/time.
+
+Meshlet counts come directly from the GPU work buffer and immutable geometry
+header. No count readback sizes work. Other values are CPU-owned allocation/
+publication metadata or already completed timing queries. Active bundle memory
+excludes pending/staging/driver allocations; neither memory label is total VRAM.
+Per-frame JSON `cooked` records and CSV columns retain active bundle allocation
+bytes, texture count and publication/deferral totals. HTML records the overlay
+setting; overlay cost remains included in timings.
+
+The optional shader uses a separate fragment pipeline, five storage-buffer bindings
+and a 112-byte push range: camera bytes 0..64, timing/phase bytes 64..96, and owned
+bundle/count metadata bytes 96..112. Device limits are checked. The disabled path
+uses the existing four-storage-buffer/64-byte resolve and does not need the HUD
+module. Scoped compute/graphics barriers publish counts to the fragment stage and
+cover their reuse. The same benchmark-only debug font is reused; this does not
+replace the planned general UI/text system.
+
+The cooked qualifier now includes resident, successful-publication and short-budget
+deferral glyph checks, plus the original procedural HUD replay and both disabled
+paths. Its `--whole-world` selection verifies the complete resident scene panel.

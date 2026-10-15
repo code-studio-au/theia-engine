@@ -34,6 +34,7 @@ impl Drop for ShaderModule {
 }
 #[derive(Clone, Copy)]
 pub struct ResolveMode {
+    pub cooked_hud: bool,
     pub cooked: bool,
     pub authored: bool,
     pub uv: bool,
@@ -214,6 +215,7 @@ impl Pipeline {
         mode: ResolveMode,
     ) -> Result<Self> {
         let ResolveMode {
+            cooked_hud,
             cooked,
             authored,
             uv,
@@ -230,7 +232,9 @@ impl Pipeline {
             ShaderStages {
                 mesh: "resolve.mesh.spv",
                 task: None,
-                fragment: if mip_tail {
+                fragment: if cooked_hud {
+                    "cooked.benchmark.resolve.frag.spv"
+                } else if mip_tail {
                     "asset.texture.tail.resolve.frag.spv"
                 } else if automatic_mips {
                     "asset.texture.auto.resolve.frag.spv"
@@ -279,7 +283,9 @@ impl Pipeline {
                 .push
                 .map(|stage| {
                     vk::PushConstantRange::default().stage_flags(stage).size(
-                        if shaders.fragment == "benchmark.resolve.frag.spv" {
+                        if shaders.fragment == "cooked.benchmark.resolve.frag.spv" {
+                            112
+                        } else if shaders.fragment == "benchmark.resolve.frag.spv" {
                             32
                         } else if shaders.mesh == "benchmark.mesh.spv" {
                             96

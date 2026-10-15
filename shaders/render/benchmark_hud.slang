@@ -1,6 +1,8 @@
 // Tiny benchmark-only 5x7 debug font. General engine UI/text shaping stays separate.
+#ifndef THEIA_COOKED_HUD
 struct Hud { uint4 perf; uint4 scene; };
 [[vk::push_constant]] ConstantBuffer<Hud> hud;
+#endif
 static const uint2 hudFont[38]={
 uint2(0x239ace2eu,14u),
 uint2(0x08421184u,14u),
@@ -63,6 +65,49 @@ uint hudDecimal(uint value,uint precision,uint col) {
     if(col<=n+precision)return 48+(value/hudPow(precision-(col-n)))%10;
     return 32;
 }
+#ifdef THEIA_COOKED_HUD
+static const uint cookedHudPrefixes[9][16]={
+{84,72,69,73,65,32,67,79,79,75,69,68,32,32,32,32},
+{70,80,83,32,32,32,32,32,32,32,32,32,32,32,32,32},
+{67,80,85,32,77,83,32,32,32,32,32,32,32,32,32,32},
+{71,80,85,32,77,83,32,32,32,32,32,32,32,32,32,32},
+{77,69,83,72,76,69,84,83,32,32,32,32,32,32,32,32},
+{66,85,78,68,76,69,32,77,73,66,32,32,32,32,32,32},
+{68,82,65,87,32,77,73,66,32,32,32,32,32,32,32,32},
+{80,85,66,32,32,32,32,32,32,32,32,32,32,32,32,32},
+{80,72,65,83,69,32,32,32,32,32,32,32,32,32,32,32}
+};
+static const uint cookedHudPrefixLength[9]={12,4,7,7,9,11,9,4,6};
+uint hudCharacter(uint line,uint column) {
+    if(line>=9)return 32;
+    uint prefix=cookedHudPrefixLength[line];if(column<prefix)return cookedHudPrefixes[line][column];
+    uint col=column-prefix;
+    if(line==0)return 32;
+    if(line==1)return hudDecimal(sceneCamera.hudPerf.x,1,col);
+    if(line==2)return hudDecimal(sceneCamera.hudPerf.y,3,col);
+    if(line==3)return hudDecimal(sceneCamera.hudPerf.z,3,col);
+    if(line==4) {
+        uint count=cookedHudWork.Load(36),n=hudDigits(count),total=resolveGeometry.Load(20),m=hudDigits(total);
+        if(col<n)return hudUInt(count,col);if(col==n)return 47;
+        if(col<n+1+m)return hudUInt(total,col-n-1);
+        uint suffix[5]={32,84,69,88,32};
+        if(col<n+1+m+5)return suffix[col-n-1-m];
+        return hudUInt(sceneCamera.hudCounts.y,col-n-1-m-5);
+    }
+    if(line==5)return hudDecimal(sceneCamera.hudCounts.x,3,col);
+    if(line==6)return hudDecimal(sceneCamera.hudScene.z,1,col);
+    if(line==7) {
+        uint value=sceneCamera.hudCounts.z,n=hudDigits(value);
+        if(col<n)return hudUInt(value,col);
+        uint separator[5]={32,68,69,70,32};
+        if(col<n+5)return separator[col-n];
+        return hudUInt(sceneCamera.hudCounts.w,col-n-5);
+    }
+    if(col==0)return hudUInt(sceneCamera.hudScene.x,0);
+    uint separator[3]={32,84,32};if(col<4)return separator[col-1];
+    return hudDecimal(sceneCamera.hudScene.y,1,col-4);
+}
+#else
 uint hudCharacter(uint line,uint column) {
     if(line>=9)return 32;
     uint prefix=hudPrefixLength[line];if(column<prefix)return hudPrefixes[line][column];
@@ -87,6 +132,7 @@ uint hudCharacter(uint line,uint column) {
     uint separator[3]={32,84,32};if(col<4)return separator[col-1];
     return hudDecimal(hud.scene.y,1,col-4);
 }
+#endif
 float4 hudPixel(uint2 pixel) {
     if(pixel.x<14 || pixel.y<14)return float4(0.04,0.5,0.4,1);
     if(pixel.x<24 || pixel.y<24)return float4(0.012,0.025,0.04,1);

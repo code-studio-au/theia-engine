@@ -113,7 +113,7 @@ impl Options {
             } else {
                 self.benchmark_players.unwrap_or(1000)
             },
-            overlay: !self.benchmark_cooked && !self.benchmark_no_overlay,
+            overlay: !self.benchmark_no_overlay,
             frames: self.frames.unwrap_or(3660),
             warmup: self.benchmark_warmup.unwrap_or(60),
             seconds: self.benchmark_seconds.unwrap_or(60.),

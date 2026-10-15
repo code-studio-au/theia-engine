@@ -162,6 +162,34 @@ pub fn reference(config: &Config, frame: u64, width: u32, height_: u32) -> Resul
     Ok(json!({"time":config.time(frame),"rows":rows,"eye":eye,"objects":objects}))
 }
 
+#[derive(Clone, Copy)]
+pub struct CookedStats {
+    pub bundle_bytes: u64,
+    pub textures: u32,
+    pub publications: u64,
+    pub deferrals: u64,
+}
+impl CookedStats {
+    pub fn hud_words(self) -> [u32; 4] {
+        [
+            (self.bundle_bytes as f64 / 1048576. * 1000.)
+                .round()
+                .clamp(0., u32::MAX as f64) as u32,
+            self.textures,
+            self.publications.min(u32::MAX as u64) as u32,
+            self.deferrals.min(u32::MAX as u64) as u32,
+        ]
+    }
+}
+struct PendingFrame {
+    frame: u64,
+    cpu_ms: f64,
+    extent: [u32; 2],
+    allocated_bytes: u64,
+    interval_ms: f64,
+    cooked: Option<CookedStats>,
+}
+
 pub struct Recorder {
     device: ash::Device,
     pool: vk::QueryPool,
@@ -169,7 +197,7 @@ pub struct Recorder {
     mask: u64,
     pub config: Config,
     samples: Vec<Value>,
-    pending: Option<(u64, f64, [u32; 2], u64, f64)>,
+    pending: Option<PendingFrame>,
     started: Instant,
     last_submit: Instant,
     metadata: Value,
@@ -210,7 +238,15 @@ impl Recorder {
     }
     /// Caller has retired the sole frame fence. No GPU-dependent work sizing is read back.
     pub fn collect(&mut self) -> Result<()> {
-        if let Some((frame, cpu_ms, extent, allocated_bytes, interval_ms)) = self.pending.take() {
+        if let Some(PendingFrame {
+            frame,
+            cpu_ms,
+            extent,
+            allocated_bytes,
+            interval_ms,
+            cooked,
+        }) = self.pending.take()
+        {
             let mut values = [0u64; 4];
             // SAFETY: Completed frame wrote all four queries; pool and output array are live.
             unsafe {
@@ -225,7 +261,11 @@ impl Recorder {
                 ((values[b].wrapping_sub(values[a])) & self.mask) as f64 * self.period as f64
                     / 1_000_000.
             };
-            self.samples.push(json!({"frame":frame,"warmup":frame<self.config.warmup,"scene_time":self.config.time(frame),"cpu_draw_ms":cpu_ms,"frame_interval_ms":interval_ms,"extent":extent,"tracked_image_and_work_allocation_bytes":allocated_bytes,"gpu_total_ms":elapsed(0,3),"gpu_compute_ms":elapsed(0,1),"gpu_visibility_ms":elapsed(1,2),"gpu_resolve_ms":elapsed(2,3)}));
+            let mut sample = json!({"frame":frame,"warmup":frame<self.config.warmup,"scene_time":self.config.time(frame),"cpu_draw_ms":cpu_ms,"frame_interval_ms":interval_ms,"extent":extent,"tracked_image_and_work_allocation_bytes":allocated_bytes,"gpu_total_ms":elapsed(0,3),"gpu_compute_ms":elapsed(0,1),"gpu_visibility_ms":elapsed(1,2),"gpu_resolve_ms":elapsed(2,3)});
+            if let Some(stats) = cooked {
+                sample["cooked"] = json!({"active_bundle_allocation_bytes":stats.bundle_bytes,"resident_texture_count":stats.textures,"publications":stats.publications,"deferrals":stats.deferrals});
+            }
+            self.samples.push(sample);
         }
         Ok(())
     }
@@ -247,10 +287,24 @@ impl Recorder {
             );
         }
     }
-    pub fn submitted(&mut self, frame: u64, cpu_ms: f64, extent: [u32; 2], allocated_bytes: u64) {
+    pub fn submitted(
+        &mut self,
+        frame: u64,
+        cpu_ms: f64,
+        extent: [u32; 2],
+        allocated_bytes: u64,
+        cooked: Option<CookedStats>,
+    ) {
         let interval = self.last_submit.elapsed().as_secs_f64() * 1000.;
         self.last_submit = Instant::now();
-        self.pending = Some((frame, cpu_ms, extent, allocated_bytes, interval));
+        self.pending = Some(PendingFrame {
+            frame,
+            cpu_ms,
+            extent,
+            allocated_bytes,
+            interval_ms: interval,
+            cooked,
+        });
     }
     pub fn overlay(&self, frame: u64, allocated_bytes: u64) -> [u8; 32] {
         let (count, interval) = self

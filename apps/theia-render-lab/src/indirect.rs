@@ -324,13 +324,14 @@ impl IndirectWork {
     ) {
         // SAFETY: Caller has begun recording a graphics+compute command buffer and waited its frame
         // fence. Work handles/descriptor set remain live; explicit barriers order reuse, compute writes,
-        // indirect command/count reads and task descriptor reads. Push constants are copied by Vulkan.
+        // indirect/task/mesh reads and the optional fragment HUD. Push constants are copied by Vulkan.
         unsafe {
             let reuse = [vk::BufferMemoryBarrier2::default()
                 .src_stage_mask(
                     vk::PipelineStageFlags2::DRAW_INDIRECT
                         | vk::PipelineStageFlags2::TASK_SHADER_EXT
                         | vk::PipelineStageFlags2::MESH_SHADER_EXT
+                        | vk::PipelineStageFlags2::FRAGMENT_SHADER
                         | vk::PipelineStageFlags2::COMPUTE_SHADER,
                 )
                 .src_access_mask(
@@ -413,7 +414,8 @@ impl IndirectWork {
                 .dst_stage_mask(
                     vk::PipelineStageFlags2::DRAW_INDIRECT
                         | vk::PipelineStageFlags2::TASK_SHADER_EXT
-                        | vk::PipelineStageFlags2::MESH_SHADER_EXT,
+                        | vk::PipelineStageFlags2::MESH_SHADER_EXT
+                        | vk::PipelineStageFlags2::FRAGMENT_SHADER,
                 )
                 .dst_access_mask(
                     vk::AccessFlags2::INDIRECT_COMMAND_READ | vk::AccessFlags2::SHADER_STORAGE_READ,

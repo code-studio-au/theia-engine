@@ -77,7 +77,7 @@ def main():
                             for v in metric.values()), 'Invalid timing summary')
                 require(sum(not s['warmup'] for s in timings['samples']) == 210, 'Incorrect warmup exclusion')
                 if cooked:
-                    require(not timings['overlay'] and timings['players'] == 0
+                    require(timings['overlay'] == ('--benchmark-no-overlay' not in flags) and timings['players'] == 0
                             and timings['static_objects'] is None, 'Cooked report claims procedural content')
                 if outcome is not None:
                     state = timings['stream_outcome']
@@ -118,6 +118,9 @@ def main():
                         name = flag[2:] + ('-short' if short else '-exact')
                         runtime(name, stream + [flag, str(cap - int(short))], outcome='defer' if short else 'publish')
                 runtime('procedural-regression', ['--benchmark', '--benchmark-players', '1000'], cooked=False)
+            selected = scene['whole_world']['cook']['bundle']['path'] if args.whole_world else bundles[0]
+            runtime('cooked-no-overlay', ['--benchmark-cooked', '--bundle', selected, '--benchmark-no-overlay'])
+            runtime('procedural-no-overlay', ['--benchmark', '--benchmark-players', '1000', '--benchmark-no-overlay'], cooked=False)
             sampled = set()
             for quadrant in ((None,) if args.whole_world else (0, 3)):
                 for frame in (10, 90, 170):
@@ -135,6 +138,35 @@ def main():
                     sampled.update(capture['sampled_materials'])
                     report['captures'].append(capture)
                     print('Verified cooked replay:', quadrant, frame, flush=True)
+            # Exercise the cooked panel both resident and after an actual generation publication.
+            for label, streaming, cap in ([('resident', False, None)] if args.whole_world else [('resident', False, None), ('stream', True, None), ('defer', True, gpu_cap - 1)]):
+                output = args.output / ('hud-' + label)
+                output.mkdir(parents=True, exist_ok=True)
+                replay_env = capture_env.copy()
+                replay_env.update(THEIA_COOKED_CAPTURE_OUTPUT=str(output), THEIA_COOKED_SCENE=str(args.scene),
+                                  THEIA_COOKED_QUADRANT='0', THEIA_COOKED_WHOLE_WORLD='1' if args.whole_world else '0',
+                                  THEIA_COOKED_FRAME='70' if streaming else '90', THEIA_COOKED_GPU=args.gpu, THEIA_COOKED_OVERLAY='1')
+                if streaming:
+                    replay_env['THEIA_COOKED_STREAM_QUADRANT'] = '3'
+                if cap is not None:
+                    replay_env['THEIA_COOKED_GPU_BUDGET'] = str(cap)
+                execute([args.qrenderdoc, '--python', 'tools/renderdoc_cooked_benchmark.py'], output / 'capture.log', replay_env)
+                capture = json.loads((output / 'report.json').read_bytes())
+                require(capture['passed'] and capture['overlay_verified'], 'Cooked stats panel was not verified')
+                if cap is not None:
+                    require(capture['stream_outcome']['publications'] == 0 and capture['stream_outcome']['deferrals'] >= 2, 'HUD capture did not exercise budget deferral')
+                elif streaming:
+                    require(capture['stream_outcome']['publications'] >= 2, 'HUD capture did not exercise publication')
+                report['captures'].append(capture)
+                print('Verified cooked HUD:', label, flush=True)
+            output = args.output / 'procedural-hud'
+            output.mkdir(parents=True, exist_ok=True)
+            replay_env = capture_env.copy()
+            replay_env.update(THEIA_BENCHMARK_CAPTURE_OUTPUT=str(output), THEIA_BENCHMARK_PLAYERS='1000',
+                              THEIA_BENCHMARK_CAPTURE_FRAME='90', THEIA_BENCHMARK_GPU=args.gpu, THEIA_BENCHMARK_OVERLAY='1')
+            execute([args.qrenderdoc, '--python', 'tools/renderdoc_benchmark.py'], output / 'capture.log', replay_env)
+            report['procedural_capture'] = json.loads((output / 'report.json').read_bytes())
+            require(report['procedural_capture']['passed'] and report['procedural_capture']['overlay_verified'], 'Procedural HUD regressed')
             require(sampled == set(range(4)), 'Not all four material bindings were pixel-qualified')
             report['sampled_materials'] = sorted(sampled)
         report['passed'] = True

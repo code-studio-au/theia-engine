@@ -1,5 +1,47 @@
 # M4 procedural MMO scene benchmark qualification (2026-10-15)
 
+## Cooked benchmark live stats (2026-10-15)
+
+`build/qualification/cooked-hud-world/report.json` and
+`build/qualification/cooked-hud-quadrants/report.json` pass **17 native Wayland
+runs × 240 frames**, including both HUD-disabled paths, all quadrants, the resident
+world, exact/short CPU/GPU/image caps and the preserved crowd route. Every run has
+zero Vulkan warnings/errors through teardown and complete timing/warmup accounting.
+
+Thirteen cooked replay captures pass immutable GPU buffers/texels, hull counts,
+whole-image identity/depth and **560 ray/colour probes**. Four panel captures pass
+**16625 glyph pixels**: whole-world resident (4165), quadrant resident (4165),
+successful replacement (4165) and short-cap retention (4130). The successful
+capture reports three publications/zero deferrals and the replacement's 89520
+active allocation bytes; the short case reports zero publications/three deferrals
+and retains the initial 89376 bytes. Whole-world active bundle charge is 120256
+bytes. GPU meshlet/total counts, texture count, both memory labels, timing digits,
+publication/deferral digits and phase/time match the captured inputs. Each suite
+also replays the original crowd HUD, passing **4375 glyph pixels** each. Capture
+validation is disabled and is separate from native Wayland validation evidence.
+
+The shared debug font stays intact. The new optional fragment shader uses five
+storage bindings and 112 push bytes; the no-overlay path keeps the old pipeline.
+The work buffer's publication/reuse barriers cover fragment reads. A missing HUD
+module rejects before presentation with zero diagnostics and orderly teardown;
+the same shader directory succeeds for three frames with the HUD disabled.
+`cooked-hud-cleanup/report.json` records both checks.
+
+Default/shared interfaces compile and validate **39 modules each**, retaining the
+previous narrowly qualified GLSL primitive-interface fallback. Rust renderer 27
+tests, offline Python 31 tests, formatting and denied-warning Clippy pass.
+`windows-cooked-hud/report.json` passes eleven GNU cross-builds/Clippy and 154 Wine
+CPU tests; native Windows/GPU remain unqualified. The original compute executable
+again verifies all 256 values on RX 7900 XTX.
+
+The optimized `cooked-hud-release/cooked-whole-world/report.json` launcher run
+passes 240 headless frames with overlay enabled and validation disabled. Its JSON,
+CSV and HTML preserve active bundle metadata and overlay context. This is a labeled
+instrumented observation, not an uncapped FPS or production capacity score.
+Active bundle bytes exclude pending/staging/driver allocations; draw allocations
+retain their separate scope. No gameplay authority, mixed crowd/world rendering,
+dynamic LOD, world-demand scheduling or general text/UI implementation is added.
+
 ## Complete resident cooked world (2026-10-15)
 
 `build/qualification/resident-world-proof/report.json` passes strict Rust admission

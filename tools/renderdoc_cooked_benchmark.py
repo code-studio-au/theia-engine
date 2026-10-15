@@ -109,11 +109,21 @@ def qualify(report):
     require(0 <= quadrant < 4 and 0 <= frame < 181, 'Invalid quadrant/frame')
     whole_world = os.environ.get('THEIA_COOKED_WHOLE_WORLD') == '1'
     cook = scene['whole_world']['cook'] if whole_world else scene['quadrants'][quadrant]['cook']
-    blobs, triangles, hulls, texels = decode(cook)
     exe = Path('apps/theia-render-lab/target/debug/theia-render-lab').resolve()
     args = ['--benchmark-cooked', '--bundle', cook['bundle']['path'], '--frames', '181',
             '--benchmark-warmup', '0', '--benchmark-report', str(output / 'timings.json'),
             '--no-validation', '--gpu', os.environ.get('THEIA_COOKED_GPU', '7900')]
+    overlay = os.environ.get('THEIA_COOKED_OVERLAY') == '1'
+    if not overlay:
+        args.append('--benchmark-no-overlay')
+    stream_index = os.environ.get('THEIA_COOKED_STREAM_QUADRANT')
+    if stream_index is not None:
+        stream_index = int(stream_index)
+        require(not whole_world and 0 <= stream_index < 4 and stream_index != quadrant, 'Invalid capture replacement')
+        args.extend(['--stream-bundle', scene['quadrants'][stream_index]['cook']['bundle']['path']])
+    gpu_budget = os.environ.get('THEIA_COOKED_GPU_BUDGET')
+    if gpu_budget is not None:
+        args.extend(['--bundle-gpu-budget', str(int(gpu_budget))])
     options = rd.CaptureOptions()
     options.apiValidation = False
     options.debugOutputMute = False
@@ -132,6 +142,11 @@ def qualify(report):
         require(not target.Connected() and capture is not None, 'Capture missing or timed out')
     finally:
         target.Shutdown()
+    timings = json.loads((output / 'timings.json').read_bytes())
+    stats = timings['samples'][frame]['cooked']
+    if stream_index is not None and stats['publications'] % 2:
+        cook = scene['quadrants'][stream_index]['cook']
+    blobs, triangles, hulls, texels = decode(cook)
     cap = rd.OpenCaptureFile()
     controller = None
     try:
@@ -188,6 +203,8 @@ def qualify(report):
 
         def probe(x, y):
             nonlocal boundary_probes
+            if overlay and 12 <= x < 420 and 12 <= y < 252:
+                return
             ident, primitive, expected_depth, material, uv = ray(rows, triangles, x, y, width, height)
             offset = y * width + x
             actual = struct.unpack_from('<2I', identities, offset * 8)
@@ -225,13 +242,49 @@ def qualify(report):
             if 0 <= x < width and 0 <= y < height:
                 probe(x, y)
         require(len(samples) >= 20, 'Insufficient stable ray/colour probes')
+        if overlay:
+            import re
+            recent = timings['samples'][max(0, frame - 30):frame]
+            last = timings['samples'][max(0, frame - 1)]
+            scaled = lambda value, scale: math.floor(value * scale + .5)
+            fps = scaled(1000 * len(recent) / sum(s['frame_interval_ms'] for s in recent), 10) if recent else 0
+            cpu = scaled(last['cpu_draw_ms'], 1000) if frame else 0
+            gpu = scaled(last['gpu_total_ms'], 1000) if frame else 0
+            draw_mib = scaled(timings['samples'][frame]['tracked_image_and_work_allocation_bytes'] / 1048576, 10)
+            bundle_mib = scaled(stats['active_bundle_allocation_bytes'] / 1048576, 1000)
+            clock = scaled(timings['samples'][frame]['scene_time'], 10)
+            phase = min(2, math.floor(timings['samples'][frame]['scene_time'] / 60 * 3)) + 1
+            lines = ['THEIA COOKED', f'FPS {fps / 10:.1f}', f'CPU MS {cpu / 1000:.3f}', f'GPU MS {gpu / 1000:.3f}',
+                     f'MESHLETS {count}/{len(hulls)} TEX {stats["resident_texture_count"]}',
+                     f'BUNDLE MIB {bundle_mib / 1000:.3f}', f'DRAW MIB {draw_mib / 10:.1f}',
+                     f'PUB {stats["publications"]} DEF {stats["deferrals"]}', f'PHASE {phase} T {clock / 10:.1f}']
+            font = [(int(a, 16), int(b)) for a, b in re.findall(r'uint2\(0x([0-9a-f]+)u,(\d+)u\)', Path('shaders/render/benchmark_hud.slang').read_text())]
+            chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ./'
+            checks = 0
+            encode = lambda v: round((v * 12.92 if v <= .0031308 else 1.055 * v ** (1 / 2.4) - .055) * 255)
+            for line, text in enumerate(lines):
+                for column, char in enumerate(text):
+                    for row in range(7):
+                        for cell in range(5):
+                            index = chars.find(char)
+                            bits = (((font[index][0] >> (row * 5)) & 31) if row < 6 else font[index][1]) if index >= 0 else 0
+                            lit = bits & (1 << (4 - cell)) != 0
+                            x = 24 + column * 18 + cell * 3 + 1
+                            y = 24 + line * 24 + row * 3 + 1
+                            actual = list(rgb[(y * width + x) * 4:(y * width + x) * 4 + 3])
+                            if color.format.BGRAOrder():
+                                actual.reverse()
+                            expected = list(map(encode, [.7, .92, .76] if lit else [.012, .025, .04]))
+                            require(all(abs(a - b) <= 2 for a, b in zip(actual, expected)), f'Cooked stats glyph differs: {line}/{column}/{row}/{cell} {text}')
+                            checks += 1
+            report.update(overlay_verified=True, overlay_glyph_pixels=checks, overlay_lines=lines)
         save = rd.TextureSave()
         save.resourceId = present.copyDestination
         save.destType = rd.FileType.PNG
         success(controller.SaveTexture(save, str(output / 'preview.png')))
         report.update(passed=True, capture=capture, quadrant=None if whole_world else quadrant, frame=frame,
                       scene_selection='whole-world' if whole_world else f'quadrant-{quadrant}',
-                      visible_meshlets=ids, gpu_buffers_verified=4, gpu_texture_texels_verified=16384,
+                      visible_meshlets=ids, overlay=overlay, stream_outcome=stats, gpu_buffers_verified=4, gpu_texture_texels_verified=16384,
                       whole_image_identity_depth_verified=True, covered_pixels=covered,
                       samples=samples, sampled_materials=sorted(materials), boundary_envelope_probes=boundary_probes, texel_coordinate_envelope=.002)
     finally:

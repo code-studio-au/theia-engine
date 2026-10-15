@@ -4,6 +4,21 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 cooked benchmark live stats — independently executed (2026-10-15)
+
+Cooked quadrants and the complete resident world now have an optional live panel:
+GPU meshlet counts, timings, active bundle/draw allocation charges, textures and
+publication/deferral counters. Four cooked panels pass 16625 glyph pixels, including
+successful replacement and retained content under short capacity; the original
+crowd HUD passes 4375 pixels in each of two suites. Seventeen 240-frame native
+Wayland cases pass zero diagnostics, with 13 cooked captures/560 ray-colour probes
+plus two procedural captures. Both shader interfaces validate 39 modules; renderer
+27 tests, Python 31 tests, formatting/Clippy, Windows GNU eleven packages/154 Wine
+CPU tests and the original compute test pass. Missing optional shader cleanup and
+the HUD-disabled path pass. No desktop window is launched for this qualification.
+[Usage](SCENE_BENCHMARK.md#cooked-benchmark-stats-overlay),
+[evidence](validation/M4_SCENE_BENCHMARK.md#cooked-benchmark-live-stats-2026-10-15).
+
 ## M4 complete resident cooked world — independently executed (2026-10-15)
 
 The asset pipeline now optionally cooks the entire village into one admitted

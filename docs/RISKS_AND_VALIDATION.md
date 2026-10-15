@@ -38,7 +38,10 @@ cooked-content streaming, skinning/lighting costs or server/network player scale
 A separate cooked benchmark mode now shares the route/timing recorder and
 qualifies periodic complete-bundle replacement under exact/short CPU/GPU/image
 caps, with independent cooked buffer/texel/culling and framebuffer probes. It
-renders one bundle at a time without moving proxies or HUD. This does not yet
+renders one bundle at a time without moving proxies. An optional debug HUD now
+qualifies direct GPU meshlet counts plus completed timings and CPU-owned active
+allocation/publication metadata; disabling it preserves the original resolve.
+Its memory labels exclude pending/staging/driver allocations. This does not yet
 qualify a simultaneously resident streamed world or camera-driven demand. GPU
 frame queries exclude uploads submitted before them; CPU/frame intervals retain
 publication stalls. Nearest texture-boundary probes use an explicit narrow

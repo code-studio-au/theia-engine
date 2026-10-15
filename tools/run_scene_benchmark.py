@@ -17,15 +17,21 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def export(report,path):
     columns=['frame','scene_time','warmup','frame_interval_ms','cpu_draw_ms','gpu_total_ms','gpu_compute_ms','gpu_visibility_ms','gpu_resolve_ms','tracked_image_and_work_allocation_bytes']
+    if report['workload']=='theia-cooked-bundle-route-v1':columns+=['active_bundle_allocation_bytes','resident_texture_count','bundle_publications','bundle_deferrals']
+    def csv_rows():
+        for sample in report['samples']:
+            row=dict(sample);cooked=sample.get('cooked',{})
+            row.update(active_bundle_allocation_bytes=cooked.get('active_bundle_allocation_bytes'),resident_texture_count=cooked.get('resident_texture_count'),bundle_publications=cooked.get('publications'),bundle_deferrals=cooked.get('deferrals'))
+            yield row
     with path.with_suffix('.csv').open('w',newline='') as file:
-        writer=csv.DictWriter(file,fieldnames=columns,extrasaction='ignore');writer.writeheader();writer.writerows(report['samples'])
+        writer=csv.DictWriter(file,fieldnames=columns,extrasaction='ignore');writer.writeheader();writer.writerows(csv_rows())
     measured=[s for s in report['samples'] if not s['warmup']]
     rows=''.join('<tr><td>'+html.escape(key)+'</td>'+''.join(f'<td>{value[field]:.3f}</td>' for field in ['mean','p50','p95','p99','max'])+'</tr>' for key,value in report['summary_ms'].items())
     data=json.dumps(measured).replace('<','\\u003c')
     page='''<!doctype html><html lang="en"><meta charset="utf-8"><title>Theia scene benchmark</title>
 <style>body{font:16px system-ui;background:#101720;color:#e2e8f0;max-width:1100px;margin:3rem auto;padding:0 1rem}td,th{text-align:right;padding:.5rem 1rem}td:first-child,th:first-child{text-align:left}canvas{width:100%;height:300px;background:#182230}select{padding:.5rem}a{color:#8ad}h1{font-size:1.8rem}</style>
 <h1>TITLE</h1><p>SCENE · DEVICE</p>
-<p>SCOPE</p>
+<p>SCOPE</p><p>Stats overlay: OVERLAY (included in timings when enabled).</p>
 <p>FIFO presentation; one frame in flight. CPU values include draw/fence/acquire/present, exclude event loop gaps. GPU timestamps include synchronization and instrumentation. Warmup excluded. These values are not an uncapped FPS score.</p>
 <table><tr><th>Milliseconds</th><th>Mean</th><th>p50</th><th>p95</th><th>p99</th><th>Max</th></tr>ROWS</table>
 <p><label>Frame trace <select id="metric"><option>gpu_total_ms</option><option>cpu_draw_ms</option><option>gpu_compute_ms</option><option>gpu_visibility_ms</option><option>gpu_resolve_ms</option></select></label> <span id="point"></span></p>
@@ -38,8 +44,8 @@ def export(report,path):
     if cooked and report.get('launcher',{}).get('scene_selection')=='whole-world':
         title='Theia cooked whole-world benchmark'
         scene='Complete resident village and terrain in one cooked bundle'
-    scope=('Opaque unlit cooked geometry and diagnostic textures. Whole-bundle replacement='+str(report['streaming'])+'. No moving proxies, skinning or gameplay authority. GPU timestamps exclude uploads queued before the frame queries; CPU/frame intervals include publication stalls. Tracked frame allocations exclude bundle resources; see separate budget evidence.' if cooked else 'Rendering workload v1. Procedural near/far detail, face shading and visual motion. No skinning, gameplay authority or content streaming.')
-    page=page.replace('TITLE',title).replace('SCENE',scene).replace('SCOPE',scope).replace('DEVICE',html.escape(report['metadata']['device'])).replace('ROWS',rows).replace('DATA',data)
+    scope=('Opaque unlit cooked geometry and diagnostic textures. Whole-bundle replacement='+str(report['streaming'])+'. No moving proxies, skinning or gameplay authority. GPU timestamps exclude uploads queued before the frame queries; CPU/frame intervals include publication stalls. Tracked draw allocations exclude bundle resources; per-frame cooked records include active bundle bytes and publication counters.' if cooked else 'Rendering workload v1. Procedural near/far detail, face shading and visual motion. No skinning, gameplay authority or content streaming.')
+    page=page.replace('TITLE',title).replace('SCENE',scene).replace('SCOPE',scope).replace('OVERLAY',str(report['overlay'])).replace('DEVICE',html.escape(report['metadata']['device'])).replace('ROWS',rows).replace('DATA',data)
     path.with_suffix('.html').write_text(page)
 
 def main():

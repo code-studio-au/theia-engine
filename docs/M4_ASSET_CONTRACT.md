@@ -633,6 +633,17 @@ are preserved. This is a fixed resident test representation, not dynamic LOD,
 independent world-chunk publication or general 3D simplification qualification.
 [Scope](SCENE_BENCHMARK.md#complete-resident-cooked-world).
 
+The cooked benchmark's optional debug resolve additionally binds its 256-byte
+work buffer at fragment storage binding 10. Camera rows remain bytes 0..64;
+completed timing/phase values occupy 64..96 and active bundle allocation/texture/
+publication metadata occupy 96..112. Queried device limits must support five
+fragment storage buffers and the 112-byte push range. The disabled path retains
+the original four storage bindings/64-byte range and does not load the HUD module.
+Scoped work-buffer barriers include fragment count reads and reuse. Per-frame
+`cooked` JSON metadata and CSV fields retain actual active allocation charges,
+texture count and publication/deferral totals. This does not read GPU counts back
+for scheduling, change any cooked file format or count pending resources as active.
+
 One/two-image alternating sets and source/table/framebuffer consistency pass
 local RX 7900 XTX validation/replay. Existing geometry-only streaming and fixed
 render modes remain separate. General GPU allocation reuse, geometry arenas for

@@ -1000,6 +1000,14 @@ impl Renderer {
                     "Selected device cannot support bounded benchmark work/mesh limits".into(),
                 );
             }
+            if options.benchmark_cooked
+                && options.benchmark_config().overlay
+                && (properties.limits.max_push_constants_size < 112
+                    || properties.limits.max_per_stage_descriptor_storage_buffers < 5
+                    || properties.limits.max_descriptor_set_storage_buffers < 5)
+            {
+                return Err("Cooked debug HUD requires 112 push bytes and five fragment storage buffers; use --benchmark-no-overlay on this device".into());
+            }
             // SAFETY: Vulkan's fixed device name is null terminated.
             let name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) }
                 .to_string_lossy()
@@ -1665,6 +1673,11 @@ impl Renderer {
             self.work.as_ref().map(|work| work.descriptor_layout),
             crate::visibility::ResolveBuffers {
                 benchmark: self.mode == RenderMode::Benchmark,
+                cooked_hud_work: self
+                    .benchmark
+                    .as_ref()
+                    .filter(|b| self.mode == RenderMode::AssetResolve && b.config.overlay)
+                    .map(|_| self.work.as_ref().unwrap().benchmark_descriptor()),
                 materials: self.materials.as_ref().map(|buffer| {
                     vk::DescriptorBufferInfo::default()
                         .buffer(buffer.handle)
@@ -1798,6 +1811,13 @@ impl Renderer {
         }
         self.tick_bundle(size)?;
         self.tick_texture_refinement(size)?;
+        let cooked_stats = (self.benchmark.is_some() && self.mode == RenderMode::AssetResolve)
+            .then(|| crate::benchmark::CookedStats {
+                bundle_bytes: self.bundle_resource_bytes(),
+                textures: self.textures.len() as u32,
+                publications: self.bundle_stream.as_ref().map_or(0, |s| s.publications),
+                deferrals: self.bundle_stream.as_ref().map_or(0, |s| s.rejections),
+            });
         let chain = self.chain.as_mut().unwrap();
         let ctx = &self.ctx;
         let device = ctx.device.as_ref().unwrap();
@@ -2026,20 +2046,30 @@ impl Renderer {
             let overlay = self
                 .benchmark
                 .as_ref()
-                .filter(|_| self.mode == RenderMode::Benchmark)
+                .filter(|b| self.mode == RenderMode::Benchmark || b.config.overlay)
                 .map(|b| {
-                    b.overlay(
+                    let base = b.overlay(
                         self.presented,
                         self.work.as_ref().unwrap().allocated_bytes
                             + chain.visibility.as_ref().unwrap().allocated_bytes(),
-                    )
+                    );
+                    let mut bytes = [0; 48];
+                    bytes[..32].copy_from_slice(&base);
+                    if let Some(stats) = cooked_stats {
+                        for (i, value) in stats.hud_words().iter().enumerate() {
+                            bytes[32 + i * 4..36 + i * 4].copy_from_slice(&value.to_ne_bytes());
+                        }
+                    }
+                    bytes
                 });
             if let Some(target) = &chain.visibility {
                 target.record_resolve(
                     ctx.command,
                     ctx.mesh_commands.as_ref().unwrap(),
                     camera_rows,
-                    overlay.as_ref(),
+                    overlay
+                        .as_ref()
+                        .map(|v| &v[..if cooked_stats.is_some() { 48 } else { 32 }]),
                 );
             } else if let Some(pipeline) = &chain.pipeline {
                 device.cmd_bind_pipeline(
@@ -2176,6 +2206,7 @@ impl Renderer {
                     [chain.extent.width, chain.extent.height],
                     self.work.as_ref().unwrap().allocated_bytes
                         + chain.visibility.as_ref().unwrap().allocated_bytes(),
+                    cooked_stats,
                 );
             }
             self.presented += u64::from(outcome.presented);

@@ -160,6 +160,7 @@ impl Drop for Image {
 }
 #[derive(Clone, Copy, Default)]
 pub struct ResolveBuffers {
+    pub cooked_hud_work: Option<vk::DescriptorBufferInfo>,
     pub benchmark: bool,
     pub materials: Option<vk::DescriptorBufferInfo>,
     pub uvs: Option<vk::DescriptorBufferInfo>,
@@ -193,6 +194,7 @@ pub struct Target {
     device: ash::Device,
     cooked: bool,
     benchmark: bool,
+    cooked_hud: bool,
     authored: bool,
     uv: bool,
     geometry: Option<(vk::Buffer, u64, u64)>,
@@ -271,6 +273,7 @@ impl Target {
             device: device.clone(),
             cooked,
             benchmark: buffers.benchmark,
+            cooked_hud: buffers.cooked_hud_work.is_some(),
             authored,
             uv,
             geometry: None,
@@ -352,6 +355,15 @@ impl Target {
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
+            if buffers.cooked_hud_work.is_some() {
+                bindings.push(
+                    vk::DescriptorSetLayoutBinding::default()
+                        .binding(10)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .descriptor_count(1)
+                        .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+                );
+            }
             let mut flags = vec![
                 vk::DescriptorBindingFlags::empty(),
                 vk::DescriptorBindingFlags::empty(),
@@ -371,6 +383,9 @@ impl Target {
                 flags.extend([vk::DescriptorBindingFlags::empty(); 2]);
             }
             if extra_storage.is_some() {
+                flags.push(vk::DescriptorBindingFlags::empty());
+            }
+            if buffers.cooked_hud_work.is_some() {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
             let mut binding_flags =
@@ -396,7 +411,8 @@ impl Target {
                         .descriptor_count(
                             1 + u32::from(authored)
                                 + u32::from(uv)
-                                + u32::from(extra_storage.is_some()),
+                                + u32::from(extra_storage.is_some())
+                                + u32::from(buffers.cooked_hud_work.is_some()),
                         ),
                 );
             }
@@ -506,6 +522,16 @@ impl Target {
                         .buffer_info(info),
                 );
             }
+            let cooked_work = buffers.cooked_hud_work.map(|v| [v]);
+            if let Some(info) = &cooked_work {
+                writes.push(
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(target.set)
+                        .dst_binding(10)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .buffer_info(info),
+                );
+            }
             device.update_descriptor_sets(&writes, &[]);
         }
         target.visibility = Some(if buffers.benchmark {
@@ -529,6 +555,7 @@ impl Target {
             shaders,
             target.layout,
             crate::pipeline::ResolveMode {
+                cooked_hud: buffers.cooked_hud_work.is_some(),
                 cooked,
                 authored,
                 uv,
@@ -578,7 +605,7 @@ impl Target {
         stage: vk::ShaderStageFlags,
         rows: [[f32; 4]; 4],
     ) {
-        // SAFETY: Sixteen contiguous f32 values occupy exactly the qualified 64-byte push range; command is recording.
+        // SAFETY: Sixteen contiguous f32 values occupy camera prefix bytes 0..64; command is recording.
         unsafe {
             self.device.cmd_push_constants(
                 command,
@@ -765,7 +792,7 @@ impl Target {
         command: vk::CommandBuffer,
         mesh: &ash::ext::mesh_shader::Device,
         rows: Option<[[f32; 4]; 4]>,
-        overlay: Option<&[u8; 32]>,
+        overlay: Option<&[u8]>,
     ) {
         let pipeline = self.resolve.as_ref().unwrap();
         // SAFETY: Called inside compatible swapchain dynamic rendering; descriptor images have been published.
@@ -775,7 +802,7 @@ impl Target {
                     command,
                     pipeline.layout,
                     vk::ShaderStageFlags::FRAGMENT,
-                    0,
+                    if self.cooked_hud { 64 } else { 0 },
                     bytes,
                 );
             }
