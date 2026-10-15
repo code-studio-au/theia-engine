@@ -71,6 +71,8 @@ def qualify(report):
             '--world-camera-slots',os.environ.get('THEIA_WORLD_SCENE_SLOTS','2'),'--world-camera-report',str(out/'camera.json')]
     if crowd is not None:args+=['--world-camera-crowd',str(crowd)]
     timed=os.environ.get('THEIA_WORLD_SCENE_TIMINGS')=='1'
+    overlay=os.environ.get('THEIA_WORLD_SCENE_HUD')=='1'
+    if overlay:args+=['--world-camera-hud']
     if timed:
         require(crowd is not None,'Timings require world crowd profile')
         args+=['--world-camera-timings',str(out/'timings.json'),'--world-camera-warmup',os.environ.get('THEIA_WORLD_SCENE_WARMUP','10')]
@@ -126,7 +128,7 @@ def qualify(report):
         from world_timing_reference import verify as verify_timings
         timing_proof=verify_timings(json.loads((out/'timings.json').read_bytes()),camera_report,scene,exe,frames,
             camera_report['route_frames'],int(os.environ.get('THEIA_WORLD_SCENE_WARMUP','10')),crowd,
-            json.loads(os.environ.get('THEIA_WORLD_SCENE_CAPS','[67108864,33554432,4194304]')))
+            json.loads(os.environ.get('THEIA_WORLD_SCENE_CAPS','[67108864,33554432,4194304]')),overlay)
     cap=rd.OpenCaptureFile();controller=None
     try:
         success(cap.OpenFile(capture,'',None));result,controller=cap.OpenCapture(rd.ReplayOptions(),None);success(result)
@@ -134,6 +136,10 @@ def qualify(report):
         draws=[a for a in actions if a.flags&rd.ActionFlags.MeshDispatch and a.flags&rd.ActionFlags.Indirect and not a.flags&rd.ActionFlags.MultiAction]
         indirect_calls=[a for a in actions if a.flags&rd.ActionFlags.PushMarker and a.flags&rd.ActionFlags.MultiAction and a.GetName(controller.GetStructuredFile()).startswith('vkCmdDrawMeshTasksIndirectCountEXT(')]
         require(len(indirect_calls)==4+int(crowd is not None),'Expected world/proxy indirect count calls')
+        resolve_draws=[a for a in actions if a.flags&rd.ActionFlags.MeshDispatch and not a.flags&rd.ActionFlags.Indirect and not a.flags&rd.ActionFlags.MultiAction]
+        require(len(resolve_draws)==1,'Missing final material resolve')
+        controller.SetFrameEvent(resolve_draws[0].eventId,True)
+        bound_images={v.descriptor.resource for v in controller.GetPipelineState().GetReadOnlyResources(rd.ShaderStage.Fragment)}
         present=next(a for a in actions if a.flags&rd.ActionFlags.Present)
         controller.SetFrameEvent(present.eventId,True)
         textures=controller.GetTextures();buffers=controller.GetBuffers()
@@ -144,16 +150,27 @@ def qualify(report):
             # refAllResources retains inactive allocation metadata, but RenderDoc
             # 1.46 does not save unused buffer initial contents. Check the exact
             # live inventory separately; payload/raster checks cover selected sets.
-            expected_buffers=Counter(len(blob) for model in inventory_models for blob in model[0])
-            expected_buffers[256]+=4
-            if crowd is not None:expected_buffers.update([40704,376160])
+            expected_storage=Counter(len(blob) for model in inventory_models for blob in model[0])
+            expected_storage[256]+=4
+            if crowd is not None:expected_storage.update([40704,376160])
+            expected_staging=Counter()
             for model in staging_models:
-                expected_buffers.update(len(blob) for blob in model[0])
-                expected_buffers.update(len(pixels) for pixels in model[3])
-            require(Counter(b.length for b in buffers)==expected_buffers,'Protected live buffer inventory differs')
+                expected_staging.update(len(blob) for blob in model[0])
+                expected_staging.update(len(pixels) for pixels in model[3])
+            if frame==0:
+                # RenderDoc frame zero also records startup copies already retired
+                # before presentation. Verify their exact separate inventory.
+                for model in inventory_models:
+                    expected_staging.update(len(blob) for blob in model[0])
+                    expected_staging.update(len(pixels) for pixels in model[3])
+                if crowd is not None:expected_staging[40704]+=1
+            require(Counter(b.length for b in buffers if b.creationFlags&rd.BufferCategory.ReadWrite)==expected_storage,
+                    'Protected storage buffer inventory differs')
+            require(Counter(b.length for b in buffers if not b.creationFlags&rd.BufferCategory.ReadWrite)==expected_staging,
+                    'Captured upload staging inventory differs')
         for model in models:
             for blob in model[0]:
-                require(any(bytes(controller.GetBufferData(b.resourceId,0,len(blob)))==blob for b in buffers if b.length==len(blob)),
+                require(any(bytes(controller.GetBufferData(b.resourceId,0,len(blob)))==blob for b in buffers if b.length==len(blob) and b.creationFlags&rd.BufferCategory.ReadWrite),
                         'World GPU root differs: %s (%d bytes)'%(hashlib.sha256(blob).hexdigest(),len(blob)))
         expected_images=sorted(p for model in models for p in model[3])
         images=[t for t in textures if (t.width,t.height)==(64,64)]
@@ -182,8 +199,8 @@ def qualify(report):
             visible.append(set(ids));expected.append((len(ids),sum(1<<i for i in ids),ids))
         require(sorted(actual)==sorted(expected),'World GPU compactions differ')
         require(len(draws)==sum(int(count>0) for count,_,_ in expected)+int(crowd is not None),'Indirect subdraw count differs from world/proxy compactions')
-        identity=next(t for t in textures if t.format.compType==rd.CompType.UInt and t.format.compCount==2)
-        depth=next(t for t in textures if t.format.compType==rd.CompType.Depth)
+        identity=next(t for t in textures if t.resourceId in bound_images and t.format.compType==rd.CompType.UInt and t.format.compCount==2)
+        depth=next(t for t in textures if t.resourceId in bound_images and t.format.compType==rd.CompType.Depth)
         identities=controller.GetTextureData(identity.resourceId,rd.Subresource())
         depths=controller.GetTextureData(depth.resourceId,rd.Subresource());rgb=controller.GetTextureData(color.resourceId,rd.Subresource())
         limits=[{i:sum(t[0]==i for t in model[1]) for i in range(1,len(model[2])+1)} for model in models]
@@ -211,13 +228,17 @@ def qualify(report):
                     x,y=[int((clip[a]/clip[3]+1)*.5*size) for a,size in enumerate((width,height))]
                     if 0<=x<width and 0<=y<height:probes.add((x,y))
         if proxies:
-            for _,center,_,_ in proxies['rays'][::max(1,len(proxies['rays'])//32)]:
+            for _,center,_,_ in sorted(proxies['rays'],key=lambda obj:obj[0])[::max(1,len(proxies['rays'])//32)]:
                 clip=[dot(row[:3],center)+row[3] for row in rows]
                 if clip[3]>0:
                     x,y=[int((clip[a]/clip[3]+1)*.5*size) for a,size in enumerate((width,height))]
                     if 0<=x<width and 0<=y<height:probes.add((x,y))
-        samples=[];materials=set();occlusion=[0]*4;boundaries=0;cross_occlusion=[0,0]
+        if proxies and crowd==10000 and camera_report['route_frames']==5 and frame%5==1:
+            # Keep the observed adjacent-D32 overlap as an explicit regression probe.
+            probes.add((493*width//960,215*height//540))
+        samples=[];materials=set();occlusion=[0]*4;boundaries=0;cross_occlusion=[0,0];depth_ambiguities=[]
         for x,y in sorted(probes):
+            if overlay and 12<=x<480 and 12<=y<300:continue
             hits=[ray(rows,model[1],x,y,width,height) for model in models]
             chunk=min(range(4),key=lambda i:hits[i][2]);ident,primitive,d,material,uv=hits[chunk]
             if sum(bool(h[0]) for h in hits)>1:occlusion[chunk]+=1
@@ -239,6 +260,12 @@ def qualify(report):
                     expected_rgb=[[encode(value) for value in crowd_reference.color_reference(proxy_id,primitive,d,3)]]
             if ident and (ident&0x80000000)==0:materials.add((chunk,material))
             pixel=y*width+x;actual=struct.unpack_from('<2I',identities,pixel*8)
+            stored_depth=struct.unpack_from('<f',depths,pixel*4)[0]
+            ambiguity=crowd_reference.adjacent_depth_hit(rows,proxies,actual,stored_depth,(ident,primitive,d),x,y,width,height) if proxies and actual!=(ident,primitive) else None
+            if ambiguity:
+                ambiguity['pixel']=[x,y];depth_ambiguities.append(ambiguity)
+                ident,primitive=ambiguity['identity'];d=ambiguity['depth']
+                expected_rgb=[[encode(value) for value in crowd_reference.color_reference(ident&0x7fffffff,primitive,d,3)]]
             require(actual==(ident,primitive) and abs(struct.unpack_from('<f',depths,pixel*4)[0]-d)<=2e-5,
                     'World ray/raster differs at %d,%d: %s vs %s'%(x,y,actual,(ident,primitive)))
             actual_rgb=list(rgb[pixel*4:pixel*4+3])
@@ -246,9 +273,12 @@ def qualify(report):
             require(any(all(abs(a-b)<=2 for a,b in zip(actual_rgb,candidate)) for candidate in expected_rgb),
                     'World array/material colour differs at %d,%d chunk=%s material=%s uv=%s id=%s: %s vs %s'%(x,y,chunk,material,uv,actual,actual_rgb,expected_rgb))
             samples.append(dict(pixel=[x,y],identity=actual,color=actual_rgb))
+        if overlay:
+            from world_hud_reference import verify as verify_hud
+            report.update(verify_hud(rgb,color,width,height,json.loads((out/'timings.json').read_bytes()),frame,expected,models,proxies['proof']))
         save=rd.TextureSave();save.resourceId=color.resourceId;save.destType=rd.FileType.PNG
         success(controller.SaveTexture(save,str(out/'preview.png')))
-        report.update(passed=True,timing_proof=timing_proof,crowd=proxies['proof'] if proxies else None,proxy_pixels=proxy_pixels,cross_occlusion_probes=cross_occlusion,capture=capture,view=view,frame=frame,retirement=retirement,camera=camera_report,camera_state=camera_state,pixels=populations,images=len(images),
+        report.update(passed=True,startup_staging_verified=frame==0,adjacent_d32_probes=depth_ambiguities,timing_proof=timing_proof,crowd=proxies['proof'] if proxies else None,proxy_pixels=proxy_pixels,cross_occlusion_probes=cross_occlusion,capture=capture,view=view,frame=frame,retirement=retirement,camera=camera_report,camera_state=camera_state,pixels=populations,images=len(images),
             protected_owners=bool(covered),selected_chunks=selected,root_buffers=len(inventory_models)*4,
             retained_inventory_verified=bool(covered),payload_scope="selected_graphs",
             compactions_verified=True,identity_depth_bounds_verified=True,sampled_materials=sorted(materials),

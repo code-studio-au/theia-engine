@@ -1,5 +1,5 @@
 // Tiny benchmark-only 5x7 debug font. General engine UI/text shaping stays separate.
-#ifndef THEIA_COOKED_HUD
+#if !defined(THEIA_COOKED_HUD) && !defined(THEIA_WORLD_HUD)
 struct Hud { uint4 perf; uint4 scene; };
 [[vk::push_constant]] ConstantBuffer<Hud> hud;
 #endif
@@ -65,7 +65,9 @@ uint hudDecimal(uint value,uint precision,uint col) {
     if(col<=n+precision)return 48+(value/hudPow(precision-(col-n)))%10;
     return 32;
 }
-#ifdef THEIA_COOKED_HUD
+#ifdef THEIA_WORLD_HUD
+#include "world_hud_characters.slang"
+#elif defined(THEIA_COOKED_HUD)
 static const uint cookedHudPrefixes[9][16]={
 {84,72,69,73,65,32,67,79,79,75,69,68,32,32,32,32},
 {70,80,83,32,32,32,32,32,32,32,32,32,32,32,32,32},

@@ -441,7 +441,7 @@ impl Scene {
             serde_json::json!({"frame":frame,"epoch":snapshot.world().epoch(),
             "selected":snapshot.selections().iter().map(|s|s.chunk).collect::<Vec<_>>(),
             "protected_epochs":(4..8).map(|id|snapshot.world().chunk(id).unwrap().epoch()).collect::<Vec<_>>(),
-            "owned_chunks":snapshot.world().chunk_count(),"cpu_unique_bytes":cpu.live_bytes(),
+            "owned_chunks":snapshot.world().chunk_count(),"selected_images":self.resources.iter().map(|s|s.images.len()).sum::<usize>(),"cpu_unique_bytes":cpu.live_bytes(),
             "physical_bytes":self.physical_bytes(),"image_bytes":self.resources.iter().map(|s|s.images.iter().map(|v|v.image.allocated_bytes).sum::<u64>()).sum::<u64>()+
                 self._protected.iter().flatten().map(Set::image_bytes).sum::<u64>(),
             "images":self.resources.iter().map(|s|s.images.len()).sum::<usize>()+self._protected.iter().flatten().map(|s|s.images.len()).sum::<usize>()}),
@@ -710,6 +710,7 @@ impl Scene {
             }
         }
         crate::visibility::SceneBuffers {
+            work: std::array::from_fn(|i| self.work[i].benchmark_descriptor()),
             geometry: std::array::from_fn(|i| self.work[i].geometry_descriptor()),
             materials: std::array::from_fn(|i| descriptor(&self.resources[i].materials)),
             uvs: std::array::from_fn(|i| descriptor(&self.resources[i].uvs)),

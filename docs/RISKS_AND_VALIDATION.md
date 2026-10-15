@@ -221,3 +221,14 @@ costs but not background worker CPU usage. FIFO/single-frame/instrumentation and
 small prevalidated content constrain interpretation. Report correctness does not
 prove production streaming throughput or networked-player capacity.
 [Metric scope](validation/M4_STREAMED_WORLD_TIMINGS.md).
+
+The streamed HUD qualifies an optional 21-storage/128-byte-push profile, retaining
+the prior world profile without HUD. It reads current GPU work counts but shows
+completed latency metrics; asset and draw memory exclude different allocations.
+The first replay exposed a truncated HUD payload despite zero validation errors,
+so glyph checks remain necessary. Dense overlapping proxies also exposed an
+adjacent-D32 ordering case: replay reports only validated proxy hits at the same
+or next depth code with exact stored/source agreement. It rejects wider gaps,
+foreign identities and wrong primitives; ordinary depth/colour limits remain.
+Frame-zero replay separates startup staging metadata and selects current targets
+from actual shader bindings. [Evidence and bounds](validation/M4_STREAMED_WORLD_HUD.md).

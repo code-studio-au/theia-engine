@@ -160,6 +160,7 @@ impl Drop for Image {
 }
 #[derive(Clone, Copy)]
 pub struct SceneBuffers {
+    pub work: [vk::DescriptorBufferInfo; 4],
     pub geometry: [vk::DescriptorBufferInfo; 4],
     pub materials: [vk::DescriptorBufferInfo; 4],
     pub uvs: [vk::DescriptorBufferInfo; 4],
@@ -184,6 +185,7 @@ pub struct WorldTextures {
 #[derive(Clone, Copy, Default)]
 pub struct ResolveBuffers {
     pub scene: Option<SceneBuffers>,
+    pub world_hud: bool,
     pub world_textures: Option<WorldTextures>,
     pub world_geometry: Option<(vk::DescriptorSetLayout, vk::DescriptorBufferInfo)>,
     pub proxy_work: Option<(vk::DescriptorSetLayout, vk::DescriptorBufferInfo)>,
@@ -226,6 +228,7 @@ pub struct Target {
     cooked: bool,
     benchmark: bool,
     cooked_hud: bool,
+    world_hud: bool,
     scene_offsets: Option<[u32; 4]>,
     authored: bool,
     uv: bool,
@@ -261,6 +264,9 @@ impl Target {
             );
         }
 
+        if buffers.world_hud && (buffers.scene.is_none() || buffers.proxy_work.is_none()) {
+            return Err("World HUD requires scene/proxy work owners".into());
+        }
         if let Some(world) = buffers.world_textures
             && (buffers.world_geometry.is_none()
                 || buffers.texture_table.is_none()
@@ -334,6 +340,7 @@ impl Target {
             cooked,
             benchmark: buffers.benchmark,
             cooked_hud: buffers.cooked_hud_work.is_some(),
+            world_hud: buffers.world_hud,
             scene_offsets: buffers.scene.map(|s| s.offsets),
             authored,
             uv,
@@ -416,16 +423,16 @@ impl Target {
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
-            if buffers.cooked_hud_work.is_some() {
+            if buffers.cooked_hud_work.is_some() || buffers.world_hud {
                 bindings.push(
                     vk::DescriptorSetLayoutBinding::default()
                         .binding(10)
                         .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                        .descriptor_count(1)
+                        .descriptor_count(if buffers.world_hud { 4 } else { 1 })
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
-            if buffers.proxy_work.is_some() && buffers.scene.is_none() {
+            if buffers.proxy_work.is_some() && (buffers.scene.is_none() || buffers.world_hud) {
                 bindings.push(
                     vk::DescriptorSetLayoutBinding::default()
                         .binding(11)
@@ -479,10 +486,10 @@ impl Target {
             if has_extra_storage {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
-            if buffers.cooked_hud_work.is_some() {
+            if buffers.cooked_hud_work.is_some() || buffers.world_hud {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
-            if buffers.proxy_work.is_some() && buffers.scene.is_none() {
+            if buffers.proxy_work.is_some() && (buffers.scene.is_none() || buffers.world_hud) {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
             if buffers.world_geometry.is_some() {
@@ -517,7 +524,7 @@ impl Target {
                     vk::DescriptorPoolSize::default()
                         .ty(vk::DescriptorType::STORAGE_BUFFER)
                         .descriptor_count(if buffers.scene.is_some() {
-                            16
+                            16 + if buffers.world_hud { 5 } else { 0 }
                         } else {
                             1 + u32::from(authored)
                                 + u32::from(uv)
@@ -649,7 +656,7 @@ impl Target {
             }
             let proxy_work = buffers
                 .proxy_work
-                .filter(|_| buffers.scene.is_none())
+                .filter(|_| buffers.scene.is_none() || buffers.world_hud)
                 .map(|(_, v)| [v]);
             if let Some(info) = &proxy_work {
                 writes.push(
@@ -701,6 +708,15 @@ impl Target {
                 );
             }
             if let Some(scene) = &buffers.scene {
+                if buffers.world_hud {
+                    writes.push(
+                        vk::WriteDescriptorSet::default()
+                            .dst_set(target.set)
+                            .dst_binding(10)
+                            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                            .buffer_info(&scene.work),
+                    );
+                }
                 for (binding, info) in [
                     (4, &scene.geometry),
                     (5, &scene.materials),
@@ -755,6 +771,7 @@ impl Target {
             target.layout,
             crate::pipeline::ResolveMode {
                 scene: buffers.scene.is_some(),
+                world_hud: buffers.world_hud,
                 world_pair: buffers.world_geometry.is_some(),
                 world_textures: buffers.world_textures.is_some(),
                 mixed: buffers.proxy_work.is_some(),
@@ -1075,7 +1092,13 @@ impl Target {
                     command,
                     pipeline.layout,
                     vk::ShaderStageFlags::FRAGMENT,
-                    if self.cooked_hud { 64 } else { 0 },
+                    if self.world_hud {
+                        80
+                    } else if self.cooked_hud {
+                        64
+                    } else {
+                        0
+                    },
                     bytes,
                 );
             }

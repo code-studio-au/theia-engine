@@ -4,6 +4,17 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 live streamed-world HUD — locally qualified (2026-10-15)
+
+An opt-in HUD now reads current world/proxy work counts directly on the GPU and
+shows completed timings with scoped memory/streaming metadata. Debug and release
+each pass 19 native cases; eight replays verify 45360 glyph pixels and 1084 scene
+probes, with one explicit adjacent-D32 proxy ordering check. Both shader profiles
+validate 52 modules; renderer 30 tests, three depth-oracle tests and Windows
+GNU/Wine checks pass. A 3660-frame headless release run records 3600 measured
+HUD-enabled samples. The older HUD and disabled-HUD routes remain qualified.
+[Legend, evidence and limits](validation/M4_STREAMED_WORLD_HUD.md).
+
 ## M4 streamed crowd frame timings — locally qualified (2026-10-15)
 
 The combined world/crowd route now records GPU frame stages and per-frame CPU

@@ -11,7 +11,7 @@ def failure_cases(args,out,runtime,scene):
     results=[]
     crowd=getattr(args,"crowd",None)
     crowd_flags=[] if crowd is None else ["--world-camera-crowd",str(crowd)]
-    resolve_shader="world.scene.resolve.frag.spv" if crowd is None else "world.crowd.resolve.frag.spv"
+    resolve_shader="world.scene.resolve.frag.spv" if crowd is None else "world.crowd.hud.resolve.frag.spv" if "--world-camera-hud" in getattr(args,"profile_flags",[]) else "world.crowd.resolve.frag.spv"
     for name in ('source-failure','generation-failure'):
         path=args.scene.resolve();extra=[];target=None
         if name=='source-failure':

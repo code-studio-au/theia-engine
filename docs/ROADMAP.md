@@ -527,3 +527,11 @@ stream counters and summary arithmetic; captures verify the corresponding pixels
 Next add a live HUD that reads the four world/proxy work counters directly on
 the GPU, using completed timing data and explicitly scoped memory labels.
 [Evidence](validation/M4_STREAMED_WORLD_TIMINGS.md).
+
+The live combined HUD now qualifies direct GPU meshlet/proxy/detail counters,
+completed timings and explicit asset/draw allocation scopes. Nineteen native
+cases, eight replays and a longer release run pass, including varied texture
+counts, pending data and frame-zero defaults. Next expose the streamed profile
+through the benchmark launcher/cooker for repeatable user runs, then continue
+independent per-view LOD, larger catalogs and virtualized-content gates.
+[Evidence](validation/M4_STREAMED_WORLD_HUD.md).

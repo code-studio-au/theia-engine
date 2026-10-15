@@ -1184,6 +1184,9 @@ impl Renderer {
                 );
             }
             if options.world_camera_timings.is_some() {
+                metadata["hud_fragment_storage_buffers"] =
+                    serde_json::json!(if options.world_camera_hud { 21 } else { 16 });
+                metadata["hud_scope"]="current GPU meshlet/proxy counts; completed timing samples; asset MiB includes current/pending/table, draw MiB is work/offscreen targets".into();
                 metadata["camera_route_frames"] = serde_json::json!(
                     options
                         .world_camera_period
@@ -1302,6 +1305,12 @@ impl Renderer {
                     "Camera crowd persistent ground allocation: {}",
                     serde_json::json!({"players":players,"encoded_bytes":bytes.len(),"physical_bytes":table.allocated_bytes,"world_graph_gpu_budget":world_gpu_budget,"aggregate_gpu_budget":options.bundle_gpu_budget.unwrap_or(32*1024*1024),"work_bytes_excluded":crate::benchmark::WORK_BYTES})
                 );
+            }
+            if options.world_camera_hud
+                && (limits.max_push_constants_size < 128
+                    || limits.max_per_stage_resources < crate::world_scene::MAX_IMAGES as u32 + 27)
+            {
+                return Err("Streamed HUD exceeds 128-byte push/resource limits".into());
             }
             renderer.scene = Some(crate::world_scene::Scene::load(
                 path,
@@ -2268,6 +2277,8 @@ impl Renderer {
                 .map(|work| work.descriptor_layout)
                 .or_else(|| self.scene.as_ref().map(|s| s.work[0].descriptor_layout)),
             crate::visibility::ResolveBuffers {
+                world_hud: self.scene.is_some()
+                    && self.benchmark.as_ref().is_some_and(|b| b.config.overlay),
                 scene: self
                     .scene
                     .as_ref()
@@ -2297,7 +2308,11 @@ impl Renderer {
                 cooked_hud_work: self
                     .benchmark
                     .as_ref()
-                    .filter(|b| self.mode == RenderMode::AssetResolve && b.config.overlay)
+                    .filter(|b| {
+                        self.mode == RenderMode::AssetResolve
+                            && b.config.overlay
+                            && self.scene.is_none()
+                    })
                     .map(|_| self.work.as_ref().unwrap().benchmark_descriptor()),
                 materials: self.materials.as_ref().map(|buffer| {
                     vk::DescriptorBufferInfo::default()
@@ -2747,6 +2762,26 @@ impl Renderer {
                     );
                     let mut bytes = [0; 48];
                     bytes[..32].copy_from_slice(&base);
+                    if let Some(stats) = &world_stats {
+                        let words = [
+                            ((stats["total_gpu_bytes"].as_u64().unwrap() as f64 / 1048576. * 1000.)
+                                .round()
+                                .clamp(0., u32::MAX as f64)) as u32,
+                            stats["selected_images"]
+                                .as_u64()
+                                .unwrap()
+                                .min(u32::MAX as u64) as u32,
+                            stats["publications"].as_u64().unwrap().min(u32::MAX as u64) as u32,
+                            stats["evictions"].as_u64().unwrap().min(u32::MAX as u64) as u32,
+                        ];
+                        for (i, word) in words.into_iter().enumerate() {
+                            bytes[32 + i * 4..36 + i * 4].copy_from_slice(&word.to_ne_bytes());
+                        }
+                        bytes[28..32].copy_from_slice(
+                            &(stats["deferrals"].as_u64().unwrap().min(u32::MAX as u64) as u32)
+                                .to_ne_bytes(),
+                        );
+                    }
                     if let Some(stats) = cooked_stats {
                         for (i, value) in stats.hud_words().iter().enumerate() {
                             bytes[32 + i * 4..36 + i * 4].copy_from_slice(&value.to_ne_bytes());
@@ -2759,9 +2794,13 @@ impl Renderer {
                     ctx.command,
                     ctx.mesh_commands.as_ref().unwrap(),
                     camera_rows,
-                    overlay
-                        .as_ref()
-                        .map(|v| &v[..if cooked_stats.is_some() { 48 } else { 32 }]),
+                    overlay.as_ref().map(|v| {
+                        &v[..if cooked_stats.is_some() || world_stats.is_some() {
+                            48
+                        } else {
+                            32
+                        }]
+                    }),
                 );
             } else if let Some(pipeline) = &chain.pipeline {
                 device.cmd_bind_pipeline(

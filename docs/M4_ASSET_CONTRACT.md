@@ -1264,3 +1264,13 @@ matching CPU selection/epoch and current/pending/fixed ledger. GPU stages cover
 frame compute/visibility/resolve, excluding earlier transfers and graphics
 retirement. Timing failure does not publish a completed report.
 [Clock, allocation and qualification scope](validation/M4_STREAMED_WORLD_TIMINGS.md).
+
+## Live streamed-world HUD
+
+`--world-camera-hud` requires streamed crowd timings and adds current GPU
+meshlet/proxy/detail counts plus completed timing and CPU-owned residency data.
+Selected texture bindings, asset bytes and draw bytes have distinct scopes. The
+optional profile binds 21 fragment storage descriptors and checks a 128-byte
+push range; other world profiles retain 16 descriptors. No extra persistent GPU
+buffer or work-sizing readback is added. The benchmark font is not engine UI.
+[Legend, binding/ABI and qualification](validation/M4_STREAMED_WORLD_HUD.md).

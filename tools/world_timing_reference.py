@@ -7,10 +7,10 @@ from world_camera_reference import Oracle,require
 def f32(value):return struct.unpack('<f',struct.pack('<f',value))[0]
 
 
-def verify(report,camera,scene,renderer,frames,period,warmup,players,caps):
+def verify(report,camera,scene,renderer,frames,period,warmup,players,caps,overlay=False):
     oracle=Oracle(scene,renderer);fixed=camera['fixed_gpu_bytes']
     require(report['schema']==1 and report['workload']=='theia-streamed-mmo-v1' and report['streaming'] and
-        not report['overlay'] and not report['authority'] and not report['skinned_animation'] and
+        report['overlay']==overlay and not report['authority'] and not report['skinned_animation'] and
         report['players']==players and report['frames']==frames and report['warmup_frames']==warmup and
         report['static_objects'] is None,'Wrong streamed timing scope/configuration')
     metadata=report['metadata']
@@ -19,6 +19,7 @@ def verify(report,camera,scene,renderer,frames,period,warmup,players,caps):
         metadata['image_gpu_budget']==caps[2] and metadata['work_requested_bytes']==377184 and
         'excludes upload' in metadata['gpu_timestamp_scope'] and 'starts at frame zero' in metadata['warmup_scope'],
         'Missing/wrong timing clock/allocation scope')
+    if 'hud_fragment_storage_buffers' in metadata:require(metadata['hud_fragment_storage_buffers']==(21 if overlay else 16),'HUD descriptor profile differs')
     oracle.verify(camera,frames,[caps[0],caps[1]-fixed,caps[2]])
     samples=report['samples'];require(len(samples)==frames,'Incomplete timing samples')
     previous=None;mutations=0;max_live=0
@@ -31,6 +32,9 @@ def verify(report,camera,scene,renderer,frames,period,warmup,players,caps):
         require(sample['frame_interval_ms']>0 and sample['tracked_image_and_work_allocation_bytes']>=377184,'Missing interval/owned allocation metric')
         require(abs(sample['gpu_total_ms']-sum(sample[k] for k in metrics[3:]))<1e-7,'GPU stage timings do not partition frame interval')
         state=sample['world'];fine=oracle.state(state,state['pending'],[caps[0],caps[1]-fixed,caps[2]])
+        if 'selected_images' in state:
+            require(state['selected_images']==sum(len(scene['quadrants' if value<4 else 'fallbacks'][i]['cook']['textures']) for i,value in enumerate(state['selected'])),'Selected texture binding count differs')
+        elif overlay:raise RuntimeError('HUD report is missing selected texture count')
         pending=state['pending'];pending_gpu=pending['pending_gpu_bytes'] if pending else 0
         require(state['frame']==frame and state['fixed_gpu_bytes']==fixed and state['total_gpu_bytes']==state['physical_bytes']+fixed+pending_gpu and
             state['total_gpu_bytes']<=caps[1] and state['route_cycle']==frame//period and

@@ -5,8 +5,17 @@
 [[vk::binding(7,0)]] Texture2D<float4> residentTextures[];
 [[vk::binding(8,0)]] SamplerState residentSampler;
 [[vk::binding(9,0)]] ByteAddressBuffer worldTables[4];
-struct SceneCamera { float4 row0; float4 row1; float4 row2; float4 row3; uint4 textureOffsets; };
+struct SceneCamera { float4 row0; float4 row1; float4 row2; float4 row3; uint4 textureOffsets;
+#ifdef THEIA_WORLD_HUD
+    uint4 hudPerf;uint4 hudScene;uint4 hudCounts;
+#endif
+};
 [[vk::push_constant]] ConstantBuffer<SceneCamera> sceneCamera;
+#ifdef THEIA_WORLD_HUD
+[[vk::binding(10,0)]] ByteAddressBuffer worldHudWork[4];
+[[vk::binding(11,0)]] ByteAddressBuffer mixedProxyWork;
+#include "benchmark_hud.slang"
+#endif
 uint worldByte(uint chunk,uint offset) { return (worldGeometry[NonUniformResourceIndex(chunk)].Load(offset&~3u)>>((offset&3u)*8))&255u; }
 bool reconstructWorldUV(float4 pixel, uint2 identity, uint chunk, out float2 result) {
     result=0;
@@ -47,6 +56,9 @@ bool reconstructWorldUV(float4 pixel, uint2 identity, uint chunk, out float2 res
 
 [shader("fragment")]
 float4 worldSceneResolve(float4 pixel : SV_Position) : SV_Target0 {
+#ifdef THEIA_WORLD_HUD
+    if(sceneCamera.hudPerf.w!=0 && pixel.x>=12 && pixel.x<480 && pixel.y>=12 && pixel.y<300)return hudPixel(uint2(pixel.xy));
+#endif
     uint2 identity=visibilityImage.Load(int3(uint2(pixel.xy),0));
 #ifdef THEIA_WORLD_CROWD
     if ((identity.x&0x80000000u)!=0) {

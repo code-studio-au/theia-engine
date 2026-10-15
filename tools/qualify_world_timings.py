@@ -12,9 +12,10 @@ from world_timing_reference import verify
 
 def qualify(args):
     out=args.output.resolve();out.mkdir(parents=True,exist_ok=True)
-    result=out/'report.json';report=dict(passed=False,native=[],captures=[],hud=False)
+    result=out/'report.json';report=dict(passed=False,native=[],captures=[],hud=getattr(args,'hud',False))
     result.write_text(json.dumps(report)+'\n')
     scene=json.loads(args.scene.read_bytes());exe=str(args.renderer.resolve())
+    hud=getattr(args,'hud',False);hud_flags=['--world-camera-hud'] if hud else []
     full=[237988,732544,524288];one=[166164,464592,327680];coarse=[142040,732544,524288]
     def caps_flags(caps):return sum(([flag,str(value)] for flag,value in zip(('--bundle-byte-budget','--bundle-gpu-budget','--texture-budget'),caps)),[])
     plans=[('full',10000,240,240,10,2,full,[]),('zero',0,240,240,10,2,full,[]),
@@ -29,18 +30,18 @@ def qualify(args):
                 timing=out/(name+'-timings.json');camera=out/(name+'-camera.json');log_path=out/(name+'.log')
                 command=['--world-camera-test',str(args.scene.resolve()),'--world-camera-crowd',str(players),
                     '--frames',str(frames),'--world-camera-period',str(period),'--world-camera-slots',str(slots),
-                    '--world-camera-report',str(camera),'--world-camera-timings',str(timing),'--world-camera-warmup',str(warmup),*caps_flags(caps),*extra]
+                    '--world-camera-report',str(camera),'--world-camera-timings',str(timing),'--world-camera-warmup',str(warmup),*hud_flags,*caps_flags(caps),*extra]
                 with log_path.open('w') as log:
                     proc=subprocess.run([exe,*command,'--gpu','7900'],env=runtime,stdout=log,stderr=subprocess.STDOUT,timeout=90)
                 text=log_path.read_text();require(proc.returncode==0 and 'VK_LAYER_KHRONOS_validation' in text and
                     'Validation totals (including teardown): 0 warnings, 0 errors' in text and 'Presented %d frames'%frames in text,name+' incomplete/unclean native run')
-                proof=verify(json.loads(timing.read_bytes()),json.loads(camera.read_bytes()),scene,args.renderer,frames,period,warmup,players,caps)
+                proof=verify(json.loads(timing.read_bytes()),json.loads(camera.read_bytes()),scene,args.renderer,frames,period,warmup,players,caps,hud)
                 report['native'].append(dict(case=name,proof=proof));print('Verified streamed world timings:',name,flush=True)
             # Fatal bootstrap must leave no completed timing file or false camera publication.
             timing=out/'failed-bootstrap.json';camera=out/'failed-bootstrap-camera.json';log_path=out/'failed-bootstrap.log'
             with log_path.open('w') as log:
                 proc=subprocess.run([exe,'--world-camera-test',str(args.scene.resolve()),'--world-camera-crowd','10000',
-                    '--world-camera-timings',str(timing),'--world-camera-report',str(camera),*caps_flags([full[0],375071,full[2]]),'--gpu','7900'],
+                    '--world-camera-timings',str(timing),'--world-camera-report',str(camera),*hud_flags,*caps_flags([full[0],375071,full[2]]),'--gpu','7900'],
                     env=runtime,stdout=log,stderr=subprocess.STDOUT,timeout=45)
             require(proc.returncode!=0 and not timing.exists() and not camera.exists() and
                 'Validation totals (including teardown): 0 warnings, 0 errors' in log_path.read_text(),'Failed bootstrap produced report/leaked resources')
@@ -55,18 +56,22 @@ def qualify(args):
                 proc=subprocess.run([exe,*flags],env=runtime,capture_output=True,text=True,timeout=10)
                 require(proc.returncode!=0 and 'Selected GPU:' not in proc.stdout,'Invalid timing plan reached Vulkan')
                 report['native'].append(dict(case=name,exit=proc.returncode))
-            args.crowd=10000;failed_report=out/'fatal-timings.json';args.profile_flags=['--world-camera-timings',str(failed_report)]
+            if hud:
+                proc=subprocess.run([exe,*primary,'--world-camera-hud'],env=runtime,capture_output=True,text=True,timeout=10)
+                require(proc.returncode!=0 and 'Selected GPU:' not in proc.stdout,'HUD without timings reached Vulkan')
+                report['native'].append(dict(case='hud-without-timings',exit=proc.returncode))
+            args.crowd=10000;failed_report=out/'fatal-timings.json';args.profile_flags=['--world-camera-timings',str(failed_report),*hud_flags]
             report['native']+=failure_cases(args,out,runtime,scene)
             require(not failed_report.exists(),'Fatal live source/generation failure completed timing report')
             if not args.native_only:
                 for name,players,frames,period,frame,warmup in [('full',10000,240,240,110,10),('repeated',10000,360,120,280,30),('zero',0,240,240,110,10)]:
                     output=out/('capture-'+name);output.mkdir(exist_ok=True)
                     env=replay.copy();env.update(THEIA_WORLD_SCENE_OUTPUT=str(output),THEIA_WORLD_SCENE=str(args.scene.resolve()),THEIA_WORLD_SCENE_CAMERA='1',
-                        THEIA_WORLD_SCENE_CROWD=str(players),THEIA_WORLD_SCENE_TIMINGS='1',THEIA_WORLD_SCENE_WARMUP=str(warmup),
+                        THEIA_WORLD_SCENE_CROWD=str(players),THEIA_WORLD_SCENE_HUD='1' if hud else '0',THEIA_WORLD_SCENE_TIMINGS='1',THEIA_WORLD_SCENE_WARMUP=str(warmup),
                         THEIA_WORLD_SCENE_FRAMES=str(frames),THEIA_WORLD_SCENE_PERIOD=str(period),THEIA_WORLD_SCENE_FRAME=str(frame),THEIA_WORLD_SCENE_CAPS=json.dumps(full))
                     with (output/'capture.log').open('w') as log:
                         subprocess.run([str(args.qrenderdoc.resolve()),'--python','tools/renderdoc_world_scene.py'],env=env,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=180)
-                    proof=json.loads((output/'report.json').read_bytes());require(proof['passed'] and proof['timing_proof']['samples']==frames,'Timed world replay failed/incomplete')
+                    proof=json.loads((output/'report.json').read_bytes());require(not hud or proof.get('overlay_verified'),'HUD pixels not checked');require(proof['passed'] and proof['timing_proof']['samples']==frames,'Timed world replay failed/incomplete')
                     report['captures'].append(dict(case=name,**proof));print('Verified timed world replay:',name,flush=True)
             report.update(passed=True,replay_qualified=not args.native_only,performance_target_claim=False)
     finally:result.write_text(json.dumps(report,indent=2)+'\n')
@@ -78,5 +83,6 @@ if __name__=='__main__':
     parser.add_argument('--renderer',type=Path,default=Path('apps/theia-render-lab/target/debug/theia-render-lab'))
     parser.add_argument('--qrenderdoc',type=Path,default=Path('build/qualification/renderdoc-tool/renderdoc_1.46/bin/qrenderdoc'))
     parser.add_argument('--headless-dri-prime',default='pci-0000_03_00_0')
+    parser.add_argument('--hud',action='store_true')
     parser.add_argument('--native-only',action='store_true')
     qualify(parser.parse_args())

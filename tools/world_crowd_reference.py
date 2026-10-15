@@ -43,7 +43,8 @@ def table_reference(blob,scene):
 
 
 def verify(controller,buffers,scene,selected,exe,players,frame,period,width,height):
-    work=[b for b in buffers if b.length==376160];tables=[b for b in buffers if b.length==40704]
+    import renderdoc as rd
+    work=[b for b in buffers if b.length==376160 and b.creationFlags&rd.BufferCategory.ReadWrite];tables=[b for b in buffers if b.length==40704 and b.creationFlags&rd.BufferCategory.ReadWrite]
     require(len(work)==len(tables)==1,'Missing proxy work/ground table')
     table_reference(bytes(controller.GetBufferData(tables[0].resourceId,0,40704)),scene)
     dynamic=controller.GetBufferData(work[0].resourceId,0,376160)
@@ -69,3 +70,23 @@ def verify(controller,buffers,scene,selected,exe,players,frame,period,width,heig
     require((count,near,far,visual)==(len(ids),sum(objects[i][3] for i in ids),sum(not objects[i][3] for i in ids),len(ids)),'Proxy GPU counters differ')
     return dict(objects=objects,visible=set(ids),rays=[objects[i] for i in ids],
         proof=dict(players=players,visible=count,near=near,far=far,max_motion_error=max_motion,max_ground_error=max_ground,ground_table_verified=True))
+
+
+def adjacent_depth_hit(rows,proxies,actual,stored_depth,expected,x,y,width,height):
+    """Resolve only proxy/proxy ambiguity at the same or adjacent D32 code.
+
+    The captured raster depth must exactly equal the independently intersected
+    actual surface after D32 conversion. Primitive, geometry membership and colour
+    remain checked; this never accepts a foreign ID, missed triangle or distant hit.
+    """
+    flag=0x80000000
+    if not actual[0]&flag or not expected[0]&flag or actual==expected[:2]:return None
+    ident=(actual[0]&~flag)-1
+    if ident not in proxies['visible']:return None
+    hit=pixel_reference(rows,[proxies['objects'][ident]],x,y,width,height)
+    if (hit[0]|flag,hit[1])!=actual:return None
+    def code(depth):return struct.unpack('<I',struct.pack('<f',depth))[0]
+    nearest,candidate,stored=map(code,(expected[2],hit[2],stored_depth))
+    if candidate-nearest not in (0,1) or stored!=candidate:return None
+    return dict(identity=actual,depth=hit[2],ideal_nearest=expected[:2],nearest_depth_code=nearest,
+        actual_source_depth_code=candidate,stored_depth_code=stored)
