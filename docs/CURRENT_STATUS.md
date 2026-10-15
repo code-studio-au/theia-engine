@@ -4,6 +4,16 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 protected CPU fallback coverage — locally qualified (2026-10-15)
+
+A bounded wrapper now owns complete coarse fallbacks and permits only fine-chunk
+publication/removal. Retained snapshots couple one complete representation per
+region to the same encoded-resource epoch; pending loads cannot select fine data.
+Distance demand uses committed fine IDs. Six new tests bring assets to 73; five
+687-sample real-bundle routes exactly match independent selection/epoch/byte
+models under full, tight, coarse-only and cancellation cases. CPU protection is
+not GPU readiness or runtime streaming. [Evidence](validation/M4_PROTECTED_CPU_COVERAGE.md).
+
 ## M4 edge-compatible quadrant fallback assets (2026-10-15)
 
 An optional offline recipe now cooks four coarse quadrant bundles retaining the

@@ -1115,3 +1115,26 @@ not a locked general LOD policy. No skirts or overlapping representations are us
 The existing four-resident fixture can draw any fixed selection. Protected coarse
 ownership, camera demand and fence-gated fine publication are not connected by
 this asset slice. [Qualification](validation/M4_CHUNK_FALLBACK_GEOMETRY.md).
+
+
+## Protected CPU fallback coverage
+
+`world_coverage::ProtectedWorld::new(world, regions)` consumes the general CPU
+store after complete coarse bootstrap. Region fine IDs/bounds and fallback IDs
+must be unique, all protected coarse graphs must be present, and every current
+ID must belong to a pair. Geometry equivalence/coverage remains an external asset
+qualification. The catalog admits 1..2048 regions within 4096 possible chunk IDs.
+
+`stage` shares the existing complete graph/unique-byte pool. `publish_fine` permits
+only configured fine IDs and delegates atomic transaction/epoch/slot checks;
+protected and unknown IDs fail before mutation. `snapshot` couples a retained
+world snapshot with exactly one fine-if-committed, otherwise-coarse selection per
+region. Coarse epochs remain fixed. `plan` applies distance demand to actual fine
+IDs, with coarse owners excluded from fine-policy slots/removals. Total store
+capacity and pending/reader bytes remain separate publication gates.
+
+This is CPU encoded ownership and selection only. GPU readiness, graphics reader
+retirement, descriptor construction and worker scheduling must precede any mirrored
+GPU/CPU publication; the wrapper cannot infer them. The real-fixture qualifier
+models budget rejection and reservation cancellation without GPU work.
+[Evidence](validation/M4_PROTECTED_CPU_COVERAGE.md).

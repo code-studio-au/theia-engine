@@ -99,6 +99,9 @@ impl Input {
 }
 fn main() -> Result<(), Box<dyn Error>> {
     let paths: Vec<_> = std::env::args().skip(1).collect();
+    if paths.first().is_some_and(|v| v == "--covered-route") {
+        return qualify_covered_route(&paths[1..]);
+    }
     if paths.first().is_some_and(|v| v == "--world-route") {
         return qualify_route(&paths[1..]);
     }
@@ -329,6 +332,122 @@ fn qualify_route(args: &[String]) -> Result<(), Box<dyn Error>> {
             store.snapshot().chunk_ids().collect::<Vec<_>>(),
             store.snapshot().epoch(),
             store.live_bytes()
+        );
+    }
+    Ok(())
+}
+
+fn qualify_covered_route(args: &[String]) -> Result<(), Box<dyn Error>> {
+    use theia_assets::world_coverage::{ProtectedWorld, Region};
+    if args.len() != 14 {
+        return Err("--covered-route needs <load> <retain> <fine-slots> <bytes> <cancel-period> <xy-route> <four coarse bundles> <four fine bundles>".into());
+    }
+    let policy = Policy {
+        load_radius: args[0].parse()?,
+        retain_radius: args[1].parse()?,
+        slots: args[2].parse()?,
+    };
+    if !(1..=4).contains(&policy.slots) {
+        return Err("covered route fine slots must be 1..4".into());
+    }
+    let cancel: usize = args[4].parse()?;
+    let inputs = args[6..]
+        .iter()
+        .map(|p| Input::load(Path::new(p)))
+        .collect::<Result<Vec<_>, _>>()?;
+    let regions = inputs[4..]
+        .iter()
+        .enumerate()
+        .map(|(id, input)| {
+            let mesh =
+                theia_assets::Mesh::decode(&input.roots[0], None, theia_assets::DEFAULT_BUDGET)?;
+            Ok(Region {
+                fine: ChunkBounds {
+                    id: id as u64,
+                    min: std::array::from_fn(|axis| {
+                        mesh.positions
+                            .iter()
+                            .map(|p| p[axis])
+                            .fold(f32::INFINITY, f32::min)
+                    }),
+                    max: std::array::from_fn(|axis| {
+                        mesh.positions
+                            .iter()
+                            .map(|p| p[axis])
+                            .fold(f32::NEG_INFINITY, f32::max)
+                    }),
+                },
+                fallback: id as u64 + 4,
+            })
+        })
+        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    let catalog = Catalog::new(&regions.iter().map(|r| r.fine).collect::<Vec<_>>())?;
+    let bytes = read(Path::new(&args[5]), 1024 * 1024)?;
+    let lines: Vec<_> = std::str::from_utf8(&bytes)?.lines().collect();
+    if lines.is_empty() || lines.len() > 4096 {
+        return Err("covered route needs 1..4096 XY samples".into());
+    }
+    let points = lines
+        .iter()
+        .map(|line| {
+            let values: Vec<f32> = line
+                .split_whitespace()
+                .map(str::parse)
+                .collect::<Result<_, _>>()?;
+            let point: [f32; 2] = values.try_into().map_err(|_| "route needs exactly XY")?;
+            catalog.plan(point, &[], policy)?;
+            Ok(point)
+        })
+        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    let mut world = WorldResidency::new(args[3].parse()?, 4 + policy.slots)?;
+    let staged = inputs[..4]
+        .iter()
+        .enumerate()
+        .map(|(i, input)| input.stage_world(&mut world).map(|s| (i as u64 + 4, s)))
+        .collect::<Result<Vec<_>, _>>()?;
+    world.publish(staged, &[])?;
+    let mut world = ProtectedWorld::new(world, &regions)?;
+    for (frame, eye) in points.iter().enumerate() {
+        let plan = world.plan(*eye, policy)?;
+        let (mut additions, mut rejected, mut cancelled) = (Vec::new(), Vec::new(), Vec::new());
+        for &id in &plan.loads {
+            let input = &inputs[id as usize + 4];
+            match world.stage(
+                &input.manifest,
+                content_id(&input.manifest),
+                std::array::from_fn(|i| input.roots[i].as_slice()),
+                &input.leaves.iter().map(Vec::as_slice).collect::<Vec<_>>(),
+            ) {
+                Err(_) => rejected.push(id),
+                Ok(staged) if cancel > 0 && frame % cancel == 0 => {
+                    drop(staged);
+                    cancelled.push(id);
+                }
+                Ok(staged) => additions.push((id, staged)),
+            }
+        }
+        let published: Vec<_> = additions.iter().map(|(id, _)| *id).collect();
+        if !additions.is_empty() || !plan.removals.is_empty() {
+            world.publish_fine(additions, &plan.removals)?;
+        }
+        let snapshot = world.snapshot();
+        println!(
+            "{{\"frame\":{frame},\"desired\":{:?},\"loads\":{:?},\"removals\":{:?},\"deferred\":{:?},\"published\":{:?},\"rejected\":{:?},\"cancelled\":{:?},\"resident\":{:?},\"selected\":{:?},\"epoch\":{},\"live_bytes\":{}}}",
+            plan.desired,
+            plan.loads,
+            plan.removals,
+            plan.deferred,
+            published,
+            rejected,
+            cancelled,
+            snapshot.world().chunk_ids().collect::<Vec<_>>(),
+            snapshot
+                .selections()
+                .iter()
+                .map(|s| s.chunk)
+                .collect::<Vec<_>>(),
+            snapshot.world().epoch(),
+            world.live_bytes()
         );
     }
     Ok(())

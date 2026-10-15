@@ -461,3 +461,11 @@ vertical error, full props/material preservation and native cooked admission are
 checked. Next connect protected fallback owners to committed fine residency;
 fixed resident selections alone do not provide camera-driven streaming or runtime
 LOD. [Evidence](validation/M4_CHUNK_FALLBACK_GEOMETRY.md).
+
+
+Protected CPU fallback ownership now wraps complete coarse bootstrap, forbids
+coarse mutation and selects fine data only from committed complete graphs.
+Five real-bundle routes qualify camera demand, reservations, tight/coarse-only
+capacity and retained coverage. Next mirror these owners/selections in fence-gated
+GPU generations, then connect runtime camera demand and the timed crowd route.
+[Evidence](validation/M4_PROTECTED_CPU_COVERAGE.md).
