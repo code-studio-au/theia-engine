@@ -159,6 +159,27 @@ completion before acting. The offline complete-bundle example executes only CPU
 transactions against a sufficient shared byte budget.
 [Evidence](validation/M4_WORLD_DEMAND.md).
 
+### Isolated independent GPU chunk-upload ownership probe
+
+Render Lab's `--world-upload-test <scene.json>` uses the four checked quadrant
+bundles in a bounded (1 MiB) offline scene manifest. It reuses existing complete
+v2 admission and buffer/image upload primitives, and the new shared CPU world
+owner. Each GPU chunk has independent buffer/image owners; encoded resource
+sharing does not imply GPU allocation sharing. The probe performs synchronous
+uploads with one pending complete set at a time, retiring every transfer fence
+before exposing a ready set. Only CPU metadata publication follows; no descriptors
+or graphics work refer to these chunks. Its three presented frames are clear-only.
+
+Physical caps count all completed active, ready and retained-reader buffer/image
+allocations plus the local pending reservation; images also have an independent
+cap. Staging, queries, targets, driver and container overhead are excluded.
+Cancellation and partial allocation failure retire submitted transfers before
+releasing source reservations. Removed chunks remain charged while a reader owns
+them. This private qualification owner is not a frame-loop streamer or a public
+GPU completion API. A rendering integration must additionally prove frame and
+descriptor retirement, fallback coverage and shared identity/depth/resolve.
+[Evidence](validation/M4_WORLD_UPLOAD_OWNERSHIP.md).
+
 ### Indexed bundle and multiple authored images
 
 THEIABND v2 retains the 176-byte four-root layout, replacing the final KTX2

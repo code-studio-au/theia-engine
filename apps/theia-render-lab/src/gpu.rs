@@ -929,6 +929,36 @@ impl Renderer {
         validation: Arc<Validation>,
     ) -> Result<Self> {
         let ctx = Context::new(window, options, validation)?;
+        if let Some(path) = &options.world_upload {
+            // SAFETY: Context owns the selected live physical device and instance.
+            let (memory, limits, image_limits) = unsafe {
+                let instance = ctx.instance.as_ref().unwrap();
+                (
+                    instance.get_physical_device_memory_properties(ctx.physical),
+                    instance.get_physical_device_properties(ctx.physical).limits,
+                    instance.get_physical_device_image_format_properties(
+                        ctx.physical,
+                        vk::Format::R8G8B8A8_SRGB,
+                        vk::ImageType::TYPE_2D,
+                        vk::ImageTiling::OPTIMAL,
+                        vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                        vk::ImageCreateFlags::empty(),
+                    )?,
+                )
+            };
+            crate::world_upload::qualify(
+                path,
+                crate::bundle_streaming::Gpu {
+                    device: ctx.device.as_ref().unwrap(),
+                    memory: &memory,
+                    family: ctx.graphics_family,
+                    queue: ctx.graphics,
+                    limits,
+                    image_limits,
+                },
+            )?;
+        }
+
         let mut renderer = Self {
             authority: if options.render_mode() == RenderMode::Authority {
                 Some(

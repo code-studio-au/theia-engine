@@ -405,3 +405,11 @@ priority and slot deferral. The actual benchmark camera plus spatial excursions
 qualify it against real quadrant bundles and independent publication/byte models.
 Next connect protected fallback coverage and fence-gated independent GPU owners;
 the policy alone does not stream or change the displayed mixed benchmark.
+
+
+A separate native GPU ownership probe now admits/uploads all four complete
+quadrants independently, qualifies aggregate/image short-cap cleanup and retains
+removed allocations until the last reader releases them. Its transfer fences
+retire synchronously and no chunk is drawn. Next connect independent chunk owners
+to shared visibility/depth/resolve and protect fallback coverage before camera
+requests can change rendered residency. Existing streamed/mixed paths stay intact.

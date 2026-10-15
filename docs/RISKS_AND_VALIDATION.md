@@ -135,3 +135,12 @@ The fixed coarse ground, diagnostic textures, two procedural proxy detail levels
 FIFO presentation and one frame in flight constrain timing interpretation.
 Independent chunk residency and representative geometry/texture LOD remain gates.
 [Evidence](validation/M4_SCENE_BENCHMARK.md#mixed-resident-village-and-crowd-2026-10-15).
+
+
+Independent CPU chunk publication and outdoor distance demand now have bounded
+oracle evidence. A separate four-chunk Vulkan upload probe qualifies physical
+ownership, retained readers and short-cap cleanup; it draws no chunk geometry.
+None of these results proves multi-chunk rendering, protected fallback coverage,
+asynchronous world demand scheduling or descriptor/frame retirement. Those gates
+must precede replacing the mixed benchmark's single resident representation.
+[Upload evidence](validation/M4_WORLD_UPLOAD_OWNERSHIP.md).

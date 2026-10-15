@@ -13,10 +13,10 @@ use theia_assets::{
     content_id,
 };
 
-struct Input {
-    manifest: Vec<u8>,
-    roots: [Vec<u8>; 4],
-    leaves: Vec<Vec<u8>>,
+pub(super) struct Input {
+    pub(super) manifest: Vec<u8>,
+    pub(super) roots: [Vec<u8>; 4],
+    pub(super) leaves: Vec<Vec<u8>>,
 }
 fn hex(id: [u8; 32]) -> String {
     id.iter().map(|v| format!("{v:02x}")).collect()
@@ -32,7 +32,7 @@ fn read(path: &Path, limit: usize) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 impl Input {
-    fn load(path: &Path) -> Result<Self> {
+    pub(super) fn load(path: &Path) -> Result<Self> {
         let manifest = read(path, BYTES)?;
         if path.file_stem().and_then(|v| v.to_str()) != Some(&hex(content_id(&manifest))) {
             return Err("Bundle stream manifest filename hash mismatch".into());

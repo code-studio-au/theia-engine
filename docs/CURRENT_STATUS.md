@@ -4,6 +4,18 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 independent GPU chunk-upload ownership — locally qualified (2026-10-15)
+
+An isolated Render Lab probe now uploads four independently owned complete cooked
+chunks: 16 root buffers and 16 images, 357472 physical bytes on RADV, including
+262144 image bytes. CPU owners deduplicate to 165148 encoded bytes. Transfer
+fences retire before publication; cancelled ready sets release, retained readers
+block physical reuse, and last-owner release permits an exact-budget replacement.
+One-byte-short aggregate and image caps retain the first three complete chunks
+when the fourth fails. This is a synchronous ownership probe with no chunk draws,
+GPU content readback or graphics readers. The mixed benchmark remains unchanged.
+[Evidence](validation/M4_WORLD_UPLOAD_OWNERSHIP.md).
+
 ## M4 bounded CPU chunk-distance demand — locally qualified (2026-10-15)
 
 A stateless outdoor XY-distance oracle now prioritizes bounded chunk demand from
