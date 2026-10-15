@@ -1,6 +1,6 @@
 # THEIA — CHARACTER ARCS AND MILESTONES
 
-**Status:** Oth'varen's overarching modern character arc is **creator-approved and locked (14 October 2026)**. Thes'var's full arc is also **creator-approved and locked**. Oth'varen, Thes'var, Su'vareth, Oma'vira and Khor'vun have approved overarching arcs. Vaer'uun, the First Voice, remains a **detailed proposal**, not yet locked canon. Their ancient histories, original roles, names, titles, transformation and loyalties remain established canon. Milestone placement, new encounters and character decisions require later approval.
+**Status:** Oth'varen and all five Corrupted Conclave founders have **creator-approved overarching character arcs** (14–15 October 2026). Their ancient histories, original roles, names, titles, transformations and loyalties remain established canon. Specific encounters, dialogue, outcomes and production details remain open unless separately approved.
 
 **Sources:** [Interwoven Chronicle](THEIA_INTERWOVEN_CHRONICLE.md) and [Modern Story and Revelation Timeline](THEIA_MODERN_STORY_REVELATION_TIMELINE.md). This is a player-facing development plan, not a replacement for the historical narrative.
 
@@ -43,20 +43,62 @@
 
 The five are not interchangeable bosses. Each should pursue Nhal's purpose through an established scholarly talent and a personal interpretation of what the catastrophe meant. Their extraordinary longevity makes them recurring antagonists; they remain vulnerable and not divine. The Conclave formed after The Binding, and Nhal's voice returned only after the Major Anchor network crossed the critical resonance threshold.
 
-### Vaer'uun, the First Voice — authority without certainty
+### Vaer'uun, the First Voice — the burden of authority
 
-**Historical foundation:** The principal resonance and communication scholar; after the Binding, he claimed the right to interpret Nhal's remembered purpose.
+**Status: creator-approved and locked (15 October 2026).** The overarching character arc and eight milestones are approved. Exact dialogue, missions, confrontation and ultimate fate remain open.
 
-**Core conflict:** His authority was most secure when no one could test it against a fresh message. The return of Nhal's selective whispers vindicates him publicly but may expose differences between his own centuries of doctrine and what Nhal now directs.
+**Core movement:** The brilliant scholar who coordinated resonance and communication research became the interpreter of Nhal's remembered will during the Age of Silence. He held the Conclave together for centuries, but the return of Nhal's voice challenges whether his authority reflects his master's purpose or his own need to be obeyed.
 
-**Proposed milestones:**
-1. His teachings appear as fragments within apparently unrelated Unmade cells; early followers dispute their meaning.
-2. The player uncovers contradictory instructions issued in his name across generations, showing how silence changed doctrine.
-3. An inner Conclave directive reveals his attempt to reconcile inherited interpretation with Nhal's newly returned guidance.
-4. He authorises increasingly dangerous network operations to prove that his authority remains indispensable.
-5. A major confrontation forces a choice between preserving his position and obeying an instruction that undermines it. **His response remains to be decided.**
+#### Before the First Anchor
 
-**Player-facing role:** The voice of ideological certainty, not merely a spellcaster who speaks for Nhal. His weakness is the difference between faith, interpretation and authority.
+Vaer'uun was the principal scholar of resonance and communication, capable of coordinating researchers across the six disciplines. His work required identifying a recipient, maintaining a stable channel and distinguishing a meaningful response from interference. He was persuasive, capable and respected, including by Oth'varen.
+
+As the hidden influence behind the experiments became apparent, Vaer'uun interpreted it as a discovery beyond the gods' knowledge. His confidence hardened into certainty; objections became threats to the undertaking. He justified concealed alterations and rejected Oth'varen's plea to halt activation, believing hesitation itself a betrayal of the work.
+
+#### Divine War and Binding
+
+The rupture transformed Vaer'uun and allowed Nhal's whispers to reach willing followers more clearly. He helped coordinate Unmade activity during the Divine War while Su'vareth cultivated networks of influence. At The Binding, reliable communication vanished. The Unmade turned to the five transformed scholars, and Vaer'uun assumed responsibility for interpreting remembered instructions.
+
+His earliest interpretations may have been sincere efforts to preserve purpose, but over generations his authority came to depend on their acceptance. Doctrine and leadership became difficult for ordinary followers to distinguish from Nhal's will.
+
+#### Leadership during the Age of Silence
+
+Vaer'uun kept the Conclave's different pursuits aligned. Thes'var's Anchor research required resources and protection; Su'vareth's networks supplied them; Oma'vira maintained recruitment and conditioning; Khor'vun secured strongholds and installations. Vaer'uun established priorities, allocated resources and mediated disagreements. His leadership helped preserve a coordinated organisation rather than five isolated endeavours.
+
+The successful Major Anchor network restored Nhal's selective whispers. Vaer'uun initially treated this as vindication of his centuries of leadership. Yet as instructions became more specific, some could challenge doctrines and priorities he had established. His defining question is whether he can acknowledge that his interpretation was incomplete.
+
+#### Modern personality and relationships
+
+Commanding, persuasive, intellectually formidable, strategically patient, proud and controlling. He believes his judgement is uniquely suited to expressing Nhal's purpose; his flaw is confusing certainty with truth.
+
+- **Thes'var, the Architect:** Values his achievements but fears technical ambition can divert the organisation.
+- **Su'vareth, the Veiled Hand:** Depends on her intelligence while knowing she controls information he cannot independently verify.
+- **Oma'vira, the Harbinger:** Competes over interpretation: remembered instruction and authority versus devotion and altered consciousness.
+- **Khor'vun, the Warden:** Relies on his enforcement and defence, but must give orders that remain practical and coherent.
+- **Oth'varen:** Regards the sixth scholar's refusal as a profound betrayal of the research team; their former mutual respect makes the conflict personal.
+
+#### Eight modern milestones
+
+1. **The Unseen Authority — opening.** Separate Unmade cells act upon recurring directives that suggest a central leader without identifying him.
+2. **The First Voice — early investigation.** Orders and testimony reveal a title uniting otherwise disparate Unmade operations.
+3. **The Doctrine of Silence — historical investigation.** Evidence shows the organisation persisted for centuries without dependable communication from its patron, sustained by Vaer'uun's interpretations.
+4. **The Sixth Scholar's Accusation — Oth'varen revelation.** Oth'varen identifies Vaer'uun as the original research leader who refused to stop activation.
+5. **The Voice Returns — Major Anchor revelation.** The network's restoration of Nhal's selective communication initially strengthens Vaer'uun's standing.
+6. **The Contradiction — internal Conclave conflict.** A renewed instruction appears inconsistent with established doctrine or strategy; Vaer'uun struggles to reconcile the two without admitting error.
+7. **The Authority of the First Voice — major confrontation.** Players exploit tensions around conflicting directives to disrupt an operation requiring unified Conclave leadership.
+8. **The Voice and the Will — later campaigns.** Clearer communications increasingly expose the distinction between Nhal's purpose and Vaer'uun's personal authority; his response remains undecided.
+
+#### Defining confrontation and major encounter
+
+Oth'varen confronts Vaer'uun with the distinction between extraordinary understanding and the right to endanger others. Vaer'uun accuses Oth'varen of betraying their greatest opportunity; Oth'varen challenges the leadership that elevated certainty above truth.
+
+Reserve Vaer'uun for a major encounter involving coordination, resonance and Mind workings, not an early generic boss. Players may disrupt the systems through which he directs Unmade forces, forcing retreat or abandonment of an objective without necessarily killing him.
+
+#### Long-term possibility
+
+Nhal may eventually show that its purpose does not depend upon the Conclave's survival or Vaer'uun's authority. This should challenge rather than automatically redeem him. Denial, fanaticism, resistance or another response remains open.
+
+**Character-defining principle:** Vaer'uun's strength kept the Conclave united through silence; his weakness is the inability to separate serving a purpose from preserving his own power.
 
 ### Thes'var, the Architect — the unfinished masterpiece
 
