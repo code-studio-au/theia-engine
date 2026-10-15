@@ -207,4 +207,10 @@ Travel should advance character relationships, cultural understanding and meanin
 
 **Mara Thorne** is a methodical senior Royal Investigator who verifies evidence and becomes the player's recurring ally. The human Act I investigation culminates around level 20 in a challenge to Cassian through the King's lawful authority, without revealing the complete conspiracy or ending the war.
 
-The Royal Marshal, Regional Warden, Covenant High Ruler, royal family details and exact quest staging remain open.
+**Garrick Ashford**, the human Royal Marshal, is a veteran career commander whose loyalty is to the kingdom and the soldiers he leads. He opposed the Shattered Delegation negotiations on strategic grounds but had no involvement in the attack. He respects Edric's integrity, mistrusts Cassian's selective use of military intelligence, and becomes a recurring military contact for overseas expeditions and later Shroud operations.
+
+**Elara Fenwick**, a respected rural militia captain and Regional Warden, is the human player's first major mentor. She knows the starting district's people and problems, guides the player through local responsibilities and recognises when recovered royal correspondence requires Mara's investigation. She continues to represent the effect of larger events on the player's home region throughout the campaign.
+
+**Corven Vaelmont** is Covenant's hereditary **High Ruler**, from a separate branch of the human royal dynasty and a distant relation of Aldren. He governs the four-sovereign alliance from its multicultural coastal capital, not the human inland capital. A capable negotiator, he balances human, dwarven, Aelari and Korrath obligations. His caution may delay action. He becomes important in the alliance's overseas war, Shroud expedition and response to the Anchor network. His stronger support for the original peace negotiations than Aldren's remains a possible relationship detail, not a fixed event.
+
+These three character names, roles, histories and broad arcs are creator-approved. Exact quest staging, the royal family's other members and succession arrangements remain open.
