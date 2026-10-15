@@ -161,3 +161,9 @@ current sets under short capacity. It still rebuilds/retire graphics conservativ
 and uses a fixed frame schedule. Spatial coverage, camera-driven request priority,
 four-chunk composition, GPU allocator reuse and native Windows GPU remain gates.
 [Evidence](validation/M4_WORLD_CHUNK_STREAMING.md).
+
+
+Nonuniform storage descriptor arrays now have a small opt-in compute correctness
+gate on RADV. It does not establish fragment/mesh compiler behavior, many-buffer
+performance, four-chunk rendering or broader vendor/Windows GPU support. Normal
+modes request their prior feature set. [Evidence](validation/M4_STORAGE_DESCRIPTOR_ARRAYS.md).

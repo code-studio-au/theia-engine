@@ -253,7 +253,11 @@ impl Context {
                 options.render_mode(),
                 RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
             ),
-            (options.texture_auto_mips, options.texture_linear_filter),
+            (
+                options.texture_auto_mips,
+                options.texture_linear_filter,
+                options.world_descriptor_test,
+            ),
         )?;
         // SAFETY: Features were queried on the selected device; all queue indices support the intended
         // operations. Create-info backing storage remains live and handles immediately gain RAII ownership.
@@ -284,7 +288,8 @@ impl Context {
                 .buffer_device_address(true)
                 .runtime_descriptor_array(true)
                 .descriptor_binding_partially_bound(true)
-                .shader_sampled_image_array_non_uniform_indexing(true);
+                .shader_sampled_image_array_non_uniform_indexing(true)
+                .shader_storage_buffer_array_non_uniform_indexing(options.world_descriptor_test);
             let mut v13 = vk::PhysicalDeviceVulkan13Features::default()
                 .dynamic_rendering(true)
                 .synchronization2(true);
@@ -294,7 +299,8 @@ impl Context {
             let mut maintenance = vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
                 .swapchain_maintenance1(true);
             let core_features = vk::PhysicalDeviceFeatures::default()
-                .fragment_stores_and_atomics(options.texture_auto_mips);
+                .fragment_stores_and_atomics(options.texture_auto_mips)
+                .shader_storage_buffer_array_dynamic_indexing(options.world_descriptor_test);
             self.device = Some(
                 instance.create_device(
                     self.physical,
@@ -340,9 +346,9 @@ impl Context {
         visibility: bool,
         asset: bool,
         cull: bool,
-        texture_profile: (bool, bool),
+        texture_profile: (bool, bool, bool),
     ) -> Result<()> {
-        let (footprint, linear_filter) = texture_profile;
+        let (footprint, linear_filter, storage_arrays) = texture_profile;
         let instance = self.instance.as_ref().unwrap();
         let surface = self.surface_loader.as_ref().unwrap();
         let mut candidates = Vec::new();
@@ -370,6 +376,10 @@ impl Context {
                     .push_next(&mut mesh)
                     .push_next(&mut maintenance);
                 instance.get_physical_device_features2(physical, &mut features);
+                let storage_dynamic = features
+                    .features
+                    .shader_storage_buffer_array_dynamic_indexing
+                    == vk::TRUE;
                 let fragment_stores = features.features.fragment_stores_and_atomics == vk::TRUE;
                 let extensions = instance.enumerate_device_extension_properties(physical)?;
                 let visibility_formats = !visibility
@@ -471,6 +481,18 @@ impl Context {
                                 && properties.limits.max_compute_work_group_size[0] >= 64
                                 && properties.limits.max_compute_shared_memory_size >= 524
                                 && properties.limits.max_storage_buffer_range >= 9728),
+                    ),
+                    (
+                        "optional storage-array probe requirements",
+                        !storage_arrays
+                            || (storage_dynamic
+                                && v12.shader_storage_buffer_array_non_uniform_indexing
+                                    == vk::TRUE
+                                && properties.limits.max_per_stage_descriptor_storage_buffers >= 5
+                                && properties.limits.max_descriptor_set_storage_buffers >= 5
+                                && properties.limits.max_storage_buffer_range >= 256
+                                && properties.limits.max_compute_work_group_invocations >= 64
+                                && properties.limits.max_compute_work_group_size[0] >= 64),
                     ),
                     ("dynamicRendering", v13.dynamic_rendering == vk::TRUE),
                     (
@@ -966,6 +988,28 @@ impl Renderer {
                     limits,
                     image_limits,
                 },
+            )?;
+        }
+
+        if options.world_descriptor_test {
+            // SAFETY: Context retains the selected physical device and instance.
+            let (memory, limits) = unsafe {
+                let instance = ctx.instance.as_ref().unwrap();
+                (
+                    instance.get_physical_device_memory_properties(ctx.physical),
+                    instance.get_physical_device_properties(ctx.physical).limits,
+                )
+            };
+            let shaders = options.shader_dir.clone().unwrap_or_else(|| {
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/shaders")
+            });
+            crate::world_descriptors::qualify(
+                ctx.device.as_ref().unwrap(),
+                &memory,
+                ctx.graphics_family,
+                ctx.graphics,
+                &shaders,
+                limits,
             )?;
         }
 

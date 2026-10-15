@@ -4,6 +4,18 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 optional storage-descriptor array compute gate — locally qualified (2026-10-15)
+
+An isolated opt-in probe now requires/enables uniform/nonuniform storage-buffer
+array indexing only for that test. Slang's runtime-array capabilities/decorations
+validate, and divergent lanes read four independently bound buffers correctly:
+64 checked GPU values with zero native validation diagnostics. Six plans cover
+both shader profiles, missing-module cleanup, normal rendering without the probe
+and pre-Vulkan mode conflicts. Both profiles validate 46 modules; renderer 28
+tests, Clippy and Windows GNU/Wine qualification pass. This qualifies compute
+access only; four-chunk fragment composition is the next gate, not implemented
+by this probe. [Evidence](validation/M4_STORAGE_DESCRIPTOR_ARRAYS.md).
+
 ## M4 independent complete-chunk replacement — locally qualified (2026-10-15)
 
 The resident pair can now keep chunk 0 fixed while one bounded I/O worker and GPU

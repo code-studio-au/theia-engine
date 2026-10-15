@@ -437,3 +437,10 @@ short capacity and fence-gated descriptor/CPU publication. Four/two-image array
 transitions and 65 successive publications qualify locally. Next expand bounded
 complete-world composition and spatial fallback coverage before connecting the
 camera-distance oracle to runtime requests. The timed crowd route stays separate.
+
+
+A separate optional storage-descriptor-array compute gate now passes 64 divergent
+GPU reads from four bound buffers. Additional indexing features are opt-in and
+leave existing modes unchanged. Next qualify fragment access and bounded
+four-chunk composition; advertised feature/limit support is not rendering or
+performance evidence. [Gate](validation/M4_STORAGE_DESCRIPTOR_ARRAYS.md).

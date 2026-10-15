@@ -275,6 +275,26 @@ still prevent overshoot. No renderer scheduling reads GPU counts back.
 Camera demand, spatial fallback coverage, four-chunk composition, proxies and the
 timed crowd route remain separate. [Evidence](validation/M4_WORLD_CHUNK_STREAMING.md).
 
+### Optional nonuniform storage-descriptor array compute gate
+
+`--world-descriptor-test` is a separate three-frame clear-only qualification. It
+requires and enables core `shaderStorageBufferArrayDynamicIndexing` and Vulkan
+1.2 `shaderStorageBufferArrayNonUniformIndexing` only for that opt-in test; normal
+profiles retain their prior feature requests. Existing runtime-descriptor-array
+support plus queried compute/storage limits are checked before device creation.
+
+One compute workgroup has 64 divergent invocations select among four independently
+uploaded 16-byte buffers and vary the word offset. A fixed transposed literal
+pattern checks all 64 output values after explicit shader-to-host publication,
+fence retirement and coherent mapping. The sentinel-to-compute barrier covers
+both read/write access declared by `RWByteAddressBuffer`. RAII retires submitted
+commands before freeing pipelines/descriptors/buffers on success or failure.
+
+This is a correctness gate for future bounded multi-chunk binding, not a new
+production GPU requirement or binding-policy approval. Fragment/mesh integration,
+four-world-chunk rendering and performance remain separate qualifications.
+[Evidence](validation/M4_STORAGE_DESCRIPTOR_ARRAYS.md).
+
 ### Indexed bundle and multiple authored images
 
 THEIABND v2 retains the 176-byte four-root layout, replacing the final KTX2
