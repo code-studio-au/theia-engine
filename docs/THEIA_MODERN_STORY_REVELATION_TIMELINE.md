@@ -196,3 +196,15 @@ Every character also undertakes **several major expeditions to the opposing cont
 **World PvP and Shroud WvW are distinct.** Earlier enemy-continent visits introduce the ordinary Covenant–Dominion war and possible open-world PvP. Around level 40, the Shroud introduces a dedicated large-scale WvW frontier with territorial and supply objectives. Required story missions on either continent and within the Shroud must remain solo-accessible without mandatory PvP victories; protected approaches or story instances can support this. WvW participation remains optional for completing the main narrative.
 
 Travel should advance character relationships, cultural understanding and meaningful discoveries, not consist solely of courier errands. Allied capitals must feel like sovereign racial centres, separate from the multicultural alliance capital. These are approved structural principles; specific routes, quests, encounter designs and level placements are not yet locked.
+
+## Approved human royal court characters (15 October 2026)
+
+**King Aldren Vaelmont** rules the human kingdom, separately from Covenant's High Ruler. His grief over the Shattered Delegation and the death of his trusted counsellor has deepened his distrust of Dominion, though he remains a capable ruler who once supported negotiations.
+
+**Lord Edric Halewyn**, the former First Royal Counsellor, was Aldren's trusted confidant and a pragmatic advocate of peace. He died in the Shattered Delegation. His correspondence and former colleagues inform the later investigation.
+
+**Lord Cassian Veyr**, the current First Royal Counsellor, is a competent administrator who knowingly helped intermediaries connected to the Veiled Hand compromise the delegation to eliminate Edric and gain his office. He did not know the full Unmade plan. His contacts retain leverage over him, and he initially appears helpful to the player.
+
+**Mara Thorne** is a methodical senior Royal Investigator who verifies evidence and becomes the player's recurring ally. The human Act I investigation culminates around level 20 in a challenge to Cassian through the King's lawful authority, without revealing the complete conspiracy or ending the war.
+
+The Royal Marshal, Regional Warden, Covenant High Ruler, royal family details and exact quest staging remain open.
