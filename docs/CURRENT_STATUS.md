@@ -4,6 +4,22 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 mixed resident village and crowd — independently executed (2026-10-15)
+
+The complete cooked village and 0..10000 GPU visual proxies now share visibility,
+depth and deferred resolve. Two fixed indirect draws retain separate GPU work
+arenas; the live panel adds visible/total proxies and near/far counts. Eight
+240-frame native Wayland cases pass zero diagnostics, and nine mixed RenderDoc
+captures pass all proxy records, both compactions, identity/depth, 439 independent
+ray/colour probes and 15575 HUD glyph pixels. Preserved cooked/procedural replay
+regressions pass. Renderer 28 tests, offline Python 31 tests, denied-warning Clippy,
+both 41-module shader interfaces and Windows GNU/Wine qualification pass.
+The fixed resident ground is coarse; proxies have no navigation, collision,
+skinning or gameplay authority. Independent world-chunk residency, representative
+art/LOD/mips and remaining M4 gates stay open.
+[Usage](SCENE_BENCHMARK.md#mixed-resident-world-and-visual-proxies),
+[evidence](validation/M4_SCENE_BENCHMARK.md#mixed-resident-village-and-crowd-2026-10-15).
+
 ## M4 cooked benchmark live stats — independently executed (2026-10-15)
 
 Cooked quadrants and the complete resident world now have an optional live panel:

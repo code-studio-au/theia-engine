@@ -350,3 +350,43 @@ replace the planned general UI/text system.
 The cooked qualifier now includes resident, successful-publication and short-budget
 deferral glyph checks, plus the original procedural HUD replay and both disabled
 paths. Its `--whole-world` selection verifies the complete resident scene panel.
+
+## Mixed resident world and visual proxies
+
+The complete cooked village can now render alongside **0..10000 moving visual
+proxies**, with shared visibility/depth and a combined stats panel. After cooking
+`scene.json` with `--whole-world`, run from the repository root:
+
+```sh
+python3 tools/run_scene_benchmark.py \
+  --cooked-scene build/qualification/resident-world-cook/scene.json \
+  --whole-world --mixed-world --players 10000 --frames 9000 --warmup 60 \
+  --slangc /home/steven/dev/tools/slang/bin/slangc
+```
+
+Use your actual cooked manifest and compiler paths. `--skip-build --profile release`
+reuses matching binaries/modules; `--headless` runs the same route in the private
+display. `--validation` enables validation and `--no-overlay` disables the panel.
+Reports identify workload `theia-cooked-mmo-v1`, include cooked allocation metadata,
+population and provenance, and export JSON/CSV/HTML. Multiple populations run
+sequentially. Direct Render Lab uses `--benchmark-mixed --bundle <indexed-bundle>`
+and `--benchmark-players N`; other primary benchmark modes and bundle replacement
+are rejected in this first resident slice.
+
+The immutable 28-meshlet village and GPU-generated crowd use two fixed indirect
+mesh/task draws and separate 256-byte/376160-byte work arenas. Both write one
+visibility/depth target, so buildings and proxies occlude one another. Identity
+bit 31 distinguishes frame-local proxy IDs from cooked meshlet IDs; it does not
+change the asset format or create persistent entity handles. Resolve uses five
+fragment storage buffers without the HUD, six with it, and 64/112-byte push data;
+proxy compute uses 96 bytes. Device limits are checked before creating pipelines.
+The eleven-line HUD adds GPU visible/total proxies and near/far counts to cooked
+stats. DRAW includes both work arenas and tracked targets; BUNDLE is the active
+bundle allocation charge. Neither is total VRAM usage.
+
+Proxy bases follow the resident world's 16-unit triangular ground interpolation.
+The world uses a fixed, error-checked coarse mesh, not dynamic terrain LOD. Proxy
+near/far detail remains the procedural 35-unit rule. There is no world collision,
+navigation, skinning, networking or authority: proxies can pass through buildings.
+The resident checker-texture village is a correctness fixture, not representative
+production art, lighting, texture filtering or independent chunk residency.

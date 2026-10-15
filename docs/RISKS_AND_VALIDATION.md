@@ -126,3 +126,12 @@ frames/replay while the desktop display remains off. Full headless Xwayland reco
 still times out after frame 80 in both composition-GPU configurations; cause and
 clean teardown remain unqualified. Do not infer native-seat/scanout or Wayland replay
 from this evidence. [Details](validation/HEADLESS_DISPLAY.md).
+
+
+The mixed resident benchmark now qualifies shared cooked-world/proxy visibility,
+depth and resolve up to 10000 visual proxies on RADV. It does not establish network
+player capacity, collision/navigation, animation or production rendering cost.
+The fixed coarse ground, diagnostic textures, two procedural proxy detail levels,
+FIFO presentation and one frame in flight constrain timing interpretation.
+Independent chunk residency and representative geometry/texture LOD remain gates.
+[Evidence](validation/M4_SCENE_BENCHMARK.md#mixed-resident-village-and-crowd-2026-10-15).

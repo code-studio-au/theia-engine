@@ -901,6 +901,7 @@ pub struct Renderer {
     texture_refinement: Option<crate::texture_refinement::Refinement>,
     benchmark: Option<crate::benchmark::Recorder>,
     work: Option<IndirectWork>,
+    proxy_work: Option<IndirectWork>,
     lod: Option<crate::indirect::Lod>,
     materials: Option<crate::asset::Buffer>,
     uvs: Option<crate::asset::Buffer>,
@@ -950,6 +951,7 @@ impl Renderer {
             generations: 0,
             mode: options.render_mode(),
             work: None,
+            proxy_work: None,
             lod: None,
             materials: None,
             uvs: None,
@@ -986,7 +988,7 @@ impl Renderer {
                 )
             };
             let count = options.benchmark_config().players + crate::benchmark::STATIC_OBJECTS;
-            if renderer.mode == RenderMode::Benchmark
+            if (renderer.mode == RenderMode::Benchmark || options.benchmark_mixed)
                 && ((properties.limits.max_storage_buffer_range as u64)
                     < crate::benchmark::WORK_BYTES
                     || properties.limits.max_push_constants_size < 96
@@ -1000,20 +1002,29 @@ impl Renderer {
                     "Selected device cannot support bounded benchmark work/mesh limits".into(),
                 );
             }
+            if options.benchmark_mixed
+                && (properties.limits.max_per_stage_descriptor_storage_buffers < 5
+                    || properties.limits.max_descriptor_set_storage_buffers < 5)
+            {
+                return Err("Mixed benchmark requires five fragment storage buffers".into());
+            }
+            let hud_storage = 5 + u32::from(options.benchmark_mixed);
             if options.benchmark_cooked
                 && options.benchmark_config().overlay
                 && (properties.limits.max_push_constants_size < 112
-                    || properties.limits.max_per_stage_descriptor_storage_buffers < 5
-                    || properties.limits.max_descriptor_set_storage_buffers < 5)
+                    || properties.limits.max_per_stage_descriptor_storage_buffers < hud_storage
+                    || properties.limits.max_descriptor_set_storage_buffers < hud_storage)
             {
-                return Err("Cooked debug HUD requires 112 push bytes and five fragment storage buffers; use --benchmark-no-overlay on this device".into());
+                return Err("Cooked debug HUD exceeds push/storage limits for this workload; use --benchmark-no-overlay on this device".into());
             }
             // SAFETY: Vulkan's fixed device name is null terminated.
             let name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) }
                 .to_string_lossy()
                 .into_owned();
             let mut metadata = serde_json::json!({"device":name,"vendor_id":properties.vendor_id,"device_id":properties.device_id,"driver_version":properties.driver_version,"api_version":properties.api_version,"timestamp_period_ns":properties.limits.timestamp_period,"timestamp_valid_bits":bits,"validation":!options.no_validation,"debug_assertions":cfg!(debug_assertions),"work_requested_bytes":crate::benchmark::WORK_BYTES,"shader_dir":renderer.shader_dir});
-            metadata["scene_kind"] = serde_json::json!(if options.benchmark_cooked {
+            metadata["scene_kind"] = serde_json::json!(if options.benchmark_mixed {
+                "mixed-world"
+            } else if options.benchmark_cooked {
                 "cooked-bundle"
             } else {
                 "procedural"
@@ -1034,6 +1045,16 @@ impl Renderer {
                 );
                 metadata["tracked_allocation_scope"] = serde_json::json!(
                     "work and render targets; active/pending cooked buffers/images are charged separately by bundle budgets and excluded from this frame metric"
+                );
+            }
+            if options.benchmark_mixed {
+                metadata["proxy_work_requested_bytes"] =
+                    serde_json::json!(crate::benchmark::WORK_BYTES);
+                metadata["proxy_ground_model"] = serde_json::json!(
+                    "fixed 16-metre triangular grid, bounded whole-world fixture"
+                );
+                metadata["visibility_identity"] = serde_json::json!(
+                    "frame-local bit31 marks visual proxies; lower31 stores dense id+1; zero background"
                 );
             }
             renderer.benchmark = Some(crate::benchmark::Recorder::new(
@@ -1496,6 +1517,21 @@ impl Renderer {
                 ),
                 lod_pair.as_ref().map(|v| v.coarse.as_slice()),
             )?);
+            if options.benchmark_mixed {
+                renderer.proxy_work = Some(IndirectWork::new(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    renderer.shader_dir.as_ref().unwrap(),
+                    RenderMode::Benchmark,
+                    None,
+                    (
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        u64::MAX,
+                    ),
+                    None,
+                )?);
+            }
         }
         if let Some(path) = &options.stream_bundle {
             let stream = crate::bundle_streaming::Stream::new(
@@ -1672,6 +1708,10 @@ impl Renderer {
             self.mode,
             self.work.as_ref().map(|work| work.descriptor_layout),
             crate::visibility::ResolveBuffers {
+                proxy_work: self
+                    .proxy_work
+                    .as_ref()
+                    .map(|work| (work.descriptor_layout, work.benchmark_descriptor())),
                 benchmark: self.mode == RenderMode::Benchmark,
                 cooked_hud_work: self
                     .benchmark
@@ -1951,6 +1991,15 @@ impl Renderer {
                     }),
                 );
             }
+            if let Some(proxy) = &self.proxy_work {
+                let mut push = benchmark_push.as_ref().unwrap().0;
+                push[88..92].copy_from_slice(&1u32.to_ne_bytes());
+                proxy.generate_benchmark(
+                    ctx.command,
+                    &push,
+                    self.benchmark.as_ref().unwrap().config.players,
+                );
+            }
             if let Some(benchmark) = &self.benchmark {
                 benchmark.mark(ctx.command, 1);
             }
@@ -1988,6 +2037,7 @@ impl Renderer {
                     ctx.command,
                     ctx.mesh_commands.as_ref().unwrap(),
                     self.work.as_ref().unwrap(),
+                    self.proxy_work.as_ref(),
                     camera_rows,
                 );
             }
@@ -2051,6 +2101,7 @@ impl Renderer {
                     let base = b.overlay(
                         self.presented,
                         self.work.as_ref().unwrap().allocated_bytes
+                            + self.proxy_work.as_ref().map_or(0, |p| p.allocated_bytes)
                             + chain.visibility.as_ref().unwrap().allocated_bytes(),
                     );
                     let mut bytes = [0; 48];
@@ -2205,6 +2256,7 @@ impl Renderer {
                     cpu_started.elapsed().as_secs_f64() * 1000.,
                     [chain.extent.width, chain.extent.height],
                     self.work.as_ref().unwrap().allocated_bytes
+                        + self.proxy_work.as_ref().map_or(0, |p| p.allocated_bytes)
                         + chain.visibility.as_ref().unwrap().allocated_bytes(),
                     cooked_stats,
                 );
@@ -2270,6 +2322,7 @@ impl Drop for Renderer {
         drop(self.texture_refinement.take());
         drop(self.benchmark.take());
         drop(self.work.take());
+        drop(self.proxy_work.take());
         drop(self.materials.take());
         drop(self.uvs.take());
         drop(self.texture.take());

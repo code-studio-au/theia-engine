@@ -17,7 +17,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def export(report,path):
     columns=['frame','scene_time','warmup','frame_interval_ms','cpu_draw_ms','gpu_total_ms','gpu_compute_ms','gpu_visibility_ms','gpu_resolve_ms','tracked_image_and_work_allocation_bytes']
-    if report['workload']=='theia-cooked-bundle-route-v1':columns+=['active_bundle_allocation_bytes','resident_texture_count','bundle_publications','bundle_deferrals']
+    if report['workload'] in ('theia-cooked-bundle-route-v1','theia-cooked-mmo-v1'):columns+=['active_bundle_allocation_bytes','resident_texture_count','bundle_publications','bundle_deferrals']
     def csv_rows():
         for sample in report['samples']:
             row=dict(sample);cooked=sample.get('cooked',{})
@@ -38,13 +38,18 @@ def export(report,path):
 <canvas id="plot" width="1100" height="300"></canvas>
 <p>Logical route: 60 seconds by default; the selected number of frames samples the entire route. Wall duration can differ. <a href="report.json">JSON</a> · <a href="report.csv">CSV</a></p>
 <script>const samples=DATA,c=document.querySelector('#plot'),ctx=c.getContext('2d'),m=document.querySelector('#metric');function draw(){const key=m.value,max=samples.reduce((v,s)=>Math.max(v,s[key]),.001);ctx.clearRect(0,0,c.width,c.height);ctx.strokeStyle='#74cfce';ctx.beginPath();samples.forEach((s,i)=>{let x=40+i/(samples.length-1)*1040,y=270-s[key]/max*240;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();ctx.fillStyle='#e2e8f0';ctx.font='14px system-ui';ctx.fillText(max.toFixed(3)+' ms',8,20);ctx.fillText('Approach → village orbit → sweep',40,293)}m.onchange=draw;c.onmousemove=e=>{let i=Math.round(Math.max(0,Math.min(1,(e.offsetX/c.clientWidth*c.width-40)/1040))*(samples.length-1)),s=samples[i];document.querySelector('#point').textContent='Frame '+s.frame+', scene '+s.scene_time.toFixed(2)+'s: '+s[m.value].toFixed(3)+' ms'};draw();</script></html>'''
-    cooked=report['workload']=='theia-cooked-bundle-route-v1'
+    mixed=report['workload']=='theia-cooked-mmo-v1'
+    cooked=report['workload'] in ('theia-cooked-bundle-route-v1','theia-cooked-mmo-v1')
     title='Theia cooked bundle benchmark' if cooked else 'Theia procedural MMO benchmark'
     scene='One complete cooked bundle at a time' if cooked else f"{report['players']} proxies · 448 static objects"
     if cooked and report.get('launcher',{}).get('scene_selection')=='whole-world':
         title='Theia cooked whole-world benchmark'
         scene='Complete resident village and terrain in one cooked bundle'
     scope=('Opaque unlit cooked geometry and diagnostic textures. Whole-bundle replacement='+str(report['streaming'])+'. No moving proxies, skinning or gameplay authority. GPU timestamps exclude uploads queued before the frame queries; CPU/frame intervals include publication stalls. Tracked draw allocations exclude bundle resources; per-frame cooked records include active bundle bytes and publication counters.' if cooked else 'Rendering workload v1. Procedural near/far detail, face shading and visual motion. No skinning, gameplay authority or content streaming.')
+    if mixed:
+        title='Theia cooked MMO visual benchmark'
+        scene=f"Complete resident cooked world · {report['players']} GPU visual proxies"
+        scope='Opaque cooked world and GPU proxy motion/detail share visibility and depth. No skinning, gameplay authority, collision or networking. Draw allocations include both work buffers; active bundle metadata retains its separate scope.'
     page=page.replace('TITLE',title).replace('SCENE',scene).replace('SCOPE',scope).replace('OVERLAY',str(report['overlay'])).replace('DEVICE',html.escape(report['metadata']['device'])).replace('ROWS',rows).replace('DATA',data)
     path.with_suffix('.html').write_text(page)
 
@@ -53,6 +58,7 @@ def main():
     parser.add_argument('--players',type=int,nargs='+')
     parser.add_argument('--cooked-scene',type=Path,help='scene.json from cook_benchmark_scene.py')
     parser.add_argument('--quadrant',type=int,choices=range(4))
+    parser.add_argument('--mixed-world',action='store_true',help='add GPU visual proxies to the complete resident world')
     parser.add_argument('--whole-world',action='store_true',help='select the complete resident world from the cooked scene manifest')
     parser.add_argument('--stream-quadrant',type=int,choices=range(4))
     parser.add_argument('--bundle-gpu-budget',type=int)
@@ -70,13 +76,14 @@ def main():
     parser.add_argument('--slangc',default=shutil.which('slangc'))
     parser.add_argument('--skip-build',action='store_true',help='use already built matching binaries/SPIR-V')
     args=parser.parse_args();os.chdir(ROOT)
+    if args.mixed_world and (not args.cooked_scene or not args.whole_world):parser.error('--mixed-world requires --cooked-scene and --whole-world')
     if args.whole_world and (not args.cooked_scene or args.quadrant is not None or args.stream_quadrant is not None):parser.error('--whole-world requires --cooked-scene and cannot combine quadrant selection/replacement')
     args.quadrant=0 if args.quadrant is None else args.quadrant
-    if args.cooked_scene and args.players is not None:parser.error('Cooked routes do not include procedural proxies')
+    if args.cooked_scene and not args.mixed_world and args.players is not None:parser.error('Cooked routes do not include procedural proxies')
     if not args.cooked_scene and (args.stream_quadrant is not None or args.quadrant != 0 or any(v is not None for v in [args.bundle_gpu_budget,args.bundle_byte_budget,args.texture_budget])):parser.error('Quadrants and bundle budgets require --cooked-scene')
     if args.stream_quadrant==args.quadrant:parser.error('Replacement must be a different quadrant')
     if any(v is not None and v<1 for v in [args.bundle_gpu_budget,args.bundle_byte_budget,args.texture_budget]):parser.error('Budgets must be positive')
-    args.players=[0] if args.cooked_scene else (args.players if args.players is not None else [100,500,1000])
+    args.players=[0] if args.cooked_scene and not args.mixed_world else (args.players if args.players is not None else [100,500,1000])
     if any(p<0 or p>10000 for p in args.players) or not 3<=args.frames<=120000 or not 0<=args.warmup<args.frames-2 or not 1<=args.seconds<=600 or not 64<=args.width<=8192 or not 64<=args.height<=8192:
         parser.error('Invalid bounded population/frame/warmup/duration/extent')
     if args.headless_dri_prime and not args.headless:parser.error('--headless-dri-prime requires --headless')
@@ -105,11 +112,11 @@ def main():
     with context as (env,_,display):
         for number,players in enumerate(args.players):
             selection='whole-world' if args.whole_world else f'quadrant-{args.quadrant}'
-            output=args.output/(f'cooked-{selection}' if bundles else f'{number:02d}-{players}-players');output.mkdir(parents=True,exist_ok=True)
+            output=args.output/(f'{number:02d}-mixed-{players}-players' if args.mixed_world else f'cooked-{selection}' if bundles else f'{number:02d}-{players}-players');output.mkdir(parents=True,exist_ok=True)
             report_path=output/'report.json'
             # An old successful report must not survive a failed rerun of this owned output.
             for suffix in ['.json','.csv','.html']:report_path.with_suffix(suffix).unlink(missing_ok=True)
-            mode=['--benchmark-cooked','--bundle',selected_bundle] if bundles else ['--benchmark','--benchmark-players',str(players)]
+            mode=['--benchmark-mixed','--bundle',selected_bundle,'--benchmark-players',str(players)] if args.mixed_world else ['--benchmark-cooked','--bundle',selected_bundle] if bundles else ['--benchmark','--benchmark-players',str(players)]
             command=[str(exe),*mode,'--frames',str(args.frames),'--benchmark-warmup',str(args.warmup),
                 '--benchmark-seconds',str(args.seconds),'--benchmark-width',str(args.width),'--benchmark-height',str(args.height),'--benchmark-report',str(report_path)]
             if bundles and args.stream_quadrant is not None:command+=['--stream-bundle',bundles[args.stream_quadrant]]
@@ -118,7 +125,7 @@ def main():
             if args.gpu:command+=['--gpu',args.gpu]
             if args.no_overlay:command+=['--benchmark-no-overlay']
             if not args.validation:command+=['--no-validation']
-            print(f'Running {"cooked "+selection if bundles else str(players)+" visual proxies"}, {args.frames} frames ({args.profile}, validation={args.validation})',flush=True)
+            print(f'Running {"mixed "+str(players)+" visual proxies" if args.mixed_world else "cooked "+selection if bundles else str(players)+" visual proxies"}, {args.frames} frames ({args.profile}, validation={args.validation})',flush=True)
             try:
                 with (output/'run.log').open('w') as log:
                     subprocess.run(command,env=env,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=max(120,args.frames/10))
@@ -129,7 +136,7 @@ def main():
             if args.validation and 'Validation totals (including teardown): 0 warnings, 0 errors' not in text:raise RuntimeError('Missing clean validation evidence')
             report=json.loads(report_path.read_bytes());report['launcher']={'profile':args.profile,'display':display,'provenance':provenance,'command':command}
             if bundles:
-                report['launcher'].update(scene_selection=selection,source_manifest=str(args.cooked_scene.resolve()),source_manifest_sha256=hashlib.sha256(args.cooked_scene.read_bytes()).hexdigest())
+                report['launcher'].update(scene_selection=selection,mixed_world=args.mixed_world,source_manifest=str(args.cooked_scene.resolve()),source_manifest_sha256=hashlib.sha256(args.cooked_scene.read_bytes()).hexdigest())
             report_path.write_text(json.dumps(report,indent=2)+'\n');export(report,report_path)
             results.append({'workload':report['workload'],'players':players,'report':str(report_path),'summary_ms':report['summary_ms']})
             print('Report:',report_path.with_suffix('.html'),flush=True)

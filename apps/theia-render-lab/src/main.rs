@@ -55,6 +55,7 @@ enum RenderMode {
 struct Options {
     benchmark: bool,
     benchmark_cooked: bool,
+    benchmark_mixed: bool,
     benchmark_no_overlay: bool,
     benchmark_players: Option<u32>,
     benchmark_warmup: Option<u64>,
@@ -108,7 +109,7 @@ struct Options {
 impl Options {
     fn benchmark_config(&self) -> benchmark::Config {
         benchmark::Config {
-            players: if self.benchmark_cooked {
+            players: if self.benchmark_cooked && !self.benchmark_mixed {
                 0
             } else {
                 self.benchmark_players.unwrap_or(1000)
@@ -141,8 +142,16 @@ impl Options {
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
+                "--benchmark-mixed" => {
+                    if result.benchmark {
+                        return Err("Choose one benchmark workload".into());
+                    }
+                    result.benchmark = true;
+                    result.benchmark_cooked = true;
+                    result.benchmark_mixed = true;
+                }
                 "--benchmark-cooked" => {
-                    if result.benchmark && !result.benchmark_cooked {
+                    if result.benchmark_mixed || (result.benchmark && !result.benchmark_cooked) {
                         return Err("Choose one benchmark workload".into());
                     }
                     result.benchmark = true;
@@ -188,7 +197,8 @@ impl Options {
                     result.benchmark_report =
                         Some(args.next().ok_or("Missing benchmark report path")?.into())
                 }
-                "--benchmark-reference" => {
+                "--benchmark-reference" | "--benchmark-mixed-reference" => {
+                    let mixed = arg == "--benchmark-mixed-reference";
                     let players = args.next().ok_or("Missing players")?.parse()?;
                     let frame = args.next().ok_or("Missing frame")?.parse()?;
                     let frames = args.next().ok_or("Missing total frames")?.parse()?;
@@ -209,7 +219,14 @@ impl Options {
                     if frame >= frames {
                         return Err("Benchmark reference frame outside route".into());
                     }
-                    println!("{}", benchmark::reference(&config, frame, width, height)?);
+                    println!(
+                        "{}",
+                        if mixed {
+                            benchmark::mixed_reference(&config, frame, width, height)?
+                        } else {
+                            benchmark::reference(&config, frame, width, height)?
+                        }
+                    );
                     std::process::exit(0);
                 }
                 "--network-client" => {
@@ -851,7 +868,7 @@ impl Options {
                 }
                 "--help" => {
                     println!(
-                        "Cooked route/timings: --benchmark-cooked --bundle <indexed bundle> [--stream-bundle <replacement>]\nMMO visual benchmark: --benchmark [--benchmark-players 0..10000] [--benchmark-width 1280 --benchmark-height 720] [--frames 3660 --benchmark-warmup 60 --benchmark-seconds 60] [--benchmark-report path.json]\nCPU oracle: --benchmark-reference <players frame frames width height>"
+                        "Mixed resident scene: --benchmark-mixed --bundle <indexed world> [--benchmark-players 0..10000]\nCooked route/timings: --benchmark-cooked --bundle <indexed bundle> [--stream-bundle <replacement>]\nMMO visual benchmark: --benchmark [--benchmark-players 0..10000] [--benchmark-width 1280 --benchmark-height 720] [--frames 3660 --benchmark-warmup 60 --benchmark-seconds 60] [--benchmark-report path.json]\nCPU oracle: --benchmark-reference <players frame frames width height>"
                     );
                     println!(
                         "Theia Render Lab: GPU task/mesh qualification\n  --network-client <loopback address> --network-certificate <public DER>  live readonly GPU viewer\n  --network-faults  bounded encrypted post-bootstrap packet faults\n  --network-repair-test  qualification ACK withholding until full repair\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-hysteresis <0..1>  stricter coarsening entry fraction (default 0)\n  --lod-hysteresis-test  explicit eight-phase budget trajectory\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-auto-mips <file>  GPU analytic-footprint mip choice\n  --texture-refine-budget <dense texel bytes>  one asynchronous finer-tail publication\n  --texture-tail-budget <dense texel bytes>  coarse resident suffix for automatic mips\n  --texture-tail-reference <mesh material uv texture budget x y width height view>  CPU suffix sampling JSON\n  --texture-tail-linear-reference <mesh material uv texture budget x y width height view>  CPU bilinear suffix sampling JSON\n  --texture-linear-filter  opt-in bilinear repeat within automatic mip\n  --texture-linear-reference <mesh material uv texture x y width height view>  CPU bilinear sampling JSON\n  --texture-auto-reference <mesh material uv texture x y width height view>  CPU automatic sampling JSON\n  --texture-mip-test <file level>  upload complete chain with a fixed mip view\n  --texture-mip-reference <mesh material uv texture level x y width height view>  CPU mip sampling JSON\n  --texture-footprint-reference <mesh uv texture x y width height view>  CPU UV-gradient/mip oracle\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
@@ -1156,10 +1173,13 @@ impl Options {
             if result.benchmark_cooked
                 && (result.bundle.is_none()
                     || result.texture_table.is_none()
-                    || result.benchmark_players.is_some()
+                    || (!result.benchmark_mixed && result.benchmark_players.is_some())
                     || result.lod.is_some())
             {
                 return Err("Cooked benchmark requires an indexed --bundle; procedural player counts and geometry LOD modes are separate".into());
+            }
+            if result.benchmark_mixed && result.stream_bundle.is_some() {
+                return Err("Mixed benchmark currently uses one resident cooked bundle".into());
             }
             let config = result.benchmark_config();
             config.validate()?;
@@ -1215,6 +1235,8 @@ impl ApplicationHandler for App {
                     Window::default_attributes()
                         .with_title(if self.options.network_address.is_some() {
                             "Theia network viewer — Connecting"
+                        } else if self.options.benchmark_mixed {
+                            "Theia — cooked village and visual players"
                         } else if self.options.benchmark_cooked {
                             "Theia — cooked bundle benchmark"
                         } else if self.options.benchmark {

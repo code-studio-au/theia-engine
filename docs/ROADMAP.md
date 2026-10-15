@@ -369,9 +369,9 @@ culling/near-far detail, visibility resolve, timings and live stats. It executes
 0..10000 visual proxies under bounded validation/replay; it is not network-player
 capacity evidence. A separate cooked-bundle mode now shares the route/recorder,
 with four checked quadrant assets, diagnostic textures and exact/short CPU/GPU/
-image pressure on periodic whole-bundle replacement. Next combine simultaneous
-world quadrants and moving proxies, then representative art, geometry LOD, texture
-mips and camera-driven residency in this same benchmark framework. Both cooked
+image pressure on periodic whole-bundle replacement. A mixed resident world/crowd profile now combines the complete village with
+0..10000 proxies. Next qualify independent chunk residency, representative art,
+geometry LOD and texture mips in this same benchmark framework. Both cooked
 and procedural profiles now have optional, independently checked debug stats.
 Richer lighting/temporal rendering and animated characters expand it across M5/M6;
 server-controlled bots and replication/load instrumentation expand it across M7–M9.
@@ -382,7 +382,8 @@ A complete resident cooked village now fits the current bounded viewer in one
 28-meshlet bundle, using an error-checked coarse ground mesh while preserving all
 buildings/trees. It shares the camera/timing framework and has three-phase replay
 evidence. This closes the single-quadrant visual gap for a fixed resident asset;
-independent quadrant residency and integration with moving proxies remain next.
+moving proxies now share its visibility/depth in a separate mixed profile.
+Independent quadrant residency remains open.
 
 Cooked stats now read GPU meshlet counts directly and display host-owned active
 allocation/texture/publication metadata plus completed timings. Exact/short budget

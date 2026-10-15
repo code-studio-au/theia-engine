@@ -877,3 +877,14 @@ source-metadata publication. Actual active-plus-pending image requirements share
 source rejection retain the protected coarse image. This is a single qualification
 request, not tiled GPU feedback, retry scheduling or overlapped generation reuse.
 [Evidence and limitations](validation/M4_ASYNC_MIP_REFINEMENT.md).
+
+### Mixed resident benchmark integration
+
+The mixed benchmark retains the immutable whole-world v2 bundle and adds a
+separately owned GPU proxy arena. Two fixed indirect draws share visibility/depth;
+resolve distinguishes cooked meshlets from proxies using a frame-local identity
+high bit. This tag is not an asset-format change or a persistent/network entity ID.
+The proxy arena is included in tracked DRAW allocation charges, independently of
+active bundle allocation metadata. The first mixed slice requires resident content
+and rejects bundle replacement; independent world-chunk residency is still open.
+[Usage and limits](SCENE_BENCHMARK.md#mixed-resident-world-and-visual-proxies).

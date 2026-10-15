@@ -79,6 +79,28 @@ static const uint cookedHudPrefixes[9][16]={
 };
 static const uint cookedHudPrefixLength[9]={12,4,7,7,9,11,9,4,6};
 uint hudCharacter(uint line,uint column) {
+#ifdef THEIA_MIXED_WORLD
+    if(line==0) {
+        uint title[11]={84,72,69,73,65,32,77,73,88,69,68};
+        return column<11 ? title[column]:32;
+    }
+    if(line==9) {
+        uint prefix[8]={80,82,79,88,73,69,83,32};
+        if(column<8)return prefix[column];
+        uint col=column-8,value=mixedProxyWork.Load(0),n=hudDigits(value);
+        if(col<n)return hudUInt(value,col);if(col==n)return 47;
+        return hudUInt(mixedProxyWork.Load(16),col-n-1);
+    }
+    if(line==10) {
+        uint prefix[5]={78,69,65,82,32};
+        if(column<5)return prefix[column];
+        uint col=column-5,value=mixedProxyWork.Load(20),n=hudDigits(value);
+        if(col<n)return hudUInt(value,col);
+        uint separator[5]={32,70,65,82,32};
+        if(col<n+5)return separator[col-n];
+        return hudUInt(mixedProxyWork.Load(24),col-n-5);
+    }
+#endif
     if(line>=9)return 32;
     uint prefix=cookedHudPrefixLength[line];if(column<prefix)return cookedHudPrefixes[line][column];
     uint col=column-prefix;

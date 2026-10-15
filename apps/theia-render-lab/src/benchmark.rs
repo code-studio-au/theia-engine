@@ -130,6 +130,34 @@ pub fn object(id: u32, players: u32, time: f32) -> ([f32; 3], [f32; 3], u32) {
         kind,
     )
 }
+pub fn coarse_height(x: f32, y: f32) -> f32 {
+    let origin = [x, y].map(|v| (((v + 64.) / 16.).floor().clamp(0., 7.)) * 16. - 64.);
+    let u = (x - origin[0]) / 16.;
+    let v = (y - origin[1]) / 16.;
+    let a = height(origin[0], origin[1]);
+    let b = height(origin[0] + 16., origin[1]);
+    let c = height(origin[0], origin[1] + 16.);
+    let d = height(origin[0] + 16., origin[1] + 16.);
+    if u + v <= 1. {
+        a + u * (b - a) + v * (c - a)
+    } else {
+        d + (1. - u) * (c - d) + (1. - v) * (b - d)
+    }
+}
+pub fn mixed_reference(config: &Config, frame: u64, width: u32, height: u32) -> Result<Value> {
+    let mut result = reference(config, frame, width, height)?;
+    let (eye, _) = rig(config.time(frame), config.seconds);
+    let (_, rows) = push(config, frame, width, height)?;
+    let objects = (STATIC_OBJECTS..STATIC_OBJECTS+config.players).map(|id| {
+        let (mut center, extent, kind) = object(id, config.players, config.time(frame));
+        center[2] = coarse_height(center[0], center[1]) + extent[2];
+        let near = center.iter().zip(eye).map(|(a,b)| (a-b).powi(2)).sum::<f32>() < 35.*35.;
+        json!({"id":id,"center":center,"extent":extent,"kind":kind,"near":near,"visible":visible(rows,center,extent)})
+    }).collect::<Vec<_>>();
+    result["objects"] = json!(objects);
+    Ok(result)
+}
+
 pub fn visible(rows: [[f32; 4]; 4], center: [f32; 3], extent: [f32; 3]) -> bool {
     let mut common = 63;
     for corner in 0..8 {
@@ -370,8 +398,9 @@ impl Recorder {
         {
             std::fs::create_dir_all(parent)?;
         }
-        let cooked = self.metadata["scene_kind"] == "cooked-bundle";
-        let report = json!({"schema":1,"workload":if cooked {"theia-cooked-bundle-route-v1"} else {"theia-procedural-mmo-v1"},"players":self.config.players,"static_objects":if cooked {Value::Null} else {json!(STATIC_OBJECTS)},"frames":self.config.frames,"warmup_frames":self.config.warmup,"logical_duration_seconds":self.config.seconds,"wall_seconds":self.started.elapsed().as_secs_f64(),"presentation":"FIFO; single frame in flight","cpu_metric":"draw call wall time including fence/acquire/present; excludes event loop gaps","gpu_metric":"four ALL_COMMANDS timestamps on one graphics/compute queue; instrumentation enabled","overlay":self.config.overlay,"streaming":self.metadata["streaming"].as_bool().unwrap_or(false),"stream_outcome":stream.map(|(publications,deferrals)|json!({"publications":publications,"deferrals":deferrals})),"authority":false,"skinned_animation":false,"generations":generations,"metadata":self.metadata,"summary_ms":summary,"samples":self.samples});
+        let mixed = self.metadata["scene_kind"] == "mixed-world";
+        let cooked = mixed || self.metadata["scene_kind"] == "cooked-bundle";
+        let report = json!({"schema":1,"workload":if mixed {"theia-cooked-mmo-v1"} else if cooked {"theia-cooked-bundle-route-v1"} else {"theia-procedural-mmo-v1"},"players":self.config.players,"static_objects":if cooked {Value::Null} else {json!(STATIC_OBJECTS)},"frames":self.config.frames,"warmup_frames":self.config.warmup,"logical_duration_seconds":self.config.seconds,"wall_seconds":self.started.elapsed().as_secs_f64(),"presentation":"FIFO; single frame in flight","cpu_metric":"draw call wall time including fence/acquire/present; excludes event loop gaps","gpu_metric":"four ALL_COMMANDS timestamps on one graphics/compute queue; instrumentation enabled","overlay":self.config.overlay,"streaming":self.metadata["streaming"].as_bool().unwrap_or(false),"stream_outcome":stream.map(|(publications,deferrals)|json!({"publications":publications,"deferrals":deferrals})),"authority":false,"skinned_animation":false,"generations":generations,"metadata":self.metadata,"summary_ms":summary,"samples":self.samples});
         std::fs::write(&self.config.report, serde_json::to_vec_pretty(&report)?)?;
         println!(
             "Benchmark report written: {} ({} measured frames)",
@@ -392,6 +421,39 @@ impl Drop for Recorder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn coarse_ground_matches_independent_triangle_weights_and_cell_boundaries() {
+        for y in 0..8 {
+            for x in 0..8 {
+                let ox = x as f32 * 16. - 64.;
+                let oy = y as f32 * 16. - 64.;
+                let a = height(ox, oy);
+                let b = height(ox + 16., oy);
+                let c = height(ox, oy + 16.);
+                let d = height(ox + 16., oy + 16.);
+                for u in [0., 0.1, 0.35, 0.75, 1.] {
+                    for v in [0., 0.1, 0.35, 0.75, 1.] {
+                        let expected = if u + v <= 1. {
+                            (1. - u - v) * a + u * b + v * c
+                        } else {
+                            (1. - v) * b + (u + v - 1.) * d + (1. - u) * c
+                        };
+                        let actual = coarse_height(ox + u * 16., oy + v * 16.);
+                        assert!((actual - expected).abs() < 2e-6);
+                    }
+                }
+                for v in [0.1, 0.5, 0.9] {
+                    let yy = oy + v * 16.;
+                    if x > 0 {
+                        assert!(
+                            (coarse_height(ox - 0.0001, yy) - coarse_height(ox + 0.0001, yy)).abs()
+                                < 0.00003
+                        );
+                    }
+                }
+            }
+        }
+    }
     #[test]
     fn ground_edges_match_and_bounds_cover_all_surface_corners() {
         for id in 0..256 {

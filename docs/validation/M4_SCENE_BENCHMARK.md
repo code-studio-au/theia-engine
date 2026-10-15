@@ -1,5 +1,44 @@
 # M4 procedural MMO scene benchmark qualification (2026-10-15)
 
+## Mixed resident village and crowd (2026-10-15)
+
+`build/qualification/mixed-world-final/report.json` passes eight native Wayland
+240-frame routes: populations 0/100/500/1000/10000, a HUD-disabled mixed route and
+preserved cooked/procedural routes. All have zero Vulkan diagnostics through
+teardown and complete timing/warmup accounting. Seven invalid plans fail before
+Vulkan work. Nine separate RenderDoc 1.46 captures cover three route phases,
+zero/100/1000/10000 proxies and three HUD cases. Capture validation is disabled;
+standalone native routes activate actual Vulkan validation.
+
+Replay checks all proxy poses/extents/kinds, both GPU compactions, immutable cooked
+buffers/textures, whole-image identity/depth bounds, and 439 independent ray/colour
+probes choosing the nearer world/proxy intersection. Both occlusion directions
+are exercised. Three mixed panels pass 15575 glyph pixels. Original cooked and
+procedural capture tools also pass after extracting their reusable CPU models.
+The motion tolerance is 0.001 world units, depth 0.00002 and encoded RGB two bytes;
+qualified nearest-texture boundary probes retain the existing 0.002-texel envelope.
+
+Renderer tests pass 28, including an independent barycentric check of the mixed
+coarse-ground interpolation. Offline Python tests pass 31; formatting and
+warning-denied Clippy pass. Both default/shared interfaces compile and validate
+41 SPIR-V modules, with no new language fallback. Windows GNU cross-build/Clippy
+passes eleven packages and Wine CPU qualification passes; native Windows/GPU is
+still unqualified. Logs are `mixed-world-{build,clippy,tests,python-tests,shaders,
+shared-shaders}.log` and `windows-mixed-world/report.json` under ignored
+`build/qualification/`.
+
+At 1280x720 the qualified driver's tracked targets plus two work arenas request
+12370024 bytes, while the active whole-world bundle charge is 120256 bytes.
+These are scoped allocation charges, not total VRAM. World geometry stays fixed
+at 1553 vertices/28 meshlets/1664 triangles. Proxies use the coarse triangular
+terrain model, can intersect buildings and have no gameplay authority. This
+resident integration does not close M4 or establish MMO network capacity.
+
+The optimized launcher separately completes a validation-enabled 10000-proxy
+240-frame headless route with 30 excluded warmup frames, zero diagnostics and
+JSON/CSV/HTML exports in `build/benchmark/mixed-release-10000/`. The original
+headless compute test re-verifies all 256 values (`mixed-world-compute.log`).
+
 ## Cooked benchmark live stats (2026-10-15)
 
 `build/qualification/cooked-hud-world/report.json` and

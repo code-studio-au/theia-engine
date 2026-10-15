@@ -160,6 +160,7 @@ impl Drop for Image {
 }
 #[derive(Clone, Copy, Default)]
 pub struct ResolveBuffers {
+    pub proxy_work: Option<(vk::DescriptorSetLayout, vk::DescriptorBufferInfo)>,
     pub cooked_hud_work: Option<vk::DescriptorBufferInfo>,
     pub benchmark: bool,
     pub materials: Option<vk::DescriptorBufferInfo>,
@@ -181,6 +182,7 @@ impl ResolveBuffers {
     }
 }
 pub struct Target {
+    proxy_visibility: Option<Pipeline>,
     visibility: Option<Pipeline>,
     resolve: Option<Pipeline>,
     pool: vk::DescriptorPool,
@@ -260,6 +262,7 @@ impl Target {
         };
         let materials = [material()?, material()?];
         let mut target = Self {
+            proxy_visibility: None,
             visibility: None,
             resolve: None,
             pool: vk::DescriptorPool::null(),
@@ -364,6 +367,15 @@ impl Target {
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
+            if buffers.proxy_work.is_some() {
+                bindings.push(
+                    vk::DescriptorSetLayoutBinding::default()
+                        .binding(11)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .descriptor_count(1)
+                        .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+                );
+            }
             let mut flags = vec![
                 vk::DescriptorBindingFlags::empty(),
                 vk::DescriptorBindingFlags::empty(),
@@ -386,6 +398,9 @@ impl Target {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
             if buffers.cooked_hud_work.is_some() {
+                flags.push(vk::DescriptorBindingFlags::empty());
+            }
+            if buffers.proxy_work.is_some() {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
             let mut binding_flags =
@@ -412,7 +427,8 @@ impl Target {
                             1 + u32::from(authored)
                                 + u32::from(uv)
                                 + u32::from(extra_storage.is_some())
-                                + u32::from(buffers.cooked_hud_work.is_some()),
+                                + u32::from(buffers.cooked_hud_work.is_some())
+                                + u32::from(buffers.proxy_work.is_some()),
                         ),
                 );
             }
@@ -532,6 +548,16 @@ impl Target {
                         .buffer_info(info),
                 );
             }
+            let proxy_work = buffers.proxy_work.map(|(_, v)| [v]);
+            if let Some(info) = &proxy_work {
+                writes.push(
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(target.set)
+                        .dst_binding(11)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .buffer_info(info),
+                );
+            }
             device.update_descriptor_sets(&writes, &[]);
         }
         target.visibility = Some(if buffers.benchmark {
@@ -539,6 +565,15 @@ impl Target {
         } else {
             Pipeline::visibility(device, shaders, work_layout, cooked)?
         });
+        if let Some((layout, _)) = buffers.proxy_work {
+            target.proxy_visibility = Some(Pipeline::benchmark(
+                device,
+                vk::Format::R32G32_UINT,
+                shaders,
+                layout,
+                false,
+            )?);
+        }
         if buffers.benchmark {
             target.resolve = Some(Pipeline::benchmark(
                 device,
@@ -555,6 +590,7 @@ impl Target {
             shaders,
             target.layout,
             crate::pipeline::ResolveMode {
+                mixed: buffers.proxy_work.is_some(),
                 cooked_hud: buffers.cooked_hud_work.is_some(),
                 cooked,
                 authored,
@@ -621,6 +657,7 @@ impl Target {
         command: vk::CommandBuffer,
         mesh: &ash::ext::mesh_shader::Device,
         work: &IndirectWork,
+        proxy: Option<&IndirectWork>,
         rows: Option<[[f32; 4]; 4]>,
     ) {
         let visibility = self.visibility.as_ref().unwrap();
@@ -761,6 +798,21 @@ impl Target {
                 );
             }
             work.draw(command, visibility.layout, mesh);
+            if let Some(proxy) = proxy {
+                let pipeline = self.proxy_visibility.as_ref().unwrap();
+                self.device.cmd_bind_pipeline(
+                    command,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline.handle,
+                );
+                self.push_rows(
+                    command,
+                    pipeline.layout,
+                    vk::ShaderStageFlags::MESH_EXT,
+                    rows.unwrap(),
+                );
+                proxy.draw(command, pipeline.layout, mesh);
+            }
             self.device.cmd_end_rendering(command);
             let end = [
                 color
@@ -846,6 +898,7 @@ impl Drop for Target {
     fn drop(&mut self) {
         // SAFETY: Owning swapchain retired submissions. Pipelines precede descriptor layout and image destruction.
         drop(self.resolve.take());
+        drop(self.proxy_visibility.take());
         drop(self.visibility.take());
         unsafe {
             if self.pool != vk::DescriptorPool::null() {
