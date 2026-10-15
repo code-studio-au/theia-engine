@@ -986,13 +986,15 @@ impl Renderer {
                 )
             };
             let count = options.benchmark_config().players + crate::benchmark::STATIC_OBJECTS;
-            if (properties.limits.max_storage_buffer_range as u64) < crate::benchmark::WORK_BYTES
-                || properties.limits.max_push_constants_size < 96
-                || mesh_limits.max_task_work_group_count[0] < count
-                || mesh_limits.max_task_work_group_total_count < count
-                || properties.limits.max_compute_work_group_count[0] < count.div_ceil(64)
-                || mesh_limits.max_mesh_output_vertices < 48
-                || mesh_limits.max_mesh_output_primitives < 16
+            if renderer.mode == RenderMode::Benchmark
+                && ((properties.limits.max_storage_buffer_range as u64)
+                    < crate::benchmark::WORK_BYTES
+                    || properties.limits.max_push_constants_size < 96
+                    || mesh_limits.max_task_work_group_count[0] < count
+                    || mesh_limits.max_task_work_group_total_count < count
+                    || properties.limits.max_compute_work_group_count[0] < count.div_ceil(64)
+                    || mesh_limits.max_mesh_output_vertices < 48
+                    || mesh_limits.max_mesh_output_primitives < 16)
             {
                 return Err(
                     "Selected device cannot support bounded benchmark work/mesh limits".into(),
@@ -1002,7 +1004,30 @@ impl Renderer {
             let name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) }
                 .to_string_lossy()
                 .into_owned();
-            let metadata = serde_json::json!({"device":name,"vendor_id":properties.vendor_id,"device_id":properties.device_id,"driver_version":properties.driver_version,"api_version":properties.api_version,"timestamp_period_ns":properties.limits.timestamp_period,"timestamp_valid_bits":bits,"validation":!options.no_validation,"debug_assertions":cfg!(debug_assertions),"work_requested_bytes":crate::benchmark::WORK_BYTES,"shader_dir":renderer.shader_dir});
+            let mut metadata = serde_json::json!({"device":name,"vendor_id":properties.vendor_id,"device_id":properties.device_id,"driver_version":properties.driver_version,"api_version":properties.api_version,"timestamp_period_ns":properties.limits.timestamp_period,"timestamp_valid_bits":bits,"validation":!options.no_validation,"debug_assertions":cfg!(debug_assertions),"work_requested_bytes":crate::benchmark::WORK_BYTES,"shader_dir":renderer.shader_dir});
+            metadata["scene_kind"] = serde_json::json!(if options.benchmark_cooked {
+                "cooked-bundle"
+            } else {
+                "procedural"
+            });
+            if options.benchmark_cooked {
+                metadata["work_requested_bytes"] = serde_json::Value::Null;
+                metadata["initial_bundle"] = serde_json::json!(options.bundle);
+                metadata["replacement_bundle"] = serde_json::json!(options.stream_bundle);
+                metadata["streaming"] = serde_json::json!(options.stream_bundle.is_some());
+                metadata["bundle_cpu_budget"] =
+                    serde_json::json!(options.bundle_byte_budget.unwrap_or(64 * 1024 * 1024));
+                metadata["bundle_gpu_budget"] =
+                    serde_json::json!(options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024));
+                metadata["texture_image_budget"] = serde_json::json!(
+                    options
+                        .texture_budget
+                        .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64)
+                );
+                metadata["tracked_allocation_scope"] = serde_json::json!(
+                    "work and render targets; active/pending cooked buffers/images are charged separately by bundle budgets and excluded from this frame metric"
+                );
+            }
             renderer.benchmark = Some(crate::benchmark::Recorder::new(
                 renderer.ctx.device.as_ref().unwrap(),
                 options.benchmark_config(),
@@ -1639,7 +1664,7 @@ impl Renderer {
             self.mode,
             self.work.as_ref().map(|work| work.descriptor_layout),
             crate::visibility::ResolveBuffers {
-                benchmark: self.benchmark.is_some(),
+                benchmark: self.mode == RenderMode::Benchmark,
                 materials: self.materials.as_ref().map(|buffer| {
                     vk::DescriptorBufferInfo::default()
                         .buffer(buffer.handle)
@@ -1877,7 +1902,8 @@ impl Renderer {
                     &vk::DependencyInfo::default().buffer_memory_barriers(&reuse),
                 );
             }
-            if let Some((push, _)) = &benchmark_push {
+            if self.mode == RenderMode::Benchmark {
+                let (push, _) = benchmark_push.as_ref().unwrap();
                 self.work.as_ref().unwrap().generate_benchmark(
                     ctx.command,
                     push,
@@ -1997,13 +2023,17 @@ impl Renderer {
                 rendering = rendering.depth_attachment(depth);
             }
             device.cmd_begin_rendering(ctx.command, &rendering);
-            let overlay = self.benchmark.as_ref().map(|b| {
-                b.overlay(
-                    self.presented,
-                    self.work.as_ref().unwrap().allocated_bytes
-                        + chain.visibility.as_ref().unwrap().allocated_bytes(),
-                )
-            });
+            let overlay = self
+                .benchmark
+                .as_ref()
+                .filter(|_| self.mode == RenderMode::Benchmark)
+                .map(|b| {
+                    b.overlay(
+                        self.presented,
+                        self.work.as_ref().unwrap().allocated_bytes
+                            + chain.visibility.as_ref().unwrap().allocated_bytes(),
+                    )
+                });
             if let Some(target) = &chain.visibility {
                 target.record_resolve(
                     ctx.command,
@@ -2162,7 +2192,12 @@ impl Renderer {
                     u64::MAX,
                 )?;
             }
-            benchmark.finish(self.generations)?;
+            benchmark.finish(
+                self.generations,
+                self.bundle_stream
+                    .as_ref()
+                    .map(|s| (s.publications, s.rejections)),
+            )?;
         }
         if let Some(stream) = &self.stream {
             println!(

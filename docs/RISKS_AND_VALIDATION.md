@@ -35,6 +35,15 @@ tracked allocations are not total VRAM. A resident low-poly scene does not valid
 cooked-content streaming, skinning/lighting costs or server/network player scale.
 [Scope and evidence](validation/M4_SCENE_BENCHMARK.md).
 
+A separate cooked benchmark mode now shares the route/timing recorder and
+qualifies periodic complete-bundle replacement under exact/short CPU/GPU/image
+caps, with independent cooked buffer/texel/culling and framebuffer probes. It
+renders one bundle at a time without moving proxies or HUD. This does not yet
+qualify a simultaneously resident streamed world or camera-driven demand. GPU
+frame queries exclude uploads submitted before them; CPU/frame intervals retain
+publication stalls. Nearest texture-boundary probes use an explicit narrow
+coordinate envelope. [Evidence](validation/M4_SCENE_BENCHMARK.md#cooked-bundle-route-and-timing-integration-2026-10-15).
+
 ## Decisions needing concrete values later
 
 - Actual minimum GPU/VRAM models; baseline fps and target resolution; vendor matrix.

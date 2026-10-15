@@ -4,6 +4,22 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 cooked-bundle benchmark route — independently executed (2026-10-15)
+
+An explicit cooked mode now reuses the benchmark camera/timing recorder with the
+existing meshlet/visibility/textured resolve path. It renders one admitted bundle
+at a time, optionally alternating two through bounded I/O/upload/publication.
+Eleven 240-frame cooked runs plus the preserved procedural route pass zero Vulkan
+diagnostics, complete warmup accounting and exact/one-byte-short CPU/GPU/image
+budgets. Six replay captures verify immutable GPU buffers/textures, culling and
+identity/depth plus 286 ray/colour probes across all four material bindings.
+Renderer 27 and offline Python 29 tests, denied-warning Clippy, release launcher,
+Windows GNU eleven packages and 154 Wine CPU tests pass. Cooked content and moving
+proxies are still separate workloads; simultaneous quadrants, world-demand
+scheduling, representative art/LOD/mips and the cooked HUD remain open.
+[Workflow](SCENE_BENCHMARK.md#cooked-bundle-route-and-timing-observations),
+[evidence](validation/M4_SCENE_BENCHMARK.md#cooked-bundle-route-and-timing-integration-2026-10-15).
+
 ## M4 integrated procedural scene benchmark — independently executed (2026-10-15)
 
 The next offline prerequisite now cooks a four-quadrant static-world fixture:

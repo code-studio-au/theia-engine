@@ -292,7 +292,7 @@ impl Recorder {
         }
         bytes
     }
-    pub fn finish(&mut self, generations: u64) -> Result<()> {
+    pub fn finish(&mut self, generations: u64, stream: Option<(u64, u64)>) -> Result<()> {
         self.collect()?;
         if self.samples.len() as u64 != self.config.frames {
             return Err("Benchmark frame accounting incomplete".into());
@@ -316,7 +316,8 @@ impl Recorder {
         {
             std::fs::create_dir_all(parent)?;
         }
-        let report = json!({"schema":1,"workload":"theia-procedural-mmo-v1","players":self.config.players,"static_objects":STATIC_OBJECTS,"frames":self.config.frames,"warmup_frames":self.config.warmup,"logical_duration_seconds":self.config.seconds,"wall_seconds":self.started.elapsed().as_secs_f64(),"presentation":"FIFO; single frame in flight","cpu_metric":"draw call wall time including fence/acquire/present; excludes event loop gaps","gpu_metric":"four ALL_COMMANDS timestamps on one graphics/compute queue; instrumentation enabled","overlay":self.config.overlay,"streaming":false,"authority":false,"skinned_animation":false,"generations":generations,"metadata":self.metadata,"summary_ms":summary,"samples":self.samples});
+        let cooked = self.metadata["scene_kind"] == "cooked-bundle";
+        let report = json!({"schema":1,"workload":if cooked {"theia-cooked-bundle-route-v1"} else {"theia-procedural-mmo-v1"},"players":self.config.players,"static_objects":if cooked {Value::Null} else {json!(STATIC_OBJECTS)},"frames":self.config.frames,"warmup_frames":self.config.warmup,"logical_duration_seconds":self.config.seconds,"wall_seconds":self.started.elapsed().as_secs_f64(),"presentation":"FIFO; single frame in flight","cpu_metric":"draw call wall time including fence/acquire/present; excludes event loop gaps","gpu_metric":"four ALL_COMMANDS timestamps on one graphics/compute queue; instrumentation enabled","overlay":self.config.overlay,"streaming":self.metadata["streaming"].as_bool().unwrap_or(false),"stream_outcome":stream.map(|(publications,deferrals)|json!({"publications":publications,"deferrals":deferrals})),"authority":false,"skinned_animation":false,"generations":generations,"metadata":self.metadata,"summary_ms":summary,"samples":self.samples});
         std::fs::write(&self.config.report, serde_json::to_vec_pretty(&report)?)?;
         println!(
             "Benchmark report written: {} ({} measured frames)",

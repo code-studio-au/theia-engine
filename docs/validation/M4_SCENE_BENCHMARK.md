@@ -1,5 +1,46 @@
 # M4 procedural MMO scene benchmark qualification (2026-10-15)
 
+## Cooked-bundle route and timing integration (2026-10-15)
+
+`build/qualification/cooked-route-final/report.json` passes twelve native headless
+Wayland runs of 240 frames: four resident quadrants, alternating quadrants 0/3,
+six exact/one-byte-short CPU/GPU/image caps, and the original procedural 1000-proxy
+route. Each has zero Vulkan warnings/errors through teardown, 240 samples, 210
+measured frames and final logical time 60 seconds. Exact caps permit publication;
+short caps retain the active complete set and record deferrals. Five invalid plans
+reject before Vulkan; both orders of mixed benchmark flags separately reject.
+
+Six separate Xwayland/RenderDoc captures cover quadrants 0/3 at frames 10/90/170.
+All four immutable GPU buffers and 16384 GPU texels per capture match the cooked
+files. Compacted meshlet IDs/masks match an independent hull-plane oracle;
+whole-image identities/depth obey bounds. **286 world-space ray/UV/texture probes**
+match rendered identities/depth and encoded RGB within two bytes, covering all
+four material bindings. Eighty probes use the documented ±0.002-texel boundary
+envelope: only immediately adjacent source texels are candidates. No wall probes
+are silently excluded. This numeric profile does not prove arbitrary coordinate
+accuracy or cross-vendor sampler behavior. Capture validation is disabled; actual
+validation evidence comes from the native Wayland runs.
+
+`build/qualification/cooked-route-release/suite.json` passes a complete 240-frame
+optimized launcher run with JSON/CSV/interactive HTML, executable/shader digests,
+headless context and validation disabled. It is a labeled timing observation,
+not an uncapped FPS score. The Rust renderer has 27 passing tests; formatting,
+denied-warning Clippy and all 29 offline Python tests pass. The default 38 shader
+modules compile/validate during the release launch; no shader source changed.
+`build/qualification/windows-cooked-route/report.json` passes eleven GNU package
+cross-builds/Clippy and 154 Wine CPU tests; native Windows/GPU remain unqualified.
+
+Reports distinguish the cooked workload, zero procedural players, null procedural
+object count, bundle paths/budgets and final publication/deferral counts. No cooked
+HUD is enabled. Frame allocation traces exclude active/pending cooked resource
+allocations; those retain separate physical caps. GPU frame timestamps exclude
+transfers submitted before query recording, while CPU/frame intervals include
+publication stalls. The periodic whole-bundle replacement is unrelated to camera
+demand. Simultaneous quadrants, a cooked/crowd mixture, general geometry LOD and
+texture mip integration remain open.
+
+## Procedural workload
+
 The first integrated scene workload combines a scripted camera, continuous ground,
 village/tree geometry and moving visual proxies with compute-generated frustum
 compaction, indirect task/mesh draws, visibility/depth and deferred face shading.

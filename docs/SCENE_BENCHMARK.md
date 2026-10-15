@@ -213,7 +213,57 @@ bundle hashes repeat at a fixed output location, but change across output roots.
 Geometry, material, UV and texture hashes repeat across roots with the same tools.
 Encoded-byte totals are deduplicated file bytes, not physical GPU allocations.
 
-**The procedural `--benchmark` has not yet adopted these bundles.** World rendering,
-multi-quadrant residency/pressure, representative art, geometry LOD and texture mip
-integration remain subsequent work. This offline result is not streaming or GPU
-performance evidence.
+The procedural `--benchmark` still uses its original GPU-generated scene. The
+separate cooked route below consumes these assets. Simultaneous multi-quadrant
+residency, a cooked world mixed with moving proxies, representative art, geometry
+LOD and texture mip integration remain subsequent work.
+
+## Cooked bundle route and timing observations
+
+Use `--benchmark-cooked --bundle <indexed bundle>` directly in Render Lab, or
+select a generated quadrant through the same build/export launcher:
+
+```sh
+VK_DRIVER_FILES=/usr/share/vulkan/icd.d/radeon_icd.json \
+PYTHONPYCACHEPREFIX="$PWD/build/qualification/python-cache" \
+python3 tools/run_scene_benchmark.py \
+  --cooked-scene build/qualification/benchmark-world/scene.json \
+  --quadrant 0 --stream-quadrant 3 \
+  --frames 240 --warmup 30 --profile release \
+  --slangc /path/to/slangc \
+  --headless --headless-dri-prime pci-0000_03_00_0 \
+  --gpu 7900 --output build/benchmark/cooked
+```
+
+Omit `--stream-quadrant` to retain one bundle. Replacement alternates two complete
+bundles every twenty presented frames, using the existing bounded worker, fence
+polling and conservative graphics-generation retirement. This is a controlled
+replacement workload, not camera-driven world demand or simultaneous quadrants.
+`--bundle-byte-budget`, `--bundle-gpu-budget` and `--texture-budget` forward the
+existing CPU/GPU/image caps; insufficient coexistence capacity retains the active
+complete bundle and reports deferrals. Add `--validation` for diagnostic runs.
+
+The route and four-query timing recorder are shared with the procedural benchmark.
+Reports identify `theia-cooked-bundle-route-v1`, source bundle paths, requested
+budgets, driver/device context and final publication/deferral counts. No visual
+player proxies, near/far geometry selection or HUD runs in this profile. The JSON
+uses zero players and a null procedural static-object count. HTML describes the
+actual cooked workload; JSON/CSV/HTML export and executable/shader digests remain
+available through the launcher.
+
+CPU draw and frame-interval measurements include publication stalls. GPU frame
+queries exclude transfers queued before the first frame query, so they are not a
+complete streaming GPU cost. The frame allocation trace counts work/targets;
+active/pending cooked buffers and images remain separately charged by bundle
+budgets and excluded from that trace. FIFO/single-frame and owned-display limits
+still apply. These synthetic runs are not a production capacity or FPS score.
+
+`tools/qualify_cooked_benchmark.py --scene <scene.json> --output <directory>
+--qrenderdoc <executable> --headless-dri-prime <selector>` owns separate native
+Wayland validation and Xwayland replay. It checks complete timing/warmup accounting,
+exact/short budgets, invalid plans, the procedural regression and six cooked
+captures. Replay checks immutable GPU buffers/texels, meshlet hull compaction,
+whole-image identity/depth bounds and independent world-space ray/UV/texture colour
+probes. At nearest-texel boundaries, a recorded ±0.002-texel coordinate envelope
+permits only adjacent source texels; encoded RGB tolerance remains two bytes.
+This bounded RADV numeric profile is not cross-vendor conformance.

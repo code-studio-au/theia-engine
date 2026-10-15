@@ -614,6 +614,16 @@ not an upload/render-overlap or production latency claim. A source/driver/shader
 error terminates the viewer with orderly teardown; only budget pressure defers
 and retries. Target-construction failure is fatal and has no rollback guarantee.
 
+The opt-in `--benchmark-cooked --bundle <v2>` viewer now applies the shared
+three-phase benchmark camera and timing recorder to this same bounded profile.
+Optional `--stream-bundle` retains the twenty-presented-frame replacement schedule
+and existing ownership/budgets. It renders one complete set at a time; it does not
+mix procedural crowd records or create simultaneous world residency. Reports
+distinguish this workload, record budget requests and publication/deferral totals,
+and exclude pre-frame transfers from GPU query spans. Frame allocation traces
+exclude cooked bundle owners, whose physical budgets remain separate. No binary
+contract or authority policy changed. [Workflow](SCENE_BENCHMARK.md#cooked-bundle-route-and-timing-observations).
+
 One/two-image alternating sets and source/table/framebuffer consistency pass
 local RX 7900 XTX validation/replay. Existing geometry-only streaming and fixed
 render modes remain separate. General GPU allocation reuse, geometry arenas for
