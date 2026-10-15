@@ -33,11 +33,12 @@ def cook(args):
         raise ValueError('Expected four diagnostic material images')
     expected = []
     for i, image in enumerate(modified['images']):
-        pixels = bytearray(texture(i))
+        pixels = bytearray(texture(i % args.images))
         for pixel in range(0,len(pixels),4):
             r,g,b,_ = pixels[pixel:pixel+4]
             pixels[pixel:pixel+4] = bytes((255-b,255-r,255-g,255))
-        expected.append(bytes(pixels))
+        if i < args.images:
+            expected.append(bytes(pixels))
         name = 'palette-%d.png' % i
         (out/name).write_bytes(png(pixels))
         image['uri'] = name
@@ -49,9 +50,11 @@ def cook(args):
                         '--unlit-textures'],stdout=log,stderr=subprocess.STDOUT,check=True,timeout=120)
     a = json.loads(Path(original['normalized']).read_bytes())
     b = json.loads(normalized.read_bytes())
-    for key in ('positions','indices','texcoords','triangle_materials','base_colors','texture_materials'):
+    for key in ('positions','indices','texcoords','triangle_materials','base_colors'):
         if a[key] != b[key]:
             raise ValueError('Palette-only variant changed '+key)
+    if b['texture_materials'] != [i % args.images for i in range(4)] or len(b['textures']) != args.images:
+        raise ValueError('Normalized PNG alias mapping differs from source recipe')
     command = [sys.executable,'tools/cook_meshlet_fixture.py','--geometry',str(normalized),
                '--library',str(args.library.resolve()),'--source-archive',str(args.meshoptimizer_source.resolve()),
                '--ktx',str(args.ktx.resolve()),'--ktx-build',str(args.ktx_build.resolve()),
@@ -59,7 +62,7 @@ def cook(args):
     with (out/'cook.log').open('w') as log:
         subprocess.run(command,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=240)
     cooked = json.loads((out/'cooked/imported-report.json').read_bytes())
-    if not cooked['coverage_and_winding_verified'] or len(cooked['textures']) != 4:
+    if not cooked['coverage_and_winding_verified'] or len(cooked['textures']) != args.images:
         raise ValueError('Variant geometry/texture proof missing')
     for record, pixels in zip(cooked['textures'],expected):
         encoded = Path(record['path']).read_bytes()
@@ -71,7 +74,7 @@ def cook(args):
     variant['quadrants'][2].update(source=str(source_path),source_sha256=digest(source_path.read_bytes()),
         normalized=str(normalized),normalized_sha256=digest(normalized.read_bytes()),cook=cooked)
     variant['palette_variant'] = dict(chunk=2,recipe='rgb=(255-b,255-r,255-g),alpha=255',
-        source_scene_sha256=digest(args.scene.read_bytes()), geometry_uv_materials_unchanged=True,
+        source_scene_sha256=digest(args.scene.read_bytes()), geometry_uv_materials_unchanged=True, unique_images=args.images, texture_aliases_verified=True,
         native_texels_verified=True)
     (out/'scene.json').write_text(json.dumps(variant,indent=2,sort_keys=True)+'\n')
     print('Cooked palette-only chunk variant; unchanged geometry/UVs/material assignments and exact native texels')
@@ -79,6 +82,7 @@ def cook(args):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--images',type=int,choices=(2,4),default=4)
     parser.add_argument('--scene',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--importer',type=Path,default=Path('tools/theia-gltf-import/target/debug/theia-gltf-import'))

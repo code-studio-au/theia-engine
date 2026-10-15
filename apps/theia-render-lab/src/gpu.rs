@@ -919,6 +919,7 @@ pub struct Renderer {
     footprint: Option<crate::asset::Buffer>,
     texture_tail: Option<[u32; 4]>,
     world_cpu: Option<theia_assets::bundle_residency::WorldResidency>,
+    world_stream: Option<crate::world_streaming::Stream>,
     authority: Option<[u8; 64]>,
     pub recreate: bool,
     generations: u64,
@@ -994,6 +995,7 @@ impl Renderer {
             world_work: None,
             world_resources: None,
             world_cpu: None,
+            world_stream: None,
             lod: None,
             materials: None,
             uvs: None,
@@ -1165,15 +1167,28 @@ impl Renderer {
                 options.texture_budget.unwrap_or(4 * 1024 * 1024),
             )?;
             let [primary, secondary] = pair.work;
-            let [first, second] = pair.resources;
+            let [first, secondary_resources] = pair.resources;
             renderer.work = Some(primary);
             renderer.world_work = Some(secondary);
             renderer.materials = Some(first.materials);
             renderer.uvs = Some(first.uvs);
             renderer.texture_table = Some(first.table);
             renderer.textures = first.images;
-            renderer.world_resources = Some(second);
+            renderer.world_resources = Some(secondary_resources);
             renderer.world_cpu = Some(pair.cpu);
+            if let Some(replacement) = &options.world_stream_bundle {
+                renderer.world_stream = Some(crate::world_streaming::Stream::new(
+                    renderer.world_cpu.take().unwrap(),
+                    [second.clone(), replacement.clone()],
+                    renderer.textures.len() as u32,
+                    [
+                        options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
+                        options.texture_budget.unwrap_or(4 * 1024 * 1024),
+                    ],
+                    options.world_stream_report.clone(),
+                )?);
+            }
+
             println!(
                 "Resident pair renderer allocation ledger: {}",
                 renderer.bundle_resource_bytes()
@@ -1773,6 +1788,80 @@ impl Renderer {
         }
         Ok(())
     }
+    fn tick_world_bundle(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let active = [
+            self.bundle_resource_bytes(),
+            self.textures
+                .iter()
+                .map(|v| v.image.allocated_bytes)
+                .chain(
+                    self.world_resources
+                        .iter()
+                        .flat_map(|r| r.images.iter().map(|v| v.image.allocated_bytes)),
+                )
+                .sum(),
+        ];
+        let Some(stream) = &mut self.world_stream else {
+            return Ok(());
+        };
+        // SAFETY: Context retains the selected physical device and its instance.
+        let (memory, limits, image_limits) = unsafe {
+            let instance = self.ctx.instance.as_ref().unwrap();
+            (
+                instance.get_physical_device_memory_properties(self.ctx.physical),
+                instance
+                    .get_physical_device_properties(self.ctx.physical)
+                    .limits,
+                instance.get_physical_device_image_format_properties(
+                    self.ctx.physical,
+                    vk::Format::R8G8B8A8_SRGB,
+                    vk::ImageType::TYPE_2D,
+                    vk::ImageTiling::OPTIMAL,
+                    vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                    vk::ImageCreateFlags::empty(),
+                )?,
+            )
+        };
+        let ready = stream.tick(
+            self.presented,
+            active,
+            crate::bundle_streaming::Gpu {
+                device: self.ctx.device.as_ref().unwrap(),
+                memory: &memory,
+                family: self.ctx.graphics_family,
+                queue: self.ctx.graphics,
+                limits,
+                image_limits,
+            },
+        )?;
+        if let Some(ready) = ready {
+            // The sole frame fence is retired. Conservatively retire presentation
+            // and the entire descriptor generation before releasing chunk 1 owners.
+            if let Some(chain) = &mut self.chain {
+                chain.retire()?;
+            }
+            drop(self.chain.take());
+            let (set, publication) = ready.into_parts();
+            let [geometry, materials, uvs, table] = set.buffers;
+            drop(self.world_work.as_mut().unwrap().replace_asset(geometry));
+            self.world_resources = Some(crate::world_upload::PresentationSet {
+                materials,
+                uvs,
+                table,
+                images: set.images,
+            });
+            self.recreate = true;
+            self.rebuild(size)?;
+            if self.recreate {
+                return Err("World chunk publication generation unavailable".into());
+            }
+            self.world_stream
+                .as_mut()
+                .unwrap()
+                .published(publication, self.presented)?;
+        }
+        Ok(())
+    }
     fn tick_texture_refinement(&mut self, size: PhysicalSize<u32>) -> Result<()> {
         let Some(refinement) = &mut self.texture_refinement else {
             return Ok(());
@@ -1997,6 +2086,7 @@ impl Renderer {
             )?;
         }
         self.tick_bundle(size)?;
+        self.tick_world_bundle(size)?;
         self.tick_texture_refinement(size)?;
         let cooked_stats = (self.benchmark.is_some() && self.mode == RenderMode::AssetResolve)
             .then(|| crate::benchmark::CookedStats {
@@ -2460,6 +2550,12 @@ impl Renderer {
                 return Err("Bundle smoke did not qualify replacement or budget deferral".into());
             }
         }
+        if let Some(stream) = &self.world_stream {
+            if self.cycle_work && stream.publications < 2 && stream.deferrals == 0 {
+                return Err("World chunk smoke did not qualify publication or deferral".into());
+            }
+            stream.report()?;
+        }
         if self.probes.remaining() != 0 {
             return Err("WSI qualification ended before all four recovery probes ran".into());
         }
@@ -2489,6 +2585,7 @@ impl Drop for Renderer {
         drop(self.texture_table.take());
         drop(self.footprint.take());
         drop(self.world_cpu.take());
+        drop(self.world_stream.take());
         println!(
             "Render Lab teardown: {} swapchain generations",
             self.generations

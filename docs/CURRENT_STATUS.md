@@ -4,6 +4,20 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 independent complete-chunk replacement — locally qualified (2026-10-15)
+
+The resident pair can now keep chunk 0 fixed while one bounded I/O worker and GPU
+pending set replace chunk 1. Transfers and prior graphics users retire before a
+complete descriptor generation and CPU epoch publish. Fifteen native plans pass,
+including short-cap retention, cancellation, immutable-source failure and 65
+replacements over 1320 frames. The first chunk stays at epoch 1; diagnostic
+history stays bounded to 64 events. Seven replays pass 903 ray/colour probes
+across four/two-image transitions and retained content under pressure. Renderer
+28 tests, Clippy and Windows GNU/Wine qualification pass. This is a fixed
+20-presented-frame qualification schedule, not camera-driven world demand.
+[Contract](M4_ASSET_CONTRACT.md#independent-complete-chunk-replacement),
+[evidence](validation/M4_WORLD_CHUNK_STREAMING.md).
+
 ## M4 two complete resident textured chunks — integration slice (2026-10-15)
 
 The isolated pair mode now composes both complete cooked graphs in one shared

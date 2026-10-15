@@ -40,11 +40,23 @@ def qualify(report):
     cooks = [scene['quadrants'][i]['cook'] for i in indices]
     models = [decode(cook) for cook in cooks]
     view = int(os.environ.get('THEIA_WORLD_PAIR_VIEW', '2'))
+    frame = int(os.environ.get('THEIA_WORLD_PAIR_FRAME', '10'))
+    require(0 <= frame < 90, 'Invalid capture frame')
     exe = Path('apps/theia-render-lab/target/debug/theia-render-lab').resolve()
     textured = os.environ.get('THEIA_WORLD_PAIR_TEXTURED') == '1'
     mode = ['--world-bundle-pair', *[c['bundle']['path'] for c in cooks]] if textured else ['--world-pair-test', *[c['path'] for c in cooks]]
     args = [*mode, '--frames', '90',
             '--work-items', str(view), '--no-validation', '--gpu', '7900']
+    streamed = os.environ.get('THEIA_WORLD_STREAM_SCENE')
+    replacement = None
+    if streamed:
+        require(textured and indices == [0,2], 'Stream oracle uses fixed chunk 0 and replaceable chunk 2')
+        replacement = json.loads(Path(streamed).read_bytes())['quadrants'][2]['cook']
+        args += ['--world-stream-bundle', replacement['bundle']['path'],
+                 '--world-stream-report', str(output / 'stream.json')]
+        if os.environ.get('THEIA_WORLD_STREAM_CAPS'):
+            cpu,gpu,images = json.loads(os.environ['THEIA_WORLD_STREAM_CAPS'])
+            args += ['--bundle-byte-budget',str(cpu),'--bundle-gpu-budget',str(gpu),'--texture-budget',str(images)]
     if os.environ.get('THEIA_WORLD_PAIR_SHADERS'):
         args += ['--shader-dir', os.environ['THEIA_WORLD_PAIR_SHADERS']]
     options = rd.CaptureOptions()
@@ -57,7 +69,7 @@ def qualify(report):
     require(target is not None, 'Missing capture target')
     capture = None
     try:
-        target.QueueCapture(10, 1)
+        target.QueueCapture(frame, 1)
         deadline = time.monotonic() + 60
         while target.Connected() and time.monotonic() < deadline:
             message = target.ReceiveMessage(None)
@@ -66,6 +78,17 @@ def qualify(report):
         require(not target.Connected() and capture, 'Missing capture or target timeout')
     finally:
         target.Shutdown()
+    stream = None
+    active_index = 0
+    if streamed:
+        stream = json.loads((output / 'stream.json').read_bytes())
+        require(stream['fixed_epoch'] == 1 and stream['dropped_history'] == 0, 'Fixed chunk/history changed')
+        events = [e for e in stream['history'] if e['frame'] <= frame]
+        require(events, 'Missing publication history for capture')
+        active_index = events[-1]['index']
+        if active_index:
+            cooks[1] = replacement
+        models = [decode(cook) for cook in cooks]
     cap = rd.OpenCaptureFile()
     controller = None
     try:
@@ -88,7 +111,7 @@ def qualify(report):
         if textured:
             images = [t for t in textures if (t.width,t.height) == (64,64)]
             expected_images = sorted(p for model in models for p in model[3])
-            require(len(images) == 8 and sorted(bytes(controller.GetTextureData(t.resourceId,rd.Subresource()))
+            require(len(images) == len(expected_images) and sorted(bytes(controller.GetTextureData(t.resourceId,rd.Subresource()))
                     for t in images) == expected_images, 'Independent texture bytes differ')
         works = [controller.GetBufferData(b.resourceId, 0, 256) for b in buffers if b.length == 256]
         require(len(works) == 2, 'Expected two independent work arenas')
@@ -130,6 +153,17 @@ def qualify(report):
                         and primitive < limits[chunk][local] and d < 1, 'Invalid world identity/primitive')
                 populations[chunk] += 1
         require(all(populations) if view else not any(populations), 'Missing expected chunk coverage')
+        material_pixels = []
+        if textured:
+            for cook,model in zip(cooks,models):
+                table = model[0][3]
+                metadata, material_count, image_count = struct.unpack_from('<3I',table,12)
+                records = 88 + ((metadata+3)&~3)
+                source_pixels = {record['content_id']:pixels for record,pixels in zip(cook['textures'],model[3])}
+                hashes = [table[records+i*40:records+i*40+32].hex() for i in range(image_count)]
+                indices_offset = records + image_count*40
+                mapping = struct.unpack_from('<%dI'%material_count,table,indices_offset)
+                material_pixels.append([source_pixels[hashes[i]] for i in mapping])
         samples = []
         materials = set()
         boundaries = 0
@@ -155,7 +189,7 @@ def qualify(report):
                     materials.add((chunk,material))
                     coordinates = [{math.floor(v*64+delta)%64 for delta in (-.002,.002)} for v in uv]
                     boundaries += int(any(len(v)>1 for v in coordinates))
-                    expected_rgb = [list(models[chunk][3][material][(ty*64+tx)*4:(ty*64+tx)*4+3])
+                    expected_rgb = [list(material_pixels[chunk][material][(ty*64+tx)*4:(ty*64+tx)*4+3])
                                     for tx in coordinates[0] for ty in coordinates[1]]
                 else:
                     tint = [.18,.48,.24] if chunk == 0 else [.48,.24,.18]
@@ -177,7 +211,8 @@ def qualify(report):
         success(controller.SaveTexture(save, str(output / 'preview.png')))
         report.update(passed=True, capture=capture, chunks=indices, view=view,
                       shader_dir=os.environ.get('THEIA_WORLD_PAIR_SHADERS','build/shaders'),
-                      textured=textured, sampled_materials=sorted(materials),
+                      textured=textured, frame=frame, active_index=active_index, stream=stream,
+                      sampled_materials=sorted(materials),
                       boundary_envelope_probes=boundaries,
                       pixels=populations, compactions_verified=True,
                       identity_depth_bounds_verified=True, ray_samples=samples,

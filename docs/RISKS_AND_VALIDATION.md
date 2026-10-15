@@ -153,3 +153,11 @@ fixtures do not establish production material complexity, texture filtering/LOD,
 streaming latency or representative art quality. Construction-time caps exclude
 work/staging/targets/driver resources and are not total VRAM measurements.
 [Evidence](validation/M4_WORLD_TEXTURED_PAIR.md).
+
+
+The two-chunk profile now qualifies asynchronous complete replacement of one slot
+while another remains fixed, including image-array count changes and protected
+current sets under short capacity. It still rebuilds/retire graphics conservatively
+and uses a fixed frame schedule. Spatial coverage, camera-driven request priority,
+four-chunk composition, GPU allocator reuse and native Windows GPU remain gates.
+[Evidence](validation/M4_WORLD_CHUNK_STREAMING.md).

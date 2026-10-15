@@ -429,3 +429,11 @@ aggregate physical/image caps. Distinct palettes expose accidental cross-chunk
 bindings. Next qualify independent complete-chunk replacement and protected
 fallback coverage before camera demand can drive rendered residency. The crowd
 benchmark remains a separate single-bundle workload.
+
+
+Independent complete replacement now keeps one resident chunk fixed while a
+bounded worker/pending set alternates another, with protected current sets under
+short capacity and fence-gated descriptor/CPU publication. Four/two-image array
+transitions and 65 successive publications qualify locally. Next expand bounded
+complete-world composition and spatial fallback coverage before connecting the
+camera-distance oracle to runtime requests. The timed crowd route stays separate.

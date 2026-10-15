@@ -410,3 +410,12 @@ same isolated fixed cameras, supports the three independent CPU/bundle/image
 budget flags, and rejects streaming/benchmark modes. This is a world-rendering
 integration probe, separate from the timed `--mixed-world` crowd workload.
 [Complete-pair limits/evidence](validation/M4_WORLD_TEXTURED_PAIR.md).
+
+
+For independent replacement in the separate pair probe, append
+`--world-stream-bundle <replacement.theia-bundle>` and optionally
+`--world-stream-report build/qualification/world-stream.json`. Chunk 0 stays
+resident while chunk 1 alternates every twenty presented frames after bounded
+I/O and fence-gated uploads; both remain visible during budget deferral. This
+schedule is diagnostic and does not follow the camera-distance oracle.
+[Lifecycle, caps and proof](validation/M4_WORLD_CHUNK_STREAMING.md).

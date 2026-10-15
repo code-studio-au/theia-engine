@@ -238,6 +238,43 @@ separate. This slice has no crowd composition, live chunk replacement, protected
 fallback selection, geometry LOD or camera-driven residency.
 [Qualification](validation/M4_WORLD_TEXTURED_PAIR.md).
 
+### Independent complete-chunk replacement
+
+`--world-bundle-pair <fixed initial> --world-stream-bundle <replacement>` keeps
+presentation slot/chunk 0 resident and alternates slot 1's two distinct v2 graphs
+every twenty presented frames. These are qualification slot IDs, not inferred
+spatial region identities. One bounded local-file worker/channel and one pending
+GPU set reuse complete-graph admission and the shared world CPU encoded pool.
+The tested source variants preserve geometry/UVs/material slots while changing
+palette and deduplicated image count (four to two and back).
+
+The physical and image caps include both active chunks plus the pending complete
+replacement, without GPU deduplication. CPU charges deduplicate all live current/
+staged/retained encoded owners. Budget pressure drops partial transfers after
+fence retirement and retains both current complete chunks without changing the
+world epoch. Source/driver/unsupported-limit errors are fatal with orderly cleanup.
+File reads are bounded in bytes, not deadline bounded; shutdown joins the worker.
+
+The sole frame fence retires before polling; every replacement transfer fence
+must be ready before publication. Presentation/device retirement and destruction
+of the old graphics descriptor generation precede dropping slot 1's GPU owners.
+A new complete generation can change image-array count. Only after construction
+succeeds does the CPU world replace chunk 1; chunk 0's CPU epoch remains unchanged.
+Generation-construction failure is fatal and has no rollback guarantee. This is
+conservative retirement/rebuild, not general multi-frame allocation reuse or a
+GPU upload/render overlap performance claim.
+
+`--world-stream-report <json>` writes a diagnostic completion record, with at most
+64 recent CPU publication events plus a dropped count. `current_cpu_bytes` is the
+pool's current live charge, including an admitted pending reservation; it is not
+only published bytes or process RSS. Peak complete-set physical/image fields
+cover active plus fully submitted complete candidates; failed partial candidates
+are excluded from those observations, while per-allocation remaining-cap checks
+still prevent overshoot. No renderer scheduling reads GPU counts back.
+
+Camera demand, spatial fallback coverage, four-chunk composition, proxies and the
+timed crowd route remain separate. [Evidence](validation/M4_WORLD_CHUNK_STREAMING.md).
+
 ### Indexed bundle and multiple authored images
 
 THEIABND v2 retains the 176-byte four-root layout, replacing the final KTX2
