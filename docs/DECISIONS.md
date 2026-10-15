@@ -55,3 +55,10 @@ existing explicit Vulkan and data-oriented targets; it changes no locked baselin
 and approves no production scene-binding policy. Fragment/four-chunk composition
 and cross-vendor/native Windows execution remain open.
 [Evidence](validation/M4_STORAGE_DESCRIPTOR_ARRAYS.md).
+
+The subsequent opt-in four-chunk fixture also qualifies fragment storage/image
+array composition, differing image counts and material factors. Explicit scalar
+selection of pushed texture bases replaces a direct divergent vector-index form
+that failed colour replay. This bounded qualification does not approve a final
+binding policy or expand the mandatory baseline. Cross-vendor/native Windows GPU
+remains open. [Evidence](validation/M4_FOUR_RESIDENT_CHUNKS.md).

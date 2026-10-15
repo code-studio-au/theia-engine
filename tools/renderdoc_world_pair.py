@@ -12,7 +12,7 @@ import time
 import traceback
 import renderdoc as rd
 sys.path.insert(0, str(Path.cwd() / 'tools'))
-from cooked_benchmark_reference import decode, ray, dot
+from cooked_benchmark_reference import decode, ray, dot, material_pixels
 from proxy_benchmark_reference import encode
 
 
@@ -153,17 +153,7 @@ def qualify(report):
                         and primitive < limits[chunk][local] and d < 1, 'Invalid world identity/primitive')
                 populations[chunk] += 1
         require(all(populations) if view else not any(populations), 'Missing expected chunk coverage')
-        material_pixels = []
-        if textured:
-            for cook,model in zip(cooks,models):
-                table = model[0][3]
-                metadata, material_count, image_count = struct.unpack_from('<3I',table,12)
-                records = 88 + ((metadata+3)&~3)
-                source_pixels = {record['content_id']:pixels for record,pixels in zip(cook['textures'],model[3])}
-                hashes = [table[records+i*40:records+i*40+32].hex() for i in range(image_count)]
-                indices_offset = records + image_count*40
-                mapping = struct.unpack_from('<%dI'%material_count,table,indices_offset)
-                material_pixels.append([source_pixels[hashes[i]] for i in mapping])
+        pixel_tables = [material_pixels(cook,model[3]) for cook,model in zip(cooks,models)] if textured else []
         samples = []
         materials = set()
         boundaries = 0
@@ -189,7 +179,7 @@ def qualify(report):
                     materials.add((chunk,material))
                     coordinates = [{math.floor(v*64+delta)%64 for delta in (-.002,.002)} for v in uv]
                     boundaries += int(any(len(v)>1 for v in coordinates))
-                    expected_rgb = [list(material_pixels[chunk][material][(ty*64+tx)*4:(ty*64+tx)*4+3])
+                    expected_rgb = [list(pixel_tables[chunk][material][(ty*64+tx)*4:(ty*64+tx)*4+3])
                                     for tx in coordinates[0] for ty in coordinates[1]]
                 else:
                     tint = [.18,.48,.24] if chunk == 0 else [.48,.24,.18]

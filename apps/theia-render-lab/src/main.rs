@@ -17,6 +17,7 @@ mod texture_footprint_reference;
 mod texture_refinement;
 mod visibility;
 mod world_descriptors;
+mod world_scene;
 mod world_streaming;
 mod world_upload;
 mod wsi;
@@ -58,6 +59,7 @@ enum RenderMode {
 struct Options {
     world_upload: Option<std::path::PathBuf>,
     world_descriptor_test: bool,
+    world_scene: Option<std::path::PathBuf>,
     world_pair: Option<std::path::PathBuf>,
     world_bundle_pair: Option<std::path::PathBuf>,
     world_stream_bundle: Option<std::path::PathBuf>,
@@ -133,6 +135,15 @@ impl Options {
                 .unwrap_or_else(|| "build/benchmark/report.json".into()),
         }
     }
+    fn storage_array_requirement(&self) -> u32 {
+        if self.world_scene.is_some() {
+            16
+        } else if self.world_descriptor_test {
+            5
+        } else {
+            0
+        }
+    }
     fn render_mode(&self) -> RenderMode {
         if self.lod.is_some() {
             RenderMode::AssetLod
@@ -151,6 +162,15 @@ impl Options {
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
+                "--world-scene-test" => {
+                    if result.mode.replace(RenderMode::AssetResolve).is_some()
+                        || result.world_scene.is_some()
+                    {
+                        return Err("Four-chunk world fixture owns its render mode".into());
+                    }
+                    result.world_scene =
+                        Some(args.next().ok_or("Missing world fixture manifest")?.into());
+                }
                 "--world-descriptor-test" => {
                     if result.mode.replace(RenderMode::Clear).is_some() {
                         return Err(
@@ -958,7 +978,7 @@ impl Options {
                         "Mixed resident scene: --benchmark-mixed --bundle <indexed world> [--benchmark-players 0..10000]\nCooked route/timings: --benchmark-cooked --bundle <indexed bundle> [--stream-bundle <replacement>]\nMMO visual benchmark: --benchmark [--benchmark-players 0..10000] [--benchmark-width 1280 --benchmark-height 720] [--frames 3660 --benchmark-warmup 60 --benchmark-seconds 60] [--benchmark-report path.json]\nCPU oracle: --benchmark-reference <players frame frames width height>"
                     );
                     println!(
-                        "Theia Render Lab: GPU task/mesh qualification\n  --world-descriptor-test  qualify optional nonuniform storage-buffer arrays\n  --world-stream-bundle <replacement>  asynchronously alternate chunk 1 while chunk 0 stays resident\n  --world-stream-report <json>  bounded CPU publication history on completion\n  --world-bundle-pair <bundle0 bundle1>  two complete resident textured chunks\n  --world-pair-test <mesh0 mesh1>  two resident chunks with shared identity/depth\n  --world-pair-reference <width height view>  CPU camera JSON\n  --world-upload-test <scene.json>  isolated four-chunk GPU ownership probe (no chunk draws)\n  --network-client <loopback address> --network-certificate <public DER>  live readonly GPU viewer\n  --network-faults  bounded encrypted post-bootstrap packet faults\n  --network-repair-test  qualification ACK withholding until full repair\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-hysteresis <0..1>  stricter coarsening entry fraction (default 0)\n  --lod-hysteresis-test  explicit eight-phase budget trajectory\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-auto-mips <file>  GPU analytic-footprint mip choice\n  --texture-refine-budget <dense texel bytes>  one asynchronous finer-tail publication\n  --texture-tail-budget <dense texel bytes>  coarse resident suffix for automatic mips\n  --texture-tail-reference <mesh material uv texture budget x y width height view>  CPU suffix sampling JSON\n  --texture-tail-linear-reference <mesh material uv texture budget x y width height view>  CPU bilinear suffix sampling JSON\n  --texture-linear-filter  opt-in bilinear repeat within automatic mip\n  --texture-linear-reference <mesh material uv texture x y width height view>  CPU bilinear sampling JSON\n  --texture-auto-reference <mesh material uv texture x y width height view>  CPU automatic sampling JSON\n  --texture-mip-test <file level>  upload complete chain with a fixed mip view\n  --texture-mip-reference <mesh material uv texture level x y width height view>  CPU mip sampling JSON\n  --texture-footprint-reference <mesh uv texture x y width height view>  CPU UV-gradient/mip oracle\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU task/mesh qualification\n  --world-scene-test <scene.json>  four complete resident cooked chunks\n  --world-descriptor-test  qualify optional nonuniform storage-buffer arrays\n  --world-stream-bundle <replacement>  asynchronously alternate chunk 1 while chunk 0 stays resident\n  --world-stream-report <json>  bounded CPU publication history on completion\n  --world-bundle-pair <bundle0 bundle1>  two complete resident textured chunks\n  --world-pair-test <mesh0 mesh1>  two resident chunks with shared identity/depth\n  --world-pair-reference <width height view>  CPU camera JSON\n  --world-upload-test <scene.json>  isolated four-chunk GPU ownership probe (no chunk draws)\n  --network-client <loopback address> --network-certificate <public DER>  live readonly GPU viewer\n  --network-faults  bounded encrypted post-bootstrap packet faults\n  --network-repair-test  qualification ACK withholding until full repair\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-hysteresis <0..1>  stricter coarsening entry fraction (default 0)\n  --lod-hysteresis-test  explicit eight-phase budget trajectory\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-auto-mips <file>  GPU analytic-footprint mip choice\n  --texture-refine-budget <dense texel bytes>  one asynchronous finer-tail publication\n  --texture-tail-budget <dense texel bytes>  coarse resident suffix for automatic mips\n  --texture-tail-reference <mesh material uv texture budget x y width height view>  CPU suffix sampling JSON\n  --texture-tail-linear-reference <mesh material uv texture budget x y width height view>  CPU bilinear suffix sampling JSON\n  --texture-linear-filter  opt-in bilinear repeat within automatic mip\n  --texture-linear-reference <mesh material uv texture x y width height view>  CPU bilinear sampling JSON\n  --texture-auto-reference <mesh material uv texture x y width height view>  CPU automatic sampling JSON\n  --texture-mip-test <file level>  upload complete chain with a fixed mip view\n  --texture-mip-reference <mesh material uv texture level x y width height view>  CPU mip sampling JSON\n  --texture-footprint-reference <mesh uv texture x y width height view>  CPU UV-gradient/mip oracle\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -1068,6 +1088,7 @@ impl Options {
             }
         } else if (result.bundle_byte_budget.is_some() || result.bundle_gpu_budget.is_some())
             && result.world_bundle_pair.is_none()
+            && result.world_scene.is_none()
         {
             return Err("Bundle residency budgets require --stream-bundle".into());
         }
@@ -1185,6 +1206,7 @@ impl Options {
         if result.texture_budget.is_some()
             && result.texture.is_none()
             && result.texture_table.is_none()
+            && result.world_scene.is_none()
         {
             return Err("--texture-budget requires --texture-test or --texture-table".into());
         }
@@ -1255,6 +1277,34 @@ impl Options {
                 );
             }
             result.frames = Some(120);
+        }
+        if result.world_scene.is_some()
+            && (result.render_mode() != RenderMode::AssetResolve
+                || result.benchmark
+                || result.asset.is_some()
+                || result.bundle.is_some()
+                || result.cell.is_some()
+                || result.lod.is_some()
+                || result.fallback.is_some()
+                || result.asset_budget.is_some()
+                || result.materials.is_some()
+                || result.uvs.is_some()
+                || result.texture.is_some()
+                || result.texture_table.is_some()
+                || result.camera
+                || result.frustum
+                || result.material
+                || result.world_pair.is_some()
+                || result.world_bundle_pair.is_some()
+                || result.world_upload.is_some()
+                || result.world_descriptor_test
+                || result.network_address.is_some()
+                || result.authority_demo
+                || result.authority_alpha.is_some())
+        {
+            return Err(
+                "Four-chunk world fixture cannot combine other asset/render profiles".into(),
+            );
         }
         if result.world_descriptor_test
             && (result.benchmark
@@ -1401,6 +1451,8 @@ impl ApplicationHandler for App {
                     Window::default_attributes()
                         .with_title(if self.options.network_address.is_some() {
                             "Theia network viewer — Connecting"
+                        } else if self.options.world_scene.is_some() {
+                            "Theia — four cooked world chunks"
                         } else if self.options.benchmark_mixed {
                             "Theia — cooked village and visual players"
                         } else if self.options.benchmark_cooked {

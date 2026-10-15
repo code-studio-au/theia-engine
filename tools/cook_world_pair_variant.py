@@ -42,6 +42,12 @@ def cook(args):
         name = 'palette-%d.png' % i
         (out/name).write_bytes(png(pixels))
         image['uri'] = name
+    factors = [[.5,1.,.75,1.],[1.,.5,.75,1.],[.75,1.,.5,1.],[.5,.75,1.,1.]]
+    if args.factors:
+        if len(modified['materials']) != 4:
+            raise ValueError('Expected four material slots')
+        for material,factor in zip(modified['materials'],factors):
+            material.setdefault('pbrMetallicRoughness',{})['baseColorFactor']=factor
     source_path = out/'variant.gltf'
     source_path.write_text(json.dumps(modified,sort_keys=True,separators=(',',':'))+'\n')
     normalized = out/'variant.json'
@@ -50,9 +56,11 @@ def cook(args):
                         '--unlit-textures'],stdout=log,stderr=subprocess.STDOUT,check=True,timeout=120)
     a = json.loads(Path(original['normalized']).read_bytes())
     b = json.loads(normalized.read_bytes())
-    for key in ('positions','indices','texcoords','triangle_materials','base_colors'):
+    for key in ('positions','indices','texcoords','triangle_materials'):
         if a[key] != b[key]:
             raise ValueError('Palette-only variant changed '+key)
+    if b['base_colors'] != (factors if args.factors else a['base_colors']):
+        raise ValueError('Normalized unlit factors differ from source recipe')
     if b['texture_materials'] != [i % args.images for i in range(4)] or len(b['textures']) != args.images:
         raise ValueError('Normalized PNG alias mapping differs from source recipe')
     command = [sys.executable,'tools/cook_meshlet_fixture.py','--geometry',str(normalized),
@@ -74,14 +82,15 @@ def cook(args):
     variant['quadrants'][2].update(source=str(source_path),source_sha256=digest(source_path.read_bytes()),
         normalized=str(normalized),normalized_sha256=digest(normalized.read_bytes()),cook=cooked)
     variant['palette_variant'] = dict(chunk=2,recipe='rgb=(255-b,255-r,255-g),alpha=255',
-        source_scene_sha256=digest(args.scene.read_bytes()), geometry_uv_materials_unchanged=True, unique_images=args.images, texture_aliases_verified=True,
+        source_scene_sha256=digest(args.scene.read_bytes()), geometry_uv_materials_unchanged=not args.factors, geometry_uv_material_slots_unchanged=True, factor_variant=args.factors, unique_images=args.images, texture_aliases_verified=True,
         native_texels_verified=True)
     (out/'scene.json').write_text(json.dumps(variant,indent=2,sort_keys=True)+'\n')
-    print('Cooked palette-only chunk variant; unchanged geometry/UVs/material assignments and exact native texels')
+    print('Cooked diagnostic chunk variant; unchanged geometry/UVs/material slots, checked factors/aliases and exact native texels')
 
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--factors',action='store_true',help='use distinct opaque unlit material factors')
     parser.add_argument('--images',type=int,choices=(2,4),default=4)
     parser.add_argument('--scene',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)

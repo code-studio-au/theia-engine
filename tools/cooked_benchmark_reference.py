@@ -77,3 +77,21 @@ def ray(rows, triangles, x, y, width, height):
     return result
 
 
+
+
+def material_pixels(cook, pixels):
+    """Canonical table hashes map dense materials to source-order decoded pixels."""
+    table = Path(cook['texture_table']['path']).read_bytes()
+    metadata, materials, images = struct.unpack_from('<3I', table, 12)
+    records = 88 + ((metadata + 3) & ~3)
+    source = {record['content_id']: value for record, value in zip(cook['textures'], pixels)}
+    hashes = [table[records + i * 40:records + i * 40 + 32].hex() for i in range(images)]
+    mapping = struct.unpack_from('<%dI' % materials, table, records + images * 40)
+    return [source[hashes[index]] for index in mapping]
+
+
+def material_factors(cook):
+    page = Path(cook['materials']['path']).read_bytes()
+    metadata, count = struct.unpack_from('<2I', page, 12)
+    offset = 96 + ((metadata + 3) & ~3)
+    return list(struct.iter_unpack('<4f', page[offset:offset + count * 16]))

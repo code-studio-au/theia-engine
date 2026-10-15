@@ -256,7 +256,7 @@ impl Context {
             (
                 options.texture_auto_mips,
                 options.texture_linear_filter,
-                options.world_descriptor_test,
+                options.storage_array_requirement(),
             ),
         )?;
         // SAFETY: Features were queried on the selected device; all queue indices support the intended
@@ -289,7 +289,9 @@ impl Context {
                 .runtime_descriptor_array(true)
                 .descriptor_binding_partially_bound(true)
                 .shader_sampled_image_array_non_uniform_indexing(true)
-                .shader_storage_buffer_array_non_uniform_indexing(options.world_descriptor_test);
+                .shader_storage_buffer_array_non_uniform_indexing(
+                    options.storage_array_requirement() != 0,
+                );
             let mut v13 = vk::PhysicalDeviceVulkan13Features::default()
                 .dynamic_rendering(true)
                 .synchronization2(true);
@@ -300,7 +302,9 @@ impl Context {
                 .swapchain_maintenance1(true);
             let core_features = vk::PhysicalDeviceFeatures::default()
                 .fragment_stores_and_atomics(options.texture_auto_mips)
-                .shader_storage_buffer_array_dynamic_indexing(options.world_descriptor_test);
+                .shader_storage_buffer_array_dynamic_indexing(
+                    options.storage_array_requirement() != 0,
+                );
             self.device = Some(
                 instance.create_device(
                     self.physical,
@@ -346,9 +350,10 @@ impl Context {
         visibility: bool,
         asset: bool,
         cull: bool,
-        texture_profile: (bool, bool, bool),
+        optional_profiles: (bool, bool, u32),
     ) -> Result<()> {
-        let (footprint, linear_filter, storage_arrays) = texture_profile;
+        let (footprint, linear_filter, storage_requirement) = optional_profiles;
+        let storage_arrays = storage_requirement != 0;
         let instance = self.instance.as_ref().unwrap();
         let surface = self.surface_loader.as_ref().unwrap();
         let mut candidates = Vec::new();
@@ -483,13 +488,15 @@ impl Context {
                                 && properties.limits.max_storage_buffer_range >= 9728),
                     ),
                     (
-                        "optional storage-array probe requirements",
+                        "optional storage-array profile requirements",
                         !storage_arrays
                             || (storage_dynamic
                                 && v12.shader_storage_buffer_array_non_uniform_indexing
                                     == vk::TRUE
-                                && properties.limits.max_per_stage_descriptor_storage_buffers >= 5
-                                && properties.limits.max_descriptor_set_storage_buffers >= 5
+                                && properties.limits.max_per_stage_descriptor_storage_buffers
+                                    >= storage_requirement
+                                && properties.limits.max_descriptor_set_storage_buffers
+                                    >= storage_requirement
                                 && properties.limits.max_storage_buffer_range >= 256
                                 && properties.limits.max_compute_work_group_invocations >= 64
                                 && properties.limits.max_compute_work_group_size[0] >= 64),
@@ -932,6 +939,7 @@ pub struct Renderer {
     proxy_work: Option<IndirectWork>,
     world_work: Option<IndirectWork>,
     world_resources: Option<crate::world_upload::PresentationSet>,
+    scene: Option<crate::world_scene::Scene>,
     lod: Option<crate::indirect::Lod>,
     materials: Option<crate::asset::Buffer>,
     uvs: Option<crate::asset::Buffer>,
@@ -1038,6 +1046,7 @@ impl Renderer {
             proxy_work: None,
             world_work: None,
             world_resources: None,
+            scene: None,
             world_cpu: None,
             world_stream: None,
             lod: None,
@@ -1176,7 +1185,43 @@ impl Renderer {
                 return Err("Device cannot support bounded authority mesh/push profile".into());
             }
         }
-        if let Some(second) = &options.world_bundle_pair {
+        if let Some(path) = &options.world_scene {
+            // SAFETY: Context retains the selected physical device and instance.
+            let (memory, limits, image_limits) = unsafe {
+                let instance = renderer.ctx.instance.as_ref().unwrap();
+                (
+                    instance.get_physical_device_memory_properties(renderer.ctx.physical),
+                    instance
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits,
+                    instance.get_physical_device_image_format_properties(
+                        renderer.ctx.physical,
+                        vk::Format::R8G8B8A8_SRGB,
+                        vk::ImageType::TYPE_2D,
+                        vk::ImageTiling::OPTIMAL,
+                        vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                        vk::ImageCreateFlags::empty(),
+                    )?,
+                )
+            };
+            renderer.scene = Some(crate::world_scene::Scene::load(
+                path,
+                crate::bundle_streaming::Gpu {
+                    device: renderer.ctx.device.as_ref().unwrap(),
+                    memory: &memory,
+                    family: renderer.ctx.graphics_family,
+                    queue: renderer.ctx.graphics,
+                    limits,
+                    image_limits,
+                },
+                renderer.shader_dir.as_deref().unwrap(),
+                (
+                    options.bundle_byte_budget.unwrap_or(64 * 1024 * 1024),
+                    options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
+                    options.texture_budget.unwrap_or(4 * 1024 * 1024),
+                ),
+            )?);
+        } else if let Some(second) = &options.world_bundle_pair {
             // SAFETY: Context retains this selected physical device and instance.
             let (memory, limits, image_limits) = unsafe {
                 let instance = renderer.ctx.instance.as_ref().unwrap();
@@ -1753,6 +1798,10 @@ impl Renderer {
     fn bundle_resource_bytes(&self) -> u64 {
         self.work.as_ref().map_or(0, IndirectWork::resident_bytes)
             + self
+                .scene
+                .as_ref()
+                .map_or(0, crate::world_scene::Scene::physical_bytes)
+            + self
                 .world_work
                 .as_ref()
                 .map_or(0, IndirectWork::resident_bytes)
@@ -1969,8 +2018,15 @@ impl Renderer {
             size,
             self.shader_dir.as_deref(),
             self.mode,
-            self.work.as_ref().map(|work| work.descriptor_layout),
+            self.work
+                .as_ref()
+                .map(|work| work.descriptor_layout)
+                .or_else(|| self.scene.as_ref().map(|s| s.work[0].descriptor_layout)),
             crate::visibility::ResolveBuffers {
+                scene: self
+                    .scene
+                    .as_ref()
+                    .map(crate::world_scene::Scene::descriptors),
                 world_textures: self.world_resources.as_ref().map(|r| {
                     crate::visibility::WorldTextures {
                         materials: descriptor(&r.materials),
@@ -2156,7 +2212,7 @@ impl Renderer {
             .transpose()?;
         let camera_rows = if let Some((_, rows)) = benchmark_push {
             Some(rows)
-        } else if self.world_work.is_some() {
+        } else if self.world_work.is_some() || self.scene.is_some() {
             Some(crate::camera::world_pair_rows(
                 chain.extent.width,
                 chain.extent.height,
@@ -2186,7 +2242,7 @@ impl Renderer {
                 .unwrap()
                 .bind_geometry(self.work.as_ref().unwrap().benchmark_descriptor());
         }
-        if self.mode == RenderMode::AssetResolve {
+        if self.mode == RenderMode::AssetResolve && self.scene.is_none() {
             chain
                 .visibility
                 .as_mut()
@@ -2278,6 +2334,11 @@ impl Renderer {
                     }),
                 );
             }
+            if let Some(scene) = &self.scene {
+                for work in &scene.work {
+                    work.generate(ctx.command, input, camera_rows, None);
+                }
+            }
             if let Some(world) = &self.world_work {
                 world.generate(ctx.command, input, camera_rows, None);
             }
@@ -2326,9 +2387,19 @@ impl Renderer {
                 target.record_identity(
                     ctx.command,
                     ctx.mesh_commands.as_ref().unwrap(),
-                    self.work.as_ref().unwrap(),
+                    self.work
+                        .as_ref()
+                        .or_else(|| self.scene.as_ref().map(|s| &s.work[0]))
+                        .unwrap(),
                     self.proxy_work.as_ref(),
-                    self.world_work.as_ref(),
+                    if let Some(scene) = &self.scene {
+                        crate::visibility::WorldDraws::Scene(&scene.work[1..])
+                    } else {
+                        self.world_work.as_ref().map_or(
+                            crate::visibility::WorldDraws::None,
+                            crate::visibility::WorldDraws::Pair,
+                        )
+                    },
                     camera_rows,
                 );
             }
@@ -2622,6 +2693,7 @@ impl Drop for Renderer {
         drop(self.proxy_work.take());
         drop(self.world_work.take());
         drop(self.world_resources.take());
+        drop(self.scene.take());
         drop(self.materials.take());
         drop(self.uvs.take());
         drop(self.texture.take());

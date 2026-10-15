@@ -1076,3 +1076,27 @@ The proxy arena is included in tracked DRAW allocation charges, independently of
 active bundle allocation metadata. The first mixed slice requires resident content
 and rejects bundle replacement; independent world-chunk residency is still open.
 [Usage and limits](SCENE_BENCHMARK.md#mixed-resident-world-and-visual-proxies).
+
+
+## Four complete resident chunks
+
+`--world-scene-test <scene.json>` admits exactly four checked v2 fixture bundles,
+stages their complete CPU graphs in one shared `WorldResidency`, retires all GPU
+transfers and publishes one four-chunk CPU epoch before graphics construction.
+Four geometry/work owners and four material/UV/table/image sets outlive every
+swapchain descriptor generation. Aggregate CPU encoded, physical resource and
+image allocation caps reject incomplete startup; work arenas/targets/staging are
+outside the resource cap, as in the preceding ownership probes.
+
+Shared visibility tags bits 29..30 with one of four frame-local slots; the local
+meshlet+1 occupies low 29 bits and primitive remains the second word. Each chunk
+uses its own GPU culling/indirect task work. Resolve binds four descriptors for
+each storage role and a combined image array, selecting chunk-specific texture
+bases and linear material factors. Storage-array indexing capabilities are opt-in
+for this profile. Explicit scalar selection of pushed texture-base components
+is the locally qualified form; direct divergent vector indexing failed replay.
+
+This is fixed startup composition with coarse fixed cameras, opaque unlit nearest
+mip-zero textures and no visual proxies. It does not generalize live replacement,
+connect camera demand, establish protected fallback or change the single-whole-
+world timed crowd benchmark. [Qualification](validation/M4_FOUR_RESIDENT_CHUNKS.md).

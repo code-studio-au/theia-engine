@@ -34,6 +34,7 @@ impl Drop for ShaderModule {
 }
 #[derive(Clone, Copy)]
 pub struct ResolveMode {
+    pub scene: bool,
     pub world_pair: bool,
     pub world_textures: bool,
     pub mixed: bool,
@@ -210,6 +211,25 @@ impl Pipeline {
             },
         )
     }
+    pub fn world_scene_visibility(
+        device: &ash::Device,
+        shaders: &Path,
+        layout: vk::DescriptorSetLayout,
+    ) -> Result<Self> {
+        Self::configured(
+            device,
+            vk::Format::R32G32_UINT,
+            shaders,
+            Some(layout),
+            ShaderStages {
+                mesh: "world.scene.visibility.mesh.spv",
+                task: Some("asset.task.spv"),
+                fragment: "world.pair.visibility.frag.spv",
+                depth: Some(vk::Format::D32_SFLOAT),
+                push: Some(vk::ShaderStageFlags::MESH_EXT),
+            },
+        )
+    }
     pub fn world_pair_visibility(
         device: &ash::Device,
         shaders: &Path,
@@ -237,6 +257,7 @@ impl Pipeline {
         mode: ResolveMode,
     ) -> Result<Self> {
         let ResolveMode {
+            scene,
             world_pair,
             world_textures,
             mixed,
@@ -257,7 +278,9 @@ impl Pipeline {
             ShaderStages {
                 mesh: "resolve.mesh.spv",
                 task: None,
-                fragment: if world_textures {
+                fragment: if scene {
+                    "world.scene.resolve.frag.spv"
+                } else if world_textures {
                     "world.pair.textured.resolve.frag.spv"
                 } else if world_pair {
                     "world.pair.resolve.frag.spv"
@@ -326,7 +349,10 @@ impl Pipeline {
                             32
                         } else if shaders.mesh == "benchmark.mesh.spv" {
                             96
-                        } else if shaders.fragment == "asset.texture.tail.resolve.frag.spv" {
+                        } else if shaders.fragment == "asset.texture.tail.resolve.frag.spv"
+                            || shaders.fragment == "world.scene.resolve.frag.spv"
+                            || shaders.mesh == "world.scene.visibility.mesh.spv"
+                        {
                             80
                         } else {
                             64

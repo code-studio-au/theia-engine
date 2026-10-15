@@ -4,6 +4,21 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 four complete resident world chunks — integration slice (2026-10-15)
+
+The isolated four-chunk scene now composes the full fine village through shared
+visibility/depth and nonuniform storage/image descriptor arrays. Independent
+compactions/indirect draws retain 16 root buffers and 16 images; the diagnostic
+variant reduces one chunk to two images and changes its linear material factors.
+Fifteen native plans pass with zero diagnostics, including seven-generation
+recovery and exact/short CPU/physical/image caps. A direct divergent push-constant
+vector lookup failed colour replay; explicit scalar-component selection passes
+the same oracle. Six replays pass 1247 ray/colour probes; both shader profiles
+validate 48 modules. Renderer 28 tests, Clippy and Windows GNU/Wine checks pass.
+This opt-in profile leaves the timed 10000-proxy mixed benchmark
+separate. Camera-driven residency and protected fallback remain outstanding.
+[Scope and evidence](validation/M4_FOUR_RESIDENT_CHUNKS.md).
+
 ## M4 optional storage-descriptor array compute gate — locally qualified (2026-10-15)
 
 An isolated opt-in probe now requires/enables uniform/nonuniform storage-buffer

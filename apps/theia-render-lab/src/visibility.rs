@@ -159,6 +159,21 @@ impl Drop for Image {
     }
 }
 #[derive(Clone, Copy)]
+pub struct SceneBuffers {
+    pub geometry: [vk::DescriptorBufferInfo; 4],
+    pub materials: [vk::DescriptorBufferInfo; 4],
+    pub uvs: [vk::DescriptorBufferInfo; 4],
+    pub tables: [vk::DescriptorBufferInfo; 4],
+    pub images: [vk::DescriptorImageInfo; crate::world_scene::MAX_IMAGES],
+    pub count: u32,
+    pub offsets: [u32; 4],
+}
+pub enum WorldDraws<'a> {
+    None,
+    Pair(&'a IndirectWork),
+    Scene(&'a [IndirectWork]),
+}
+#[derive(Clone, Copy)]
 pub struct WorldTextures {
     pub materials: vk::DescriptorBufferInfo,
     pub uvs: vk::DescriptorBufferInfo,
@@ -168,6 +183,7 @@ pub struct WorldTextures {
 }
 #[derive(Clone, Copy, Default)]
 pub struct ResolveBuffers {
+    pub scene: Option<SceneBuffers>,
     pub world_textures: Option<WorldTextures>,
     pub world_geometry: Option<(vk::DescriptorSetLayout, vk::DescriptorBufferInfo)>,
     pub proxy_work: Option<(vk::DescriptorSetLayout, vk::DescriptorBufferInfo)>,
@@ -184,7 +200,9 @@ pub struct ResolveBuffers {
 }
 impl ResolveBuffers {
     fn image_count(&self) -> u32 {
-        if self.texture_table.is_some() {
+        if let Some(scene) = self.scene {
+            scene.count
+        } else if self.texture_table.is_some() {
             self.texture_count
         } else {
             u32::from(self.texture.is_some())
@@ -208,6 +226,7 @@ pub struct Target {
     cooked: bool,
     benchmark: bool,
     cooked_hud: bool,
+    scene_offsets: Option<[u32; 4]>,
     authored: bool,
     uv: bool,
     geometry: Option<(vk::Buffer, u64, u64)>,
@@ -224,6 +243,25 @@ impl Target {
         cooked: bool,
     ) -> Result<Self> {
         let (work_layout, buffers) = work_info;
+        if let Some(scene) = buffers.scene
+            && (!cooked
+                || !(4..=crate::world_scene::MAX_IMAGES as u32).contains(&scene.count)
+                || buffers.world_geometry.is_some()
+                || buffers.world_textures.is_some()
+                || buffers.proxy_work.is_some()
+                || buffers.cooked_hud_work.is_some()
+                || buffers.benchmark
+                || buffers.materials.is_some()
+                || buffers.uvs.is_some()
+                || buffers.texture_table.is_some()
+                || buffers.texture.is_some()
+                || buffers.footprint.is_some())
+        {
+            return Err(
+                "Four-chunk scene requires its isolated complete descriptor profile".into(),
+            );
+        }
+
         if let Some(world) = buffers.world_textures
             && (buffers.world_geometry.is_none()
                 || buffers.texture_table.is_none()
@@ -232,8 +270,8 @@ impl Target {
             return Err("Textured world resolve requires two complete indexed sets".into());
         }
         let material_info = buffers.materials;
-        let uv = buffers.uvs.is_some();
-        let authored = material_info.is_some();
+        let uv = buffers.uvs.is_some() || buffers.scene.is_some();
+        let authored = material_info.is_some() || buffers.scene.is_some();
         let image_count = buffers.image_count();
         if buffers.footprint.is_some()
             && (buffers.texture_table.is_some() || buffers.texture.is_none() || !authored || !uv)
@@ -241,6 +279,7 @@ impl Target {
             return Err("Automatic mip probes require fixed geometry/material/UV and one full-chain texture".into());
         }
         let extra_storage = buffers.texture_table.or(buffers.footprint);
+        let has_extra_storage = extra_storage.is_some() || buffers.scene.is_some();
         if buffers.mip_tail.is_some() && buffers.footprint.is_none() {
             return Err("Mip-tail resolve requires automatic mip probes".into());
         }
@@ -296,6 +335,7 @@ impl Target {
             cooked,
             benchmark: buffers.benchmark,
             cooked_hud: buffers.cooked_hud_work.is_some(),
+            scene_offsets: buffers.scene.map(|s| s.offsets),
             authored,
             uv,
             geometry: None,
@@ -332,7 +372,7 @@ impl Target {
                     vk::DescriptorSetLayoutBinding::default()
                         .binding(4)
                         .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                        .descriptor_count(1)
+                        .descriptor_count(if buffers.scene.is_some() { 4 } else { 1 })
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
@@ -341,7 +381,7 @@ impl Target {
                     vk::DescriptorSetLayoutBinding::default()
                         .binding(5)
                         .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                        .descriptor_count(1)
+                        .descriptor_count(if buffers.scene.is_some() { 4 } else { 1 })
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
@@ -350,7 +390,7 @@ impl Target {
                     vk::DescriptorSetLayoutBinding::default()
                         .binding(6)
                         .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                        .descriptor_count(1)
+                        .descriptor_count(if buffers.scene.is_some() { 4 } else { 1 })
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
@@ -368,12 +408,12 @@ impl Target {
                     );
                 }
             }
-            if extra_storage.is_some() {
+            if has_extra_storage {
                 bindings.push(
                     vk::DescriptorSetLayoutBinding::default()
                         .binding(9)
                         .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                        .descriptor_count(1)
+                        .descriptor_count(if buffers.scene.is_some() { 4 } else { 1 })
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
@@ -437,7 +477,7 @@ impl Target {
             if image_count > 0 {
                 flags.extend([vk::DescriptorBindingFlags::empty(); 2]);
             }
-            if extra_storage.is_some() {
+            if has_extra_storage {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
             if buffers.cooked_hud_work.is_some() {
@@ -477,15 +517,17 @@ impl Target {
                 sizes.push(
                     vk::DescriptorPoolSize::default()
                         .ty(vk::DescriptorType::STORAGE_BUFFER)
-                        .descriptor_count(
+                        .descriptor_count(if buffers.scene.is_some() {
+                            16
+                        } else {
                             1 + u32::from(authored)
                                 + u32::from(uv)
-                                + u32::from(extra_storage.is_some())
+                                + u32::from(has_extra_storage)
                                 + u32::from(buffers.cooked_hud_work.is_some())
                                 + u32::from(buffers.proxy_work.is_some())
                                 + u32::from(buffers.world_geometry.is_some())
-                                + 3 * u32::from(buffers.world_textures.is_some()),
-                        ),
+                                + 3 * u32::from(buffers.world_textures.is_some())
+                        }),
                 );
             }
             target.pool = device.create_descriptor_pool(
@@ -563,7 +605,9 @@ impl Target {
                         .buffer_info(info),
                 );
             }
-            let texture_images = if buffers.texture_table.is_some() {
+            let texture_images = if let Some(scene) = &buffers.scene {
+                scene.images[..scene.count as usize].to_vec()
+            } else if buffers.texture_table.is_some() {
                 buffers.texture_images[..image_count as usize].to_vec()
             } else {
                 buffers.texture.into_iter().collect::<Vec<_>>()
@@ -654,9 +698,27 @@ impl Target {
                         .image_info(&world.images[..1]),
                 );
             }
+            if let Some(scene) = &buffers.scene {
+                for (binding, info) in [
+                    (4, &scene.geometry),
+                    (5, &scene.materials),
+                    (6, &scene.uvs),
+                    (9, &scene.tables),
+                ] {
+                    writes.push(
+                        vk::WriteDescriptorSet::default()
+                            .dst_set(target.set)
+                            .dst_binding(binding)
+                            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                            .buffer_info(info),
+                    );
+                }
+            }
             device.update_descriptor_sets(&writes, &[]);
         }
-        target.visibility = Some(if buffers.benchmark {
+        target.visibility = Some(if buffers.scene.is_some() {
+            Pipeline::world_scene_visibility(device, shaders, work_layout)?
+        } else if buffers.benchmark {
             Pipeline::benchmark(device, vk::Format::R32G32_UINT, shaders, work_layout, false)?
         } else {
             Pipeline::visibility(device, shaders, work_layout, cooked)?
@@ -690,6 +752,7 @@ impl Target {
             shaders,
             target.layout,
             crate::pipeline::ResolveMode {
+                scene: buffers.scene.is_some(),
                 world_pair: buffers.world_geometry.is_some(),
                 world_textures: buffers.world_textures.is_some(),
                 mixed: buffers.proxy_work.is_some(),
@@ -754,13 +817,26 @@ impl Target {
             );
         }
     }
+    fn push_slot(&self, command: vk::CommandBuffer, layout: vk::PipelineLayout, slot: u32) {
+        let words = [slot, 0, 0, 0];
+        // SAFETY: The scene's 80-byte mesh range includes this initialized 16-byte tail.
+        unsafe {
+            self.device.cmd_push_constants(
+                command,
+                layout,
+                vk::ShaderStageFlags::MESH_EXT,
+                64,
+                std::slice::from_raw_parts(words.as_ptr().cast::<u8>(), 16),
+            );
+        }
+    }
     pub fn record_identity(
         &self,
         command: vk::CommandBuffer,
         mesh: &ash::ext::mesh_shader::Device,
         work: &IndirectWork,
         proxy: Option<&IndirectWork>,
-        world: Option<&IndirectWork>,
+        world: WorldDraws<'_>,
         rows: Option<[[f32; 4]; 4]>,
     ) {
         let visibility = self.visibility.as_ref().unwrap();
@@ -900,6 +976,9 @@ impl Target {
                     rows.unwrap(),
                 );
             }
+            if self.scene_offsets.is_some() {
+                self.push_slot(command, visibility.layout, 0);
+            }
             work.draw(command, visibility.layout, mesh);
             if let Some(proxy) = proxy {
                 let pipeline = self.proxy_visibility.as_ref().unwrap();
@@ -916,20 +995,29 @@ impl Target {
                 );
                 proxy.draw(command, pipeline.layout, mesh);
             }
-            if let Some(world) = world {
-                let pipeline = self.world_visibility.as_ref().unwrap();
-                self.device.cmd_bind_pipeline(
-                    command,
-                    vk::PipelineBindPoint::GRAPHICS,
-                    pipeline.handle,
-                );
-                self.push_rows(
-                    command,
-                    pipeline.layout,
-                    vk::ShaderStageFlags::MESH_EXT,
-                    rows.unwrap(),
-                );
-                world.draw(command, pipeline.layout, mesh);
+            match world {
+                WorldDraws::None => {}
+                WorldDraws::Pair(world) => {
+                    let pipeline = self.world_visibility.as_ref().unwrap();
+                    self.device.cmd_bind_pipeline(
+                        command,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        pipeline.handle,
+                    );
+                    self.push_rows(
+                        command,
+                        pipeline.layout,
+                        vk::ShaderStageFlags::MESH_EXT,
+                        rows.unwrap(),
+                    );
+                    world.draw(command, pipeline.layout, mesh);
+                }
+                WorldDraws::Scene(works) => {
+                    for (index, work) in works.iter().enumerate() {
+                        self.push_slot(command, visibility.layout, index as u32 + 1);
+                        work.draw(command, visibility.layout, mesh);
+                    }
+                }
             }
             self.device.cmd_end_rendering(command);
             let end = [
@@ -965,6 +1053,19 @@ impl Target {
         overlay: Option<&[u8]>,
     ) {
         let pipeline = self.resolve.as_ref().unwrap();
+        if let Some(offsets) = self.scene_offsets {
+            // SAFETY: Four contiguous u32 texture bases fill the scene fragment prefix tail.
+            unsafe {
+                self.device.cmd_push_constants(
+                    command,
+                    pipeline.layout,
+                    vk::ShaderStageFlags::FRAGMENT,
+                    64,
+                    std::slice::from_raw_parts(offsets.as_ptr().cast::<u8>(), 16),
+                );
+            }
+        }
+
         // SAFETY: Called inside compatible swapchain dynamic rendering; descriptor images have been published.
         unsafe {
             if let Some(bytes) = overlay {

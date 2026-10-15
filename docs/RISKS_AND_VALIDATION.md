@@ -167,3 +167,13 @@ Nonuniform storage descriptor arrays now have a small opt-in compute correctness
 gate on RADV. It does not establish fragment/mesh compiler behavior, many-buffer
 performance, four-chunk rendering or broader vendor/Windows GPU support. Normal
 modes request their prior feature set. [Evidence](validation/M4_STORAGE_DESCRIPTOR_ARRAYS.md).
+
+
+Four resident complete chunks now qualify optional nonuniform fragment storage
+arrays and a combined sampled-image array. This tiny fixed world is not descriptor
+capacity/performance evidence. Direct divergent indexing of a pushed texture-base
+vector failed the varied-palette replay despite valid SPIR-V/clean native validation;
+explicit scalar component selection passes. Keep pixel oracles alongside validation,
+and requalify compiler/driver combinations before changing that expression.
+Camera-driven publication, protected fallback and cross-vendor execution remain
+open. [Evidence](validation/M4_FOUR_RESIDENT_CHUNKS.md).

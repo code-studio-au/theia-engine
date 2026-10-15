@@ -444,3 +444,12 @@ GPU reads from four bound buffers. Additional indexing features are opt-in and
 leave existing modes unchanged. Next qualify fragment access and bounded
 four-chunk composition; advertised feature/limit support is not rendering or
 performance evidence. [Gate](validation/M4_STORAGE_DESCRIPTOR_ARRAYS.md).
+
+
+The opt-in four-chunk fixture now composes the complete fine village with shared
+visibility/depth, four GPU compactions/indirect draws and nonuniform storage/image
+arrays. Distinct image counts and nonwhite material factors qualify chunk resource
+selection. Next protect spatial fallback coverage and connect camera-distance
+demand to independently published GPU sets, then integrate that world path with
+the timed crowd workload. General streaming, geometry LOD and virtual textures
+remain M4 exit gates. [Evidence](validation/M4_FOUR_RESIDENT_CHUNKS.md).
