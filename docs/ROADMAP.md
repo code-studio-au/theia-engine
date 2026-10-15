@@ -389,3 +389,11 @@ Cooked stats now read GPU meshlet counts directly and display host-owned active
 allocation/texture/publication metadata plus completed timings. Exact/short budget
 states and the original crowd panel pass pixel checks. This diagnostic UI retains
 the existing separation from the planned general engine text/UI system.
+
+
+Independent complete-bundle CPU world ownership now supports atomic named chunk
+add/replace/remove against one unique encoded-byte pool and separate slot cap.
+Retained world/chunk readers prevent premature byte reuse. Four real quadrant
+bundles pass exact/short budgets and shared ownership checks. Camera demand and
+independent GPU chunk publication remain the next integration gates; the mixed
+benchmark still uses its single resident whole-world representation.

@@ -171,6 +171,133 @@ impl Residency {
     }
 }
 
+/// Application-supplied stable chunk identity; distinct chunks may share a bundle.
+pub type ChunkId = u64;
+pub const MAX_WORLD_CHUNKS: usize = 4096;
+
+/// Atomic CPU view of independently published complete bundles.
+/// Each chunk's epoch records its last publication; this epoch records the world
+/// transaction. A retained world or chunk snapshot keeps its immutable bytes alive.
+#[derive(Clone, Default)]
+pub struct WorldSnapshot {
+    epoch: u64,
+    chunks: BTreeMap<ChunkId, Snapshot>,
+}
+impl WorldSnapshot {
+    pub fn epoch(&self) -> u64 {
+        self.epoch
+    }
+    pub fn chunk_count(&self) -> usize {
+        self.chunks.len()
+    }
+    pub fn chunk_ids(&self) -> impl Iterator<Item = ChunkId> + '_ {
+        self.chunks.keys().copied()
+    }
+    pub fn chunk(&self, id: ChunkId) -> Option<&Snapshot> {
+        self.chunks.get(&id)
+    }
+}
+
+/// Bounded CPU ownership prerequisite for independent world-chunk residency.
+/// No I/O, camera demand, eviction policy, GPU completion or descriptor publication
+/// is implied. The shared pool charges unique encoded bytes across all chunks,
+/// staged reservations and retained readers, including removed/replaced chunks.
+pub struct WorldResidency {
+    pool: Residency,
+    capacity: usize,
+    current: WorldSnapshot,
+}
+impl WorldResidency {
+    pub fn new(byte_budget: usize, chunk_capacity: usize) -> Result<Self> {
+        if !(1..=MAX_WORLD_CHUNKS).contains(&chunk_capacity) {
+            return Err(AssetError("invalid world chunk capacity"));
+        }
+        Ok(Self {
+            pool: Residency::new(byte_budget)?,
+            capacity: chunk_capacity,
+            current: WorldSnapshot::default(),
+        })
+    }
+    pub fn live_bytes(&self) -> usize {
+        self.pool.live_bytes()
+    }
+    pub fn snapshot(&self) -> WorldSnapshot {
+        self.current.clone()
+    }
+    /// Complete admission and reservation use the same contract as Residency.
+    /// A staged reservation is not yet a published chunk and consumes no slot.
+    pub fn stage(
+        &mut self,
+        manifest: &[u8],
+        expected: ResourceId,
+        roots: [&[u8]; 4],
+        leaves: &[&[u8]],
+    ) -> Result<StagedBundle> {
+        self.pool.stage(manifest, expected, roots, leaves)
+    }
+    /// Atomically add/replace named chunks and remove existing chunks. Duplicate
+    /// IDs, unknown removals, add/remove conflicts, foreign tokens, capacity and
+    /// epoch exhaustion fail before changing the current world. Failure consumes
+    /// the supplied tokens, releasing reservations when their last owner drops.
+    /// Empty transactions are rejected. Replacing an existing ID needs no removal.
+    pub fn publish(
+        &mut self,
+        additions: Vec<(ChunkId, StagedBundle)>,
+        removals: &[ChunkId],
+    ) -> Result<WorldSnapshot> {
+        if additions.len() > self.capacity
+            || removals.len() > self.capacity
+            || (additions.is_empty() && removals.is_empty())
+        {
+            return Err(AssetError("invalid world transaction size"));
+        }
+        let mut removed = std::collections::BTreeSet::new();
+        for id in removals {
+            if !removed.insert(*id) || !self.current.chunks.contains_key(id) {
+                return Err(AssetError("duplicate or unknown world removal"));
+            }
+        }
+        let mut added = std::collections::BTreeSet::new();
+        for (id, staged) in &additions {
+            if !added.insert(*id) || removed.contains(id) {
+                return Err(AssetError("duplicate or conflicting world addition"));
+            }
+            if staged.owner != self.pool.owner {
+                return Err(AssetError("foreign staged world bundle"));
+            }
+        }
+        let new_slots = added
+            .iter()
+            .filter(|id| !self.current.chunks.contains_key(id))
+            .count();
+        if self.current.chunks.len() - removed.len() + new_slots > self.capacity {
+            return Err(AssetError("world chunk capacity exhausted"));
+        }
+        let epoch = self
+            .current
+            .epoch
+            .checked_add(1)
+            .ok_or(AssetError("world residency epoch exhausted"))?;
+        let mut next = self.current.clone();
+        next.epoch = epoch;
+        for id in removals {
+            next.chunks.remove(id);
+        }
+        for (id, staged) in additions {
+            next.chunks.insert(
+                id,
+                Snapshot {
+                    epoch,
+                    bundle: Some(staged.bundle),
+                    resources: staged.resources,
+                },
+            );
+        }
+        self.current = next;
+        Ok(self.snapshot())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -220,6 +347,14 @@ mod tests {
             }
         }
         fn stage(&self, store: &mut Residency) -> Result<StagedBundle> {
+            store.stage(
+                &self.manifest,
+                content_id(&self.manifest),
+                std::array::from_fn(|i| self.roots[i].as_slice()),
+                &self.leaves.iter().map(Vec::as_slice).collect::<Vec<_>>(),
+            )
+        }
+        fn stage_world(&self, store: &mut WorldResidency) -> Result<StagedBundle> {
             store.stage(
                 &self.manifest,
                 content_id(&self.manifest),
@@ -391,6 +526,181 @@ mod tests {
             }
             assert_eq!(store.live_bytes(), expected.values().sum());
             assert!(store.live_bytes() <= budget);
+        }
+    }
+    #[test]
+    fn world_chunks_share_owners_and_publish_independently() {
+        let a = Input::fixture(42, true);
+        let b = Input::fixture(43, true);
+        let mut union = a.bytes();
+        union.extend(b.bytes());
+        let mut store = WorldResidency::new(union.values().sum(), 3).unwrap();
+        let sa = a.stage_world(&mut store).unwrap();
+        let duplicate = a.stage_world(&mut store).unwrap();
+        let sb = b.stage_world(&mut store).unwrap();
+        let first = store
+            .publish(vec![(8, sa), (2, sb), (99, duplicate)], &[])
+            .unwrap();
+        assert_eq!(first.chunk_ids().collect::<Vec<_>>(), [2, 8, 99]);
+        assert_eq!(first.epoch(), 1);
+        assert_eq!(store.live_bytes(), union.values().sum());
+        for id in a.bytes().keys() {
+            assert!(Arc::ptr_eq(
+                &first.chunks[&8].resources[id],
+                &first.chunks[&99].resources[id]
+            ));
+        }
+        let replacement = b.stage_world(&mut store).unwrap();
+        let second = store.publish(vec![(8, replacement)], &[2, 99]).unwrap();
+        assert_eq!(second.chunk_count(), 1);
+        assert_eq!(second.chunk(8).unwrap().epoch(), 2);
+        assert_eq!(first.chunk_count(), 3);
+        assert_eq!(store.live_bytes(), union.values().sum());
+        drop(first);
+        assert_eq!(store.live_bytes(), b.bytes().values().sum());
+        let retained_chunk = second.chunk(8).unwrap().clone();
+        drop(second);
+        store.publish(vec![], &[8]).unwrap();
+        assert_eq!(store.live_bytes(), b.bytes().values().sum());
+        drop(retained_chunk);
+        assert_eq!(store.live_bytes(), 0);
+    }
+
+    #[test]
+    fn world_transactions_fail_atomically_and_enforce_slots() {
+        let a = Input::fixture(42, true);
+        assert!(WorldResidency::new(0, 0).is_err());
+        assert!(WorldResidency::new(0, MAX_WORLD_CHUNKS + 1).is_err());
+        let mut store = WorldResidency::new(usize::MAX, 2).unwrap();
+        let first = a.stage_world(&mut store).unwrap();
+        store.publish(vec![(0, first)], &[]).unwrap();
+        let mut other = WorldResidency::new(usize::MAX, 2).unwrap();
+        let foreign = a.stage_world(&mut other).unwrap();
+        let valid = a.stage_world(&mut store).unwrap();
+        assert!(store.publish(vec![(1, valid), (2, foreign)], &[]).is_err());
+        assert!(store.publish(vec![], &[]).is_err());
+        assert!(store.publish(vec![], &[123]).is_err());
+        assert!(store.publish(vec![], &[0, 0]).is_err());
+        let staged = a.stage_world(&mut store).unwrap();
+        assert!(store.publish(vec![(0, staged)], &[0]).is_err());
+        let sa = a.stage_world(&mut store).unwrap();
+        let sb = a.stage_world(&mut store).unwrap();
+        assert!(store.publish(vec![(1, sa), (1, sb)], &[]).is_err());
+        let sa = a.stage_world(&mut store).unwrap();
+        let sb = a.stage_world(&mut store).unwrap();
+        assert!(store.publish(vec![(1, sa), (2, sb)], &[]).is_err());
+        assert_eq!(store.snapshot().epoch(), 1);
+        assert_eq!(store.snapshot().chunk_ids().collect::<Vec<_>>(), [0]);
+        assert_eq!(store.live_bytes(), a.bytes().values().sum());
+        let staged = a.stage_world(&mut store).unwrap();
+        store.publish(vec![(u64::MAX, staged)], &[0]).unwrap();
+        store.current.epoch = u64::MAX;
+        let staged = a.stage_world(&mut store).unwrap();
+        assert!(store.publish(vec![(0, staged)], &[u64::MAX]).is_err());
+        assert_eq!(store.snapshot().chunk_ids().collect::<Vec<_>>(), [u64::MAX]);
+    }
+
+    #[test]
+    fn world_exact_budget_short_budget_and_retained_eviction() {
+        let a = Input::fixture(42, true);
+        let b = Input::fixture(43, true);
+        let size = a.bytes().values().sum::<usize>();
+        let mut short = WorldResidency::new(size - 1, 2).unwrap();
+        assert!(a.stage_world(&mut short).is_err());
+        assert_eq!(short.live_bytes(), 0);
+        let mut store = WorldResidency::new(size, 2).unwrap();
+        let staged = a.stage_world(&mut store).unwrap();
+        let reader = store.publish(vec![(1, staged)], &[]).unwrap();
+        assert!(b.stage_world(&mut store).is_err());
+        store.publish(vec![], &[1]).unwrap();
+        assert!(b.stage_world(&mut store).is_err());
+        assert_eq!(store.snapshot().epoch(), 2);
+        drop(reader);
+        assert_eq!(store.live_bytes(), 0);
+        let staged = b.stage_world(&mut store).unwrap();
+        assert_eq!(store.publish(vec![(2, staged)], &[]).unwrap().epoch(), 3);
+    }
+
+    #[test]
+    fn randomized_world_transactions_match_independent_retained_resource_union() {
+        let inputs: Vec<_> = (0..4).map(|i| Input::fixture(i, i % 2 == 0)).collect();
+        let budget = inputs[0].bytes().values().sum::<usize>() + 800;
+        let mut store = WorldResidency::new(budget, 3).unwrap();
+        let mut current = BTreeMap::<u64, usize>::new();
+        let mut readers = Vec::<(WorldSnapshot, BTreeMap<u64, usize>)>::new();
+        let mut stages = Vec::<(StagedBundle, usize)>::new();
+        let mut seed = 12347u64;
+        for _ in 0..4000 {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let live = |current: &BTreeMap<u64, usize>,
+                        readers: &[(WorldSnapshot, BTreeMap<u64, usize>)],
+                        stages: &[(StagedBundle, usize)]| {
+                let mut union = BTreeMap::new();
+                for index in current
+                    .values()
+                    .chain(readers.iter().flat_map(|(_, c)| c.values()))
+                    .copied()
+                    .chain(stages.iter().map(|(_, i)| *i))
+                {
+                    union.extend(inputs[index].bytes());
+                }
+                union
+            };
+            match (seed >> 32) % 6 {
+                0 => {
+                    let index = seed as usize % inputs.len();
+                    let mut expected = live(&current, &readers, &stages);
+                    expected.extend(inputs[index].bytes());
+                    let result = inputs[index].stage_world(&mut store);
+                    assert_eq!(result.is_ok(), expected.values().sum::<usize>() <= budget);
+                    if let Ok(staged) = result {
+                        stages.push((staged, index));
+                    }
+                }
+                1 if !stages.is_empty() => {
+                    let (staged, index) = stages.swap_remove(seed as usize % stages.len());
+                    let id = (seed >> 16) % 5;
+                    let fits = current.contains_key(&id) || current.len() < 3;
+                    assert_eq!(store.publish(vec![(id, staged)], &[]).is_ok(), fits);
+                    if fits {
+                        current.insert(id, index);
+                    }
+                }
+                2 if !current.is_empty() => {
+                    let id = *current.keys().nth(seed as usize % current.len()).unwrap();
+                    store.publish(vec![], &[id]).unwrap();
+                    current.remove(&id);
+                }
+                3 => readers.push((store.snapshot(), current.clone())),
+                4 if !readers.is_empty() => {
+                    readers.swap_remove(seed as usize % readers.len());
+                }
+                5 if !stages.is_empty() => {
+                    stages.swap_remove(seed as usize % stages.len());
+                }
+                _ => {}
+            }
+            assert_eq!(
+                store.live_bytes(),
+                live(&current, &readers, &stages).values().sum()
+            );
+            assert!(store.live_bytes() <= budget);
+            assert_eq!(
+                store.snapshot().chunk_ids().collect::<Vec<_>>(),
+                current.keys().copied().collect::<Vec<_>>()
+            );
+            for (snapshot, model) in &readers {
+                for (chunk, index) in model {
+                    let actual = snapshot.chunk(*chunk).unwrap();
+                    assert_eq!(
+                        actual.bundle_id(),
+                        Some(content_id(&inputs[*index].manifest))
+                    );
+                    for (id, size) in inputs[*index].bytes() {
+                        assert_eq!(actual.resource(&id).unwrap().len(), size);
+                    }
+                }
+            }
         }
     }
 }

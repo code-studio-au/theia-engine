@@ -107,6 +107,31 @@ decoded admission temporaries, Arc/map overhead and Vulkan physical allocations.
 The API owns no I/O worker, GPU fences or descriptors, and makes no GPU
 publication claim. Geometry-only THEIACEL residency remains separate.
 
+### Independent complete-bundle CPU world ownership
+
+`bundle_residency::WorldResidency` reuses complete-graph admission and one shared
+unique encoded-byte pool across several chunks. Application-supplied `u64` chunk
+IDs are separate from bundle/resource hashes: different chunks can reference the
+same immutable bundle without duplicating encoded owners. `new(bytes, slots)`
+requires 1..4096 chunk slots, independently of the byte cap. Staged reservations,
+current chunks and retained world/chunk snapshots all retain charged resources.
+Caller-owned I/O buffers, decoded temporaries, Arc/map overhead and GPU allocation
+remain outside the byte charge.
+
+`publish(additions, removals)` atomically adds/replaces complete named chunks and
+removes existing chunks. Replacements need no explicit removal. Duplicate IDs,
+add/remove conflicts, unknown removals, foreign staging, slot overflow, empty or
+oversized transactions and epoch exhaustion fail before changing current state.
+Failure consumes supplied tokens; their reservations release at last-owner drop.
+A successful transaction increments the world epoch once; unchanged chunk epochs
+retain their last publication value. Snapshot chunk iteration is ascending ID.
+
+This is a CPU lifetime prerequisite, not a world file format, GPU renderer or
+streaming scheduler. It performs no I/O, automatic eviction, camera demand or GPU
+completion inference. The mixed benchmark still renders its single resident
+whole-world bundle. Next connect bounded spatial demand and fence-gated independent
+GPU chunk publication. [Qualification](validation/M4_WORLD_BUNDLE_RESIDENCY.md).
+
 ### Indexed bundle and multiple authored images
 
 THEIABND v2 retains the 176-byte four-root layout, replacing the final KTX2

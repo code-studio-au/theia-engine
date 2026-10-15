@@ -29,3 +29,10 @@ free-range coalescing. Retained clones prevent reuse. Tests cover fragmentation,
 overflow/ticket exhaustion and 5,000 randomized operations against an independent
 occupancy bitmap. Renderer use still needs explicit GPU upload/frame completion;
 the CPU allocator does not infer GPU completion from a dropped lease.
+
+`bundle_residency::WorldResidency` admits several independently named complete
+bundles against one unique encoded-byte pool and a separate chunk-slot capacity.
+Atomic add/replace/remove transactions preserve retained world/chunk snapshots.
+No camera scheduling, I/O, Vulkan upload or GPU publication is implied. Run
+`--example bundle_residency -- --world <bundle0> <bundle1> ...` for real-file
+exact/short-budget, shared ownership and retained-reader qualification.

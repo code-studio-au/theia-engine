@@ -4,6 +4,20 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 independent CPU world-bundle residency — locally qualified (2026-10-15)
+
+A separate bounded world owner now admits several complete bundles against one
+shared encoded-byte pool and a chunk-slot cap. Atomic named chunk add/replace/
+remove preserves retained world/chunk snapshots and rejects malformed/foreign/
+over-capacity transactions without changing publication. Four real cooked
+quadrants qualify 165148 unique bytes (372748 counted separately), exact/short
+budgets, independent removal/replacement and last-reader release. All 63 asset
+CPU tests and denied-warning Clippy pass, including 4000 randomized world
+operations against an independent resource-union model. Camera demand and GPU
+chunk publication remain open; the mixed renderer retains one resident bundle.
+[Contract](M4_ASSET_CONTRACT.md#independent-complete-bundle-cpu-world-ownership),
+[evidence](validation/M4_WORLD_BUNDLE_RESIDENCY.md).
+
 ## M4 mixed resident village and crowd — independently executed (2026-10-15)
 
 The complete cooked village and 0..10000 GPU visual proxies now share visibility,

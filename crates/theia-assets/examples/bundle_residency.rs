@@ -2,7 +2,7 @@
 use std::{collections::BTreeMap, error::Error, io::Read, path::Path};
 use theia_assets::{
     bundle::{BYTES, Bundle, BundleProfile},
-    bundle_residency::Residency,
+    bundle_residency::{Residency, WorldResidency},
     content_id,
 };
 
@@ -66,6 +66,17 @@ impl Input {
             leaves,
         })
     }
+    fn stage_world(
+        &self,
+        store: &mut WorldResidency,
+    ) -> Result<theia_assets::bundle_residency::StagedBundle, Box<dyn Error>> {
+        Ok(store.stage(
+            &self.manifest,
+            content_id(&self.manifest),
+            std::array::from_fn(|i| self.roots[i].as_slice()),
+            &self.leaves.iter().map(Vec::as_slice).collect::<Vec<_>>(),
+        )?)
+    }
     fn sizes(&self) -> BTreeMap<[u8; 32], usize> {
         std::iter::once(&self.manifest)
             .chain(&self.roots)
@@ -87,6 +98,9 @@ impl Input {
 }
 fn main() -> Result<(), Box<dyn Error>> {
     let paths: Vec<_> = std::env::args().skip(1).collect();
+    if paths.first().is_some_and(|v| v == "--world") {
+        return qualify_world(&paths[1..]);
+    }
     if paths.len() != 2 {
         return Err("bundle_residency needs <first bundle> <second bundle>".into());
     }
@@ -140,6 +154,88 @@ fn main() -> Result<(), Box<dyn Error>> {
         abytes + bbytes - total,
         asizes.len(),
         bsizes.len()
+    );
+    Ok(())
+}
+
+fn qualify_world(paths: &[String]) -> Result<(), Box<dyn Error>> {
+    if paths.len() < 2 || paths.len() > theia_assets::bundle_residency::MAX_WORLD_CHUNKS {
+        return Err("--world needs 2..4096 complete bundle paths".into());
+    }
+    let inputs = paths
+        .iter()
+        .map(|p| Input::load(Path::new(p)))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut union = BTreeMap::new();
+    let mut separate = 0usize;
+    for input in &inputs {
+        let sizes = input.sizes();
+        separate += sizes.values().sum::<usize>();
+        union.extend(sizes);
+    }
+    let total = union.values().sum::<usize>();
+    let mut store = WorldResidency::new(total, inputs.len())?;
+    let staged = inputs
+        .iter()
+        .enumerate()
+        .map(|(i, input)| input.stage_world(&mut store).map(|s| (i as u64, s)))
+        .collect::<Result<Vec<_>, _>>()?;
+    let reader = store.publish(staged, &[])?;
+    assert_eq!(reader.chunk_count(), inputs.len());
+    assert_eq!(reader.epoch(), 1);
+    assert_eq!(store.live_bytes(), total);
+    for (index, input) in inputs.iter().enumerate() {
+        let chunk = reader.chunk(index as u64).unwrap();
+        assert_eq!(chunk.bundle_id(), Some(content_id(&input.manifest)));
+        for (id, length) in input.sizes() {
+            assert_eq!(chunk.resource(&id).unwrap().len(), length);
+        }
+    }
+    let reduced = store.publish(vec![], &[0])?;
+    assert!(reduced.chunk(0).is_none());
+    for i in 1..inputs.len() {
+        assert_eq!(reduced.chunk(i as u64).unwrap().epoch(), 1);
+    }
+    let replacement = inputs[1].stage_world(&mut store)?;
+    let replaced = store.publish(vec![(0, replacement)], &[])?;
+    assert_eq!(
+        replaced.chunk(0).unwrap().bundle_id(),
+        reader.chunk(1).unwrap().bundle_id()
+    );
+    assert_eq!(replaced.chunk(0).unwrap().epoch(), 3);
+    assert_eq!(store.live_bytes(), total);
+    drop(reduced);
+    drop(replaced);
+    let ids = reader.chunk_ids().collect::<Vec<_>>();
+    store.publish(vec![], &ids)?;
+    assert_eq!(store.snapshot().chunk_count(), 0);
+    assert_eq!(store.live_bytes(), total);
+    drop(reader);
+    assert_eq!(store.live_bytes(), 0);
+    // An independent byte-union oracle predicts the first short-budget failure.
+    let mut short = WorldResidency::new(total - 1, inputs.len())?;
+    let mut expected = BTreeMap::new();
+    let mut retained = Vec::new();
+    let mut rejected = false;
+    for input in &inputs {
+        expected.extend(input.sizes());
+        let stage = input.stage_world(&mut short);
+        if expected.values().sum::<usize>() > total - 1 {
+            assert!(stage.is_err());
+            rejected = true;
+            break;
+        }
+        retained.push(stage?);
+    }
+    assert!(rejected);
+    assert_eq!(short.snapshot().chunk_count(), 0);
+    drop(retained);
+    assert_eq!(short.live_bytes(), 0);
+    println!(
+        "Verified independent complete CPU world bundles: chunks={}, unique_bytes={total}, separate_bytes={separate}, shared_bytes={}, resources={}, exact/short budgets and retained-reader eviction",
+        inputs.len(),
+        separate - total,
+        union.len()
     );
     Ok(())
 }
