@@ -55,6 +55,7 @@ enum RenderMode {
 #[derive(Default)]
 struct Options {
     world_upload: Option<std::path::PathBuf>,
+    world_pair: Option<std::path::PathBuf>,
     benchmark: bool,
     benchmark_cooked: bool,
     benchmark_mixed: bool,
@@ -144,6 +145,31 @@ impl Options {
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
+                "--world-pair-reference" => {
+                    let width = args.next().ok_or("Missing width")?.parse()?;
+                    let height = args.next().ok_or("Missing height")?.parse()?;
+                    let view = args.next().ok_or("Missing world view")?.parse()?;
+                    if args.next().is_some() {
+                        return Err("Unexpected world reference argument".into());
+                    }
+                    println!(
+                        "{}",
+                        serde_json::json!({"rows": camera::world_pair_rows(width,height,view)?})
+                    );
+                    std::process::exit(0);
+                }
+                "--world-pair-test" => {
+                    if result.asset.is_some()
+                        || result.world_pair.is_some()
+                        || result.mode.replace(RenderMode::Asset).is_some()
+                    {
+                        return Err("World pair qualification owns both geometry inputs".into());
+                    }
+                    result.asset = Some(args.next().ok_or("Missing first world mesh")?.into());
+                    result.world_pair =
+                        Some(args.next().ok_or("Missing second world mesh")?.into());
+                    result.material = true;
+                }
                 "--world-upload-test" => {
                     if result.world_upload.is_some()
                         || result.mode.replace(RenderMode::Clear).is_some()
@@ -885,7 +911,7 @@ impl Options {
                         "Mixed resident scene: --benchmark-mixed --bundle <indexed world> [--benchmark-players 0..10000]\nCooked route/timings: --benchmark-cooked --bundle <indexed bundle> [--stream-bundle <replacement>]\nMMO visual benchmark: --benchmark [--benchmark-players 0..10000] [--benchmark-width 1280 --benchmark-height 720] [--frames 3660 --benchmark-warmup 60 --benchmark-seconds 60] [--benchmark-report path.json]\nCPU oracle: --benchmark-reference <players frame frames width height>"
                     );
                     println!(
-                        "Theia Render Lab: GPU task/mesh qualification\n  --world-upload-test <scene.json>  isolated four-chunk GPU ownership probe (no chunk draws)\n  --network-client <loopback address> --network-certificate <public DER>  live readonly GPU viewer\n  --network-faults  bounded encrypted post-bootstrap packet faults\n  --network-repair-test  qualification ACK withholding until full repair\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-hysteresis <0..1>  stricter coarsening entry fraction (default 0)\n  --lod-hysteresis-test  explicit eight-phase budget trajectory\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-auto-mips <file>  GPU analytic-footprint mip choice\n  --texture-refine-budget <dense texel bytes>  one asynchronous finer-tail publication\n  --texture-tail-budget <dense texel bytes>  coarse resident suffix for automatic mips\n  --texture-tail-reference <mesh material uv texture budget x y width height view>  CPU suffix sampling JSON\n  --texture-tail-linear-reference <mesh material uv texture budget x y width height view>  CPU bilinear suffix sampling JSON\n  --texture-linear-filter  opt-in bilinear repeat within automatic mip\n  --texture-linear-reference <mesh material uv texture x y width height view>  CPU bilinear sampling JSON\n  --texture-auto-reference <mesh material uv texture x y width height view>  CPU automatic sampling JSON\n  --texture-mip-test <file level>  upload complete chain with a fixed mip view\n  --texture-mip-reference <mesh material uv texture level x y width height view>  CPU mip sampling JSON\n  --texture-footprint-reference <mesh uv texture x y width height view>  CPU UV-gradient/mip oracle\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Theia Render Lab: GPU task/mesh qualification\n  --world-pair-test <mesh0 mesh1>  two resident chunks with shared identity/depth\n  --world-pair-reference <width height view>  CPU camera JSON\n  --world-upload-test <scene.json>  isolated four-chunk GPU ownership probe (no chunk draws)\n  --network-client <loopback address> --network-certificate <public DER>  live readonly GPU viewer\n  --network-faults  bounded encrypted post-bootstrap packet faults\n  --network-repair-test  qualification ACK withholding until full repair\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-hysteresis <0..1>  stricter coarsening entry fraction (default 0)\n  --lod-hysteresis-test  explicit eight-phase budget trajectory\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-auto-mips <file>  GPU analytic-footprint mip choice\n  --texture-refine-budget <dense texel bytes>  one asynchronous finer-tail publication\n  --texture-tail-budget <dense texel bytes>  coarse resident suffix for automatic mips\n  --texture-tail-reference <mesh material uv texture budget x y width height view>  CPU suffix sampling JSON\n  --texture-tail-linear-reference <mesh material uv texture budget x y width height view>  CPU bilinear suffix sampling JSON\n  --texture-linear-filter  opt-in bilinear repeat within automatic mip\n  --texture-linear-reference <mesh material uv texture x y width height view>  CPU bilinear sampling JSON\n  --texture-auto-reference <mesh material uv texture x y width height view>  CPU automatic sampling JSON\n  --texture-mip-test <file level>  upload complete chain with a fixed mip view\n  --texture-mip-reference <mesh material uv texture level x y width height view>  CPU mip sampling JSON\n  --texture-footprint-reference <mesh uv texture x y width height view>  CPU UV-gradient/mip oracle\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
@@ -1156,6 +1182,25 @@ impl Options {
                 );
             }
             result.frames = Some(120);
+        }
+        if result.world_pair.is_some()
+            && (result.benchmark
+                || result.bundle.is_some()
+                || result.world_upload.is_some()
+                || result.cell.is_some()
+                || result.camera
+                || result.frustum
+                || result.lod.is_some()
+                || result.fallback.is_some()
+                || result.materials.is_some()
+                || result.uvs.is_some()
+                || result.texture.is_some()
+                || result.texture_table.is_some()
+                || result.stream_bundle.is_some()
+                || result.network_address.is_some()
+                || result.render_mode() != RenderMode::AssetResolve)
+        {
+            return Err("World pair is an isolated resident geometry qualification".into());
         }
         if result.world_upload.is_some()
             && (result.benchmark

@@ -34,6 +34,7 @@ impl Drop for ShaderModule {
 }
 #[derive(Clone, Copy)]
 pub struct ResolveMode {
+    pub world_pair: bool,
     pub mixed: bool,
     pub cooked_hud: bool,
     pub cooked: bool,
@@ -208,6 +209,25 @@ impl Pipeline {
             },
         )
     }
+    pub fn world_pair_visibility(
+        device: &ash::Device,
+        shaders: &Path,
+        layout: vk::DescriptorSetLayout,
+    ) -> Result<Self> {
+        Self::configured(
+            device,
+            vk::Format::R32G32_UINT,
+            shaders,
+            Some(layout),
+            ShaderStages {
+                mesh: "world.pair.visibility.mesh.spv",
+                task: Some("asset.task.spv"),
+                fragment: "world.pair.visibility.frag.spv",
+                depth: Some(vk::Format::D32_SFLOAT),
+                push: Some(vk::ShaderStageFlags::MESH_EXT),
+            },
+        )
+    }
     pub fn resolve(
         device: &ash::Device,
         format: vk::Format,
@@ -216,6 +236,7 @@ impl Pipeline {
         mode: ResolveMode,
     ) -> Result<Self> {
         let ResolveMode {
+            world_pair,
             mixed,
             cooked_hud,
             cooked,
@@ -234,7 +255,9 @@ impl Pipeline {
             ShaderStages {
                 mesh: "resolve.mesh.spv",
                 task: None,
-                fragment: if mixed && cooked_hud {
+                fragment: if world_pair {
+                    "world.pair.resolve.frag.spv"
+                } else if mixed && cooked_hud {
                     "mixed.benchmark.hud.resolve.frag.spv"
                 } else if mixed {
                     "mixed.benchmark.resolve.frag.spv"

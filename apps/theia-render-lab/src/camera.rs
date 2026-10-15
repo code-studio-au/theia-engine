@@ -207,6 +207,17 @@ pub fn pixel(
     }
     Ok(result)
 }
+/// Fixed two-chunk geometry qualification rig, separate from the benchmark route.
+pub fn world_pair_rows(width: u32, height: u32, view: u32) -> Result<[[f32; 4]; 4]> {
+    let (eye, target) = match view {
+        0 => ([500., -95., 65.], [500., 0., 0.]),
+        1 => ([80., -90., 45.], [0., 0., 0.]),
+        2 => ([0., -95., 65.], [0., 0., 0.]),
+        _ => return Err("World pair view must be 0..2".into()),
+    };
+    perspective_rows(width, height, eye, target, 65., 0.1, 250.)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

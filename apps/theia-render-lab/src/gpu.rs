@@ -902,6 +902,7 @@ pub struct Renderer {
     benchmark: Option<crate::benchmark::Recorder>,
     work: Option<IndirectWork>,
     proxy_work: Option<IndirectWork>,
+    world_work: Option<IndirectWork>,
     lod: Option<crate::indirect::Lod>,
     materials: Option<crate::asset::Buffer>,
     uvs: Option<crate::asset::Buffer>,
@@ -982,6 +983,7 @@ impl Renderer {
             mode: options.render_mode(),
             work: None,
             proxy_work: None,
+            world_work: None,
             lod: None,
             materials: None,
             uvs: None,
@@ -1235,6 +1237,38 @@ impl Renderer {
                     &memory,
                     alignment,
                 )?;
+            }
+            if let Some(path) = &options.world_pair {
+                let bytes = crate::asset::load(path)?;
+                // SAFETY: Context retains this selected physical device.
+                let limits = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits
+                };
+                if bytes.len() > limits.max_storage_buffer_range as usize
+                    || limits.max_per_stage_descriptor_storage_buffers < 2
+                    || limits.max_descriptor_set_storage_buffers < 2
+                {
+                    return Err("World pair geometry exceeds storage limits".into());
+                }
+                renderer.world_work = Some(IndirectWork::new(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    renderer.shader_dir.as_deref().unwrap(),
+                    RenderMode::AssetResolve,
+                    Some((&bytes, None)),
+                    (
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        options.asset_budget.unwrap_or(theia_assets::DEFAULT_BUDGET) as u64,
+                    ),
+                    None,
+                )?);
             }
             if let Some(path) = &options.materials {
                 let bytes = asset
@@ -1738,6 +1772,10 @@ impl Renderer {
             self.mode,
             self.work.as_ref().map(|work| work.descriptor_layout),
             crate::visibility::ResolveBuffers {
+                world_geometry: self
+                    .world_work
+                    .as_ref()
+                    .map(|w| (w.descriptor_layout, w.geometry_descriptor())),
                 proxy_work: self
                     .proxy_work
                     .as_ref()
@@ -1905,6 +1943,12 @@ impl Renderer {
             .transpose()?;
         let camera_rows = if let Some((_, rows)) = benchmark_push {
             Some(rows)
+        } else if self.world_work.is_some() {
+            Some(crate::camera::world_pair_rows(
+                chain.extent.width,
+                chain.extent.height,
+                input,
+            )?)
         } else if matches!(
             self.mode,
             RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
@@ -2021,6 +2065,9 @@ impl Renderer {
                     }),
                 );
             }
+            if let Some(world) = &self.world_work {
+                world.generate(ctx.command, input, camera_rows, None);
+            }
             if let Some(proxy) = &self.proxy_work {
                 let mut push = benchmark_push.as_ref().unwrap().0;
                 push[88..92].copy_from_slice(&1u32.to_ne_bytes());
@@ -2068,6 +2115,7 @@ impl Renderer {
                     ctx.mesh_commands.as_ref().unwrap(),
                     self.work.as_ref().unwrap(),
                     self.proxy_work.as_ref(),
+                    self.world_work.as_ref(),
                     camera_rows,
                 );
             }
@@ -2353,6 +2401,7 @@ impl Drop for Renderer {
         drop(self.benchmark.take());
         drop(self.work.take());
         drop(self.proxy_work.take());
+        drop(self.world_work.take());
         drop(self.materials.take());
         drop(self.uvs.take());
         drop(self.texture.take());

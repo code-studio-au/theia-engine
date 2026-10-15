@@ -4,6 +4,19 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-15.
 
+## M4 two resident geometry chunks — shared rendering slice (2026-10-15)
+
+An isolated two-input mode now gives each geometry chunk its own GPU culling/work
+arena and indirect draw, sharing identity/depth and a diagnostic resolve. The
+frame-local chunk tag distinguishes equal local meshlet IDs. Native Wayland
+swapchain recovery passes zero diagnostics; five default/shared-profile replays
+pass 577 ray/colour probes, both compactions and whole-image identity/depth bounds.
+Both shader profiles validate 44 modules; renderer 28 tests and Clippy pass.
+This geometry-only slice is separate from complete-bundle upload ownership and
+the textured mixed benchmark. Camera-driven chunk publication, protected fallback
+and full material/texture composition remain open.
+[Scope and evidence](validation/M4_WORLD_PAIR_RENDERING.md).
+
 ## M4 independent GPU chunk-upload ownership — locally qualified (2026-10-15)
 
 An isolated Render Lab probe now uploads four independently owned complete cooked

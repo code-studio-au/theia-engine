@@ -413,3 +413,11 @@ removed allocations until the last reader releases them. Its transfer fences
 retire synchronously and no chunk is drawn. Next connect independent chunk owners
 to shared visibility/depth/resolve and protect fallback coverage before camera
 requests can change rendered residency. Existing streamed/mixed paths stay intact.
+
+
+A first two-chunk resident geometry renderer now gives each page independent GPU
+frustum compaction and indirect work while sharing identity/depth and diagnostic
+resolve. Its frame-local chunk tag is unrelated to persistent world IDs. Next
+compose complete material/texture owners and prove independent publication plus
+fallback coverage before connecting camera demand. The textured crowd benchmark
+still uses its single resident world bundle.

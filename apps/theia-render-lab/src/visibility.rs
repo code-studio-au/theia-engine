@@ -160,6 +160,7 @@ impl Drop for Image {
 }
 #[derive(Clone, Copy, Default)]
 pub struct ResolveBuffers {
+    pub world_geometry: Option<(vk::DescriptorSetLayout, vk::DescriptorBufferInfo)>,
     pub proxy_work: Option<(vk::DescriptorSetLayout, vk::DescriptorBufferInfo)>,
     pub cooked_hud_work: Option<vk::DescriptorBufferInfo>,
     pub benchmark: bool,
@@ -183,6 +184,7 @@ impl ResolveBuffers {
 }
 pub struct Target {
     proxy_visibility: Option<Pipeline>,
+    world_visibility: Option<Pipeline>,
     visibility: Option<Pipeline>,
     resolve: Option<Pipeline>,
     pool: vk::DescriptorPool,
@@ -263,6 +265,7 @@ impl Target {
         let materials = [material()?, material()?];
         let mut target = Self {
             proxy_visibility: None,
+            world_visibility: None,
             visibility: None,
             resolve: None,
             pool: vk::DescriptorPool::null(),
@@ -376,6 +379,15 @@ impl Target {
                         .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 );
             }
+            if buffers.world_geometry.is_some() {
+                bindings.push(
+                    vk::DescriptorSetLayoutBinding::default()
+                        .binding(12)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .descriptor_count(1)
+                        .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+                );
+            }
             let mut flags = vec![
                 vk::DescriptorBindingFlags::empty(),
                 vk::DescriptorBindingFlags::empty(),
@@ -403,6 +415,9 @@ impl Target {
             if buffers.proxy_work.is_some() {
                 flags.push(vk::DescriptorBindingFlags::empty());
             }
+            if buffers.world_geometry.is_some() {
+                flags.push(vk::DescriptorBindingFlags::empty());
+            }
             let mut binding_flags =
                 vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(&flags);
             target.layout = device.create_descriptor_set_layout(
@@ -428,7 +443,8 @@ impl Target {
                                 + u32::from(uv)
                                 + u32::from(extra_storage.is_some())
                                 + u32::from(buffers.cooked_hud_work.is_some())
-                                + u32::from(buffers.proxy_work.is_some()),
+                                + u32::from(buffers.proxy_work.is_some())
+                                + u32::from(buffers.world_geometry.is_some()),
                         ),
                 );
             }
@@ -558,6 +574,16 @@ impl Target {
                         .buffer_info(info),
                 );
             }
+            let world_geometry = buffers.world_geometry.map(|(_, buffer)| [buffer]);
+            if let Some(info) = &world_geometry {
+                writes.push(
+                    vk::WriteDescriptorSet::default()
+                        .dst_set(target.set)
+                        .dst_binding(12)
+                        .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                        .buffer_info(info),
+                );
+            }
             device.update_descriptor_sets(&writes, &[]);
         }
         target.visibility = Some(if buffers.benchmark {
@@ -573,6 +599,10 @@ impl Target {
                 layout,
                 false,
             )?);
+        }
+        if let Some((layout, _)) = buffers.world_geometry {
+            target.world_visibility =
+                Some(Pipeline::world_pair_visibility(device, shaders, layout)?);
         }
         if buffers.benchmark {
             target.resolve = Some(Pipeline::benchmark(
@@ -590,6 +620,7 @@ impl Target {
             shaders,
             target.layout,
             crate::pipeline::ResolveMode {
+                world_pair: buffers.world_geometry.is_some(),
                 mixed: buffers.proxy_work.is_some(),
                 cooked_hud: buffers.cooked_hud_work.is_some(),
                 cooked,
@@ -658,6 +689,7 @@ impl Target {
         mesh: &ash::ext::mesh_shader::Device,
         work: &IndirectWork,
         proxy: Option<&IndirectWork>,
+        world: Option<&IndirectWork>,
         rows: Option<[[f32; 4]; 4]>,
     ) {
         let visibility = self.visibility.as_ref().unwrap();
@@ -813,6 +845,21 @@ impl Target {
                 );
                 proxy.draw(command, pipeline.layout, mesh);
             }
+            if let Some(world) = world {
+                let pipeline = self.world_visibility.as_ref().unwrap();
+                self.device.cmd_bind_pipeline(
+                    command,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline.handle,
+                );
+                self.push_rows(
+                    command,
+                    pipeline.layout,
+                    vk::ShaderStageFlags::MESH_EXT,
+                    rows.unwrap(),
+                );
+                world.draw(command, pipeline.layout, mesh);
+            }
             self.device.cmd_end_rendering(command);
             let end = [
                 color
@@ -899,6 +946,7 @@ impl Drop for Target {
         // SAFETY: Owning swapchain retired submissions. Pipelines precede descriptor layout and image destruction.
         drop(self.resolve.take());
         drop(self.proxy_visibility.take());
+        drop(self.world_visibility.take());
         drop(self.visibility.take());
         unsafe {
             if self.pool != vk::DescriptorPool::null() {

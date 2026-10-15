@@ -390,3 +390,15 @@ near/far detail remains the procedural 35-unit rule. There is no world collision
 navigation, skinning, networking or authority: proxies can pass through buildings.
 The resident checker-texture village is a correctness fixture, not representative
 production art, lighting, texture filtering or independent chunk residency.
+
+## Separate world-chunk integration probes
+
+World streaming prerequisites are qualified separately from the displayed mixed
+benchmark: bounded CPU complete-bundle ownership, distance demand, a four-chunk
+GPU upload ownership probe, then two resident geometry pages sharing visibility/
+depth. The last uses `--world-pair-test <sha256.theia-mesh> <sha256.theia-mesh>`
+with diagnostic tints; `--work-items 0|1|2` chooses empty/angled/full cameras and
+`--wsi-smoke-test` exercises recovery. It renders no textures or visual proxies
+and exports no benchmark timing score. These probes do not enable streamed world
+chunks in `--mixed-world` yet.
+[Two-chunk scope and qualification](validation/M4_WORLD_PAIR_RENDERING.md).

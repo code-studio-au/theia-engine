@@ -180,6 +180,30 @@ GPU completion API. A rendering integration must additionally prove frame and
 descriptor retirement, fallback coverage and shared identity/depth/resolve.
 [Evidence](validation/M4_WORLD_UPLOAD_OWNERSHIP.md).
 
+### Two resident geometry chunks: shared visibility/depth
+
+Render Lab's isolated `--world-pair-test <mesh0> <mesh1>` draws two admitted
+geometry pages together, each with its own GPU frustum work and indirect task/mesh
+counts. Both draws share one identity/depth pass; a diagnostic resolve validates
+both geometry pages through separate static storage bindings (4 and 12). No
+runtime descriptor array or new buffer-indexing capability is needed. Each page
+retains the current <=32-meshlet bound and fixed 256-byte work arena. The existing
+camera/mesh profile and two fragment storage bindings are checked against limits.
+
+Frame-local identity bit 30 selects the second input, with low bits meshlet+1 and
+zero background. It is separate from the bit-31 visual-proxy namespace and is not
+an asset-format or persistent-handle change. Work remains GPU-generated; the CPU
+records two fixed chunk draws, never one per meshlet/entity. Default and optional
+shared-primitive primary pipelines can coexist with the second chunk's separately
+compiled per-vertex interface. No new language fallback is introduced.
+
+This slice uses diagnostic chunk/face tint and a fixed camera rig; authored
+materials/UV/textures, LOD, benchmark/proxy modes and streaming inputs are rejected.
+It is separate from complete-bundle upload ownership and CPU world demand. Full
+bundle composition, protected fallback coverage and fence-gated independent
+publication remain to connect.
+[Evidence](validation/M4_WORLD_PAIR_RENDERING.md).
+
 ### Indexed bundle and multiple authored images
 
 THEIABND v2 retains the 176-byte four-root layout, replacing the final KTX2

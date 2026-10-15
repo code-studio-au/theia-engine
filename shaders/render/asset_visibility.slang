@@ -21,7 +21,11 @@ void assetVisibilityMesh(uint lane : SV_GroupIndex, uint3 group : SV_GroupID, in
             uint global=cookedMesh.Load(refsOffset+(meshlet.x+local)*4);
             float4 world=float4(asfloat(cookedMesh.Load3(positionOffset+global*12)),1);
             vertices[lane*3+axis].position=float4(dot(camera.row0,world),dot(camera.row1,world),dot(camera.row2,world),dot(camera.row3,world));
+            #ifdef THEIA_WORLD_SECOND
+            vertices[lane*3+axis].identity=uint2((meshletID+1)|0x40000000u,lane);
+#else
             vertices[lane*3+axis].identity=uint2(meshletID+1,lane);
+#endif
         }
         triangles[lane]=uint3(lane*3,lane*3+1,lane*3+2);
     }
