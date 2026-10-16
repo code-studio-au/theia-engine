@@ -538,3 +538,14 @@ The standalone Bevy camera profile accepts the same control, while retaining its
 diagnostic captures. A requested cap constrains host cadence and does not itself
 establish equal I/O deadlines or streaming performance.
 [Clock contract, overload checks and evidence](validation/M4_BENCHMARK_CLOCK.md).
+
+For a capture-free pair with independent streaming, use `run_bevy_comparison.py`
+with `--independent-streaming --target-hz 60 --present-mode immediate` and at least
+140 frames. Optional `--gpu-timings --stats-overlay` enables both measurements and
+live panels. `--fine-slots` and `--stream-cpu-budget` control shared slots/encoded
+ownership; GPU payload budgets remain backend-specific. JSON/CSV/HTML retain
+actual selections and missing near-detail rather than forcing a visual replay.
+`compare_stats_display.py` forwards these controls for separate on/off profiles.
+Use separate validation/capture runs; the small prevalidated fixture and uncontrolled
+OS cache do not establish production disk throughput or physical-memory efficiency.
+[Executed independent streaming comparison](validation/M4_INDEPENDENT_STREAMING_COMPARISON.md).

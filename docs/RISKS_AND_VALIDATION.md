@@ -295,3 +295,13 @@ and reports its misses; a requested rate alone does not prove equivalent I/O
 deadlines or actual presentation cadence. Capture-free independent streaming,
 cache policy, physical-memory accounting and native Windows GPU remain open.
 [Clock evidence and limits](validation/M4_BENCHMARK_CLOCK.md).
+
+Capture-free native pairs now record independent fine streaming under shared
+nominal frame deadlines. Reports retain missing near-detail, differing selections
+and unresolved windows; first observed fine is not instrumented I/O latency.
+Current/pending/fixed Theia allocations and Bevy logical payloads have separate
+scopes. Startup/export reads and sequential order leave OS cache effects
+uncontrolled. Differing CPU/GPU intervals, query/lifecycle waits and selected
+geometry prevent a whole-engine or physical-memory ranking. The earlier driver
+incident and native Windows GPU qualification remain open.
+[Independent streaming evidence](validation/M4_INDEPENDENT_STREAMING_COMPARISON.md).

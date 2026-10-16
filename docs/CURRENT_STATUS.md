@@ -4,6 +4,17 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-16.
 
+## Capture-free independent streaming comparison — locally qualified (2026-10-16)
+
+The native comparison now streams cooked fine graphs independently in both engines
+under shared frame deadlines, with optional GPU queries and live streaming stats.
+Five validated pairs cover zero/10000 proxies, one-slot and encoded-cap pressure;
+separate captures/replay pass 664 scene probes and 380000 pose checks. Reports
+retain differing selections, missing near-detail and unresolved demand windows.
+Separate release off/on runs retain 600 measured frames per engine/control at
+60 Hz. CPU/GPU scopes, OS caches and physical memory remain distinct; this is no
+whole-engine ranking. [Usage and evidence](validation/M4_INDEPENDENT_STREAMING_COMPARISON.md).
+
 ## Shared benchmark frame schedule — locally qualified (2026-10-16)
 
 Both native tools now support optional absolute frame-start deadlines with retained

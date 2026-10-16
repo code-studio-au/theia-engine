@@ -202,9 +202,10 @@ report excluded near-overlapping proxy rays with equal canonical depth codes;
 RGB tolerance is unchanged, and GPU depth ordering for excluded rays is unverified.
 Historical replay/probe sampling remains strict by default.
 
-This is a correctness profile with captures and serial lifecycle waits. It rejects
-HUD, GPU-timing and ordinary frozen-snapshot controls. A timed paired streaming
-comparison must still control wall-clock demand rate and cache/accounting scope.
+Without `--stream-measure`, this is a correctness profile with captures and serial
+lifecycle waits. It rejects HUD, GPU-timing and ordinary frozen-snapshot controls.
+The capture-free measured profile below retains lifecycle waits and records its
+wall-clock demand and cache/accounting scope.
 [Qualification and platform incident](../../docs/validation/M4_BEVY_CAMERA_STREAM.md).
 
 ## Optional shared frame schedule
@@ -224,7 +225,43 @@ A cap deliberately limits host cadence; this is not an uncapped FPS score.
 
 `tools/qualify_benchmark_clock.py --scene <scene.json> --headless-dri-prime
 <selector>` exercises paired replay, independently streamed camera compatibility,
-deliberate FIFO overload and invalid/forged inputs. Camera streaming still uses
-diagnostic captures and rejects GPU-timing/HUD controls; measured independent
-streaming comparison remains a separate gate.
+deliberate FIFO overload and invalid/forged inputs. Default camera streaming retains
+diagnostic captures; use the following explicit mode for measured streaming.
 [Executed evidence](../../docs/validation/M4_BENCHMARK_CLOCK.md).
+
+## Capture-free independent streaming comparison
+
+```sh
+python3 tools/run_bevy_comparison.py \
+  --scene build/qualification/chunk-fallback-cook/scene.json \
+  --players 10000 --frames 660 --warmup 60 --route-frames 120 \
+  --independent-streaming --target-hz 60 --present-mode immediate \
+  --gpu-timings --stats-overlay --skip-build --output build/streaming-comparison
+```
+
+This uses each backend's actual fine-file loads, GPU-ready publication and
+retirement rather than replaying selections. The paired launcher requires a clock,
+at least 140 frames and no snapshots. `--fine-slots 1..4` defaults to two;
+`--stream-cpu-budget` applies the same unique encoded cap to both. Bevy logical
+payloads are not equivalent to Theia's tracked GPU allocations or physical VRAM.
+
+The standalone Bevy mode is `--camera-stream --stream-measure`. It disables
+captures, allows optional `--gpu-timings --stats-overlay`, and rejects explicit
+capture/snapshot/reference/probe controls. Its eleven-row panel uses actual
+streaming counts and encoded/logical ownership. Default diagnostic behavior and
+ordinary replay remain available. Fine drain after the route is unmeasured.
+
+HTML shows timing and missing-near-detail traces; JSON retains first-fine
+observations and unresolved demand windows. Near-demand means the nearest
+up-to-slot-count regions within 20 m, independent of retained fine residency.
+These view observations are not direct I/O latency measurements. Inspect lateness,
+selection differences and metric scopes before interpreting timing differences.
+Startup prevalidation, export reads and sequential order leave OS cache effects
+uncontrolled; this is not a cold-storage or whole-engine benchmark.
+
+`compare_stats_display.py` accepts the same streaming/clock/slot/CPU controls for
+disabled/enabled runs. Keep validation and diagnostic captures separate from
+release observations. `qualify_streaming_comparison.py --scene <scene.json>
+--headless-dri-prime <selector>` runs native budget/slot, timing, HUD-state,
+diagnostic-capture and replay regressions.
+[Evidence, observed profiles and limits](../../docs/validation/M4_INDEPENDENT_STREAMING_COMPARISON.md).

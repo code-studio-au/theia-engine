@@ -110,6 +110,7 @@ struct Run {
     captured: bool,
     metadata: Value,
     pacer: Option<frame_pacing::FramePacer>,
+    stream_measure: bool,
 }
 #[derive(Component)]
 struct Proxy(u32);
@@ -471,12 +472,16 @@ fn finish(
     stats.previous_cpu_ms = update_ms;
     if run.tick >= run.pre_roll && run.tick - run.pre_roll < fixture.frames.len() {
         let index = run.tick - run.pre_roll;
+        let record_hud = run.stream_measure && stats.enabled;
         if let Some(sample) = run.samples.last_mut() {
             sample["cpu_main_schedule_ms"] = json!(update_ms);
             sample["scene_time"] = json!(fixture.frames[index].time);
             sample["selected"] = json!(fixture.frames[index].selected);
             if probe.enabled {
                 sample["stream_probe"] = probe.frame_report();
+            }
+            if record_hud {
+                sample["hud_text"] = json!(stats.text);
             }
         }
     }
@@ -519,6 +524,16 @@ fn finish(
             .expect("Presentation support was not verified");
         run.metadata["present_mode"] = evidence["present_mode"].clone();
         run.metadata["frame_pacing"] = run.pacer.as_ref().map_or(Value::Null, |p| p.description());
+        run.metadata["streaming_measurement"] = json!(run.stream_measure);
+        run.metadata["cache_policy"] = if probe.enabled {
+            json!(
+                "all eight cooked sources prevalidated before route; fine worker reopens actual files; OS cache uncontrolled, no cold-cache claim"
+            )
+        } else {
+            json!(
+                "predecoded fixture graphs preloaded; original cooked files are not streamed during replay"
+            )
+        };
         run.metadata["supported_present_modes"] = evidence["supported_present_modes"].clone();
         run.metadata["present_mode_evidence"] = json!(
             "same native window/adapter capability query; pinned Bevy 0.19.1 selects the explicitly supported mode; runner rejects fallback diagnostics; configured surface is private to Bevy"
@@ -646,6 +661,7 @@ fn main() -> Result<()> {
     let mut present_mode = PresentMode::Fifo;
     let mut target_hz = None;
     let mut camera_stream = false;
+    let mut stream_measure = false;
     let mut stream_slots = None;
     let mut stream_captures: Option<Vec<usize>> = None;
     let mut probe_region = None;
@@ -679,6 +695,7 @@ fn main() -> Result<()> {
                 };
             }
             "--camera-stream" => camera_stream = true,
+            "--stream-measure" => stream_measure = true,
             "--target-hz" => {
                 target_hz = Some(args.next().ok_or("Missing target Hz")?.parse::<u32>()?)
             }
@@ -727,6 +744,11 @@ fn main() -> Result<()> {
     if !camera_stream && (stream_slots.is_some() || stream_captures.is_some()) {
         return Err("Camera controls require --camera-stream".into());
     }
+    if stream_measure && (!camera_stream || stream_captures.is_some()) {
+        return Err(
+            "--stream-measure requires --camera-stream and excludes capture controls".into(),
+        );
+    }
     if target_hz.is_some_and(|hz| !(1..=240).contains(&hz))
         || target_hz.is_some()
             && (snapshot.is_some() || reference.is_some() || probe_region.is_some())
@@ -747,7 +769,9 @@ fn main() -> Result<()> {
     if probe_region.is_some_and(|r| r > 3)
         || probe_cancel.is_some_and(|f| !(21..40).contains(&f))
         || (camera_stream || probe_region.is_some())
-            && (snapshot.is_some() || reference.is_some() || stats_overlay || gpu_timings)
+            && (snapshot.is_some()
+                || reference.is_some()
+                || !stream_measure && (stats_overlay || gpu_timings))
     {
         return Err("Streaming probe requires region 0..3, optional cancel frame 21..39, no snapshot/reference/HUD/GPU timing; captures are automatic correctness instrumentation".into());
     }
@@ -805,14 +829,18 @@ fn main() -> Result<()> {
         );
         return Ok(());
     }
-    let captures = stream_captures.unwrap_or_else(|| {
-        vec![
-            0,
-            fixture.frames.len() / 3,
-            2 * fixture.frames.len() / 3,
-            fixture.frames.len() - 1,
-        ]
-    });
+    let captures = if stream_measure {
+        Vec::new()
+    } else {
+        stream_captures.unwrap_or_else(|| {
+            vec![
+                0,
+                fixture.frames.len() / 3,
+                2 * fixture.frames.len() / 3,
+                fixture.frames.len() - 1,
+            ]
+        })
+    };
     if camera_stream
         && (captures.len() > 16 || captures.iter().any(|&f| f >= fixture.frames.len()) || {
             let mut sorted = captures.clone();
@@ -896,6 +924,7 @@ fn main() -> Result<()> {
             captured: false,
             metadata: Value::Null,
             pacer: target_hz.map(frame_pacing::FramePacer::new),
+            stream_measure,
         })
         .add_plugins(
             DefaultPlugins

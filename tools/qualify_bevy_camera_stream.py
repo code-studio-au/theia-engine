@@ -16,9 +16,13 @@ from world_camera_reference import Oracle, require
 ROOT=Path(__file__).resolve().parents[1]
 
 
-def check(report,fixture,oracle,logical):
+def check(report,fixture,oracle,logical,measurement=False):
     final=report['streaming_probe'];camera=final['camera'];slots=camera['slots'];base=set(range(4,8));previous=set();epoch=1
-    require(report['workload']=='theia-bevy-camera-stream-v1' and report['streaming'] and not report['gpu_timestamps'] and not report['overlay'],'Wrong correctness profile')
+    require(report['workload']=='theia-bevy-camera-stream-v1' and report['streaming'],'Wrong streaming profile')
+    if measurement:
+        require(report['metadata']['streaming_measurement'] and not final['captures'],'Measurement enabled captures')
+    else:
+        require(not report['gpu_timestamps'] and not report['overlay'],'Wrong correctness profile')
     require(len(report['samples'])==len(fixture['frames']),'Incomplete recording')
     def ledger(state):
         committed=set(state['committed_fine']);pending={state['region']} if state['pending_encoded'] else set();ids=base|committed|pending

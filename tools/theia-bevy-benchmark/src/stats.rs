@@ -77,6 +77,7 @@ pub(super) fn update(
     fixture: Res<Fixture>,
     run: Res<Run>,
     timings: Res<super::gpu_timing::Timings>,
+    probe: Res<super::stream_probe::Probe>,
     mut stats: ResMut<Stats>,
     mut text: Query<&mut Text, With<StatsText>>,
 ) {
@@ -101,18 +102,43 @@ pub(super) fn update(
         None
     }
     .unwrap_or_else(|| "N/A".into());
-    stats.text = format!(
-        "BEVY STATS\nFPS {:.1}\nCPU MAIN MS {:.3}\nGPU MS {}\nPROXIES {}\nREGIONS {}\nCHUNKS {} PRELOADED\nWORLD TEX {}\nSOURCE T {:.1}\nSOURCE FRAME {}\nSTREAM REPLAY",
-        stats.fps(),
-        stats.previous_cpu_ms,
-        gpu,
-        fixture.players,
-        fixture.frames[frame].selected.len(),
-        fixture.chunks.len(),
-        textures,
-        fixture.frames[frame].time,
-        frame
-    );
+    stats.text = if probe.is_camera() {
+        let state = probe.frame_report();
+        let camera = &state["camera"];
+        format!(
+            "BEVY STATS\nFPS {:.1}\nCPU MAIN MS {:.3}\nGPU MS {}\nPROXIES {}\nREGIONS 4\nFINE {} / {}\nPUB {} EVICT {}\nENCODED KIB {:.1}\nLOGICAL KIB {:.1}\nCANCEL {} DEFER {}",
+            stats.fps(),
+            stats.previous_cpu_ms,
+            gpu,
+            fixture.players,
+            fixture.frames[frame]
+                .selected
+                .iter()
+                .filter(|&&id| id < 4)
+                .count(),
+            camera["slots"],
+            camera["publications"],
+            camera["evictions"],
+            state["cpu_unique_bytes"].as_u64().unwrap() as f64 / 1024.,
+            state["logical_asset_bytes"].as_u64().unwrap() as f64 / 1024.,
+            camera["cancellations"],
+            camera["cpu_deferrals"].as_u64().unwrap()
+                + camera["logical_deferrals"].as_u64().unwrap()
+        )
+    } else {
+        format!(
+            "BEVY STATS\nFPS {:.1}\nCPU MAIN MS {:.3}\nGPU MS {}\nPROXIES {}\nREGIONS {}\nCHUNKS {} PRELOADED\nWORLD TEX {}\nSOURCE T {:.1}\nSOURCE FRAME {}\nSTREAM REPLAY",
+            stats.fps(),
+            stats.previous_cpu_ms,
+            gpu,
+            fixture.players,
+            fixture.frames[frame].selected.len(),
+            fixture.chunks.len(),
+            textures,
+            fixture.frames[frame].time,
+            frame
+        )
+    };
     **text.single_mut().unwrap() = stats.text.clone();
 }
 
