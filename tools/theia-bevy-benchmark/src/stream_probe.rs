@@ -1,5 +1,7 @@
 //! Controlled coarse -> asynchronous fine -> retired gate. This is deliberately
 //! separate from camera scheduling and from claims of physical VRAM equivalence.
+#[path = "camera_stream.rs"]
+mod camera_stream;
 use super::{
     Chunk, Fixture, Part, Result, Run, SurfaceMaterial, SurfaceUniform, WorldPart, cooked,
 };
@@ -145,6 +147,8 @@ pub(super) struct Probe {
     bootstrap: Vec<Chunk>,
     coarse: Vec<Owners>,
     fine: Option<Owners>,
+    active: [Option<Owners>; 4],
+    camera: Option<camera_stream::Camera>,
     worker: Option<Worker>,
     staged: Option<StagedBundle>,
     paths: Vec<PathBuf>,
@@ -159,7 +163,7 @@ pub(super) struct Probe {
     retiring_bytes: u64,
     history: Vec<serde_json::Value>,
     captures: Arc<Mutex<Vec<String>>>,
-    captured: Vec<&'static str>,
+    captured: Vec<String>,
     pub selected: [usize; 4],
     // Keep encoded ownership after worker/candidate handle owners on shutdown.
     cpu: Option<ProtectedWorld>,
@@ -173,6 +177,8 @@ impl Default for Probe {
             bootstrap: Vec::new(),
             coarse: Vec::new(),
             fine: None,
+            active: std::array::from_fn(|_| None),
+            camera: None,
             worker: None,
             staged: None,
             paths: Vec::new(),
@@ -291,22 +297,96 @@ impl Probe {
         assert!(self.history.len() < 16);
         self.history.push(serde_json::json!({"frame":frame,"phase":phase,"cpu_unique_bytes":self.cpu.as_ref().unwrap().live_bytes(),"logical_asset_bytes":self.base_logical+self.retiring_bytes+self.fine.as_ref().map_or(0,|o|o.logical_bytes),"selected":self.selected}));
     }
+    pub fn new_camera(
+        paths: Vec<PathBuf>,
+        slots: usize,
+        budgets: (usize, u64),
+        capture_frames: Vec<usize>,
+    ) -> Result<Self> {
+        let mut probe = Self::new(paths, 0, budgets.0, budgets.1, None)?;
+        probe.camera = Some(camera_stream::Camera::new(slots, capture_frames));
+        Ok(probe)
+    }
+    pub fn is_camera(&self) -> bool {
+        self.camera.is_some()
+    }
+    fn logical_bytes(&self) -> u64 {
+        self.base_logical
+            + self.retiring_bytes
+            + self.fine.as_ref().map_or(0, |o| o.logical_bytes)
+            + self
+                .active
+                .iter()
+                .flatten()
+                .map(|o| o.logical_bytes)
+                .sum::<u64>()
+    }
+    fn state_report(&self) -> serde_json::Value {
+        let cpu = self.cpu.as_ref().unwrap();
+        let snapshot = cpu.snapshot();
+        let watch = self.bridge.0.lock().unwrap().clone();
+        serde_json::json!({"phase":self.phase,"region":self.region,"cpu_unique_bytes":cpu.live_bytes(),"base_cpu_bytes":self.base_cpu,"base_logical_asset_bytes":self.base_logical,"logical_asset_bytes":self.logical_bytes(),"logical_budget":self.budget,"cpu_budget":self.cpu_budget,"selected":self.selected,"physical_gpu_bytes":null,"gpu_ready":watch.ready,"watch_removal":watch.remove,"cpu_epoch":snapshot.world().epoch(),"committed_fine":snapshot.world().chunk_ids().filter(|id|*id<4).collect::<Vec<_>>(),"protected_epochs":(4..8).map(|id|snapshot.world().chunk(id).unwrap().epoch()).collect::<Vec<_>>(),"pending_encoded":self.staged.is_some(),"pending_logical_bytes":self.fine.as_ref().map_or(self.retiring_bytes,|o|o.logical_bytes)})
+    }
     pub fn report(&self) -> serde_json::Value {
+        self.report_impl(true)
+    }
+    pub fn frame_report(&self) -> serde_json::Value {
+        self.report_impl(false)
+    }
+    fn report_impl(&self, full: bool) -> serde_json::Value {
         if !self.enabled {
             return serde_json::Value::Null;
         }
-        let cpu = self.cpu.as_ref().unwrap();
-        let watch = self.bridge.0.lock().unwrap().clone();
-        serde_json::json!({"phase":self.phase,"region":self.region,"history":self.history,"captures":*self.captures.lock().unwrap(),"cpu_unique_bytes":cpu.live_bytes(),"base_cpu_bytes":self.base_cpu,"base_logical_asset_bytes":self.base_logical,"logical_budget":self.budget,"cpu_budget":self.cpu_budget,"selected":self.selected,"physical_gpu_bytes":null,"gpu_ready":watch.ready,"watch_removal":watch.remove,"scope":"controlled one-fine cooked-file reload and retirement; encoded ownership charged by shared ProtectedWorld; adapted mesh/texel/uniform logical bytes exclude allocator slabs, work, proxy, ground, staging, driver and fixture metadata; not equivalent camera streaming"})
+        let mut row = self.state_report();
+        if full {
+            row["captures"] = serde_json::json!(*self.captures.lock().unwrap());
+        }
+        if let Some(camera) = &self.camera {
+            row["camera"] = camera.report(full);
+            row["scope"] = serde_json::json!(
+                "repeated camera demand with protected coarse coverage; CPU encoded and adapted logical budgets; physical GPU memory and streaming throughput unqualified"
+            );
+        } else {
+            if full {
+                row["history"] = serde_json::json!(self.history);
+            }
+            row["scope"] = serde_json::json!(
+                "controlled one-fine cooked-file reload and retirement; encoded ownership charged by shared ProtectedWorld; adapted logical bytes exclude allocator/work/proxy/ground/staging/driver/fixture overhead; not equivalent camera streaming"
+            );
+        }
+        row
     }
     pub fn complete(&self) -> bool {
-        !self.enabled
-            || (matches!(
+        if !self.enabled {
+            return true;
+        }
+        let terminal = if let Some(camera) = &self.camera {
+            camera.ending
+                && self.phase == "idle"
+                && self.worker.is_none()
+                && self.fine.is_none()
+                && self.staged.is_none()
+                && self.active.iter().all(Option::is_none)
+        } else {
+            matches!(
                 self.phase,
                 "retired" | "cancelled" | "deferred_cpu" | "deferred_logical"
-            ) && self.captures.lock().unwrap().len() == self.captured.len()
-                && self.captured.len() >= 2
-                && self.cpu.as_ref().unwrap().live_bytes() == self.base_cpu)
+            ) && self.captured.len() >= 2
+        };
+        terminal
+            && self.captures.lock().unwrap().len() == self.captured.len()
+            && self.cpu.as_ref().unwrap().live_bytes() == self.base_cpu
+    }
+    fn capture(&mut self, commands: &mut Commands, run: &Run, frame: usize, label: String) {
+        self.captured.push(label.clone());
+        let output = run.output.join(&label);
+        std::fs::create_dir_all(&output).unwrap();
+        let selected = self.selected;
+        let captures = self.captures.clone();
+        commands.spawn(Screenshot::primary_window()).observe(move|event:On<ScreenshotCaptured>|{
+            std::fs::write(output.join("screenshot.raw"),event.image.data.as_ref().unwrap()).unwrap();
+            std::fs::write(output.join("screenshot.json"),serde_json::to_vec_pretty(&serde_json::json!({"frame":frame,"selected":selected,"width":event.image.width(),"height":event.image.height(),"format":format!("{:?}",event.image.texture_descriptor.format),"overlay":false})).unwrap()).unwrap();captures.lock().unwrap().push(label.clone());
+        });
     }
 }
 pub(super) fn install(app: &mut App) {
@@ -367,6 +447,16 @@ pub(super) fn tick(
     mut materials: ResMut<Assets<SurfaceMaterial>>,
 ) {
     if !probe.enabled || run.tick < run.pre_roll {
+        return;
+    }
+    if probe.camera.is_some() {
+        camera_stream::tick(
+            &mut probe,
+            &mut commands,
+            &mut fixture,
+            &run,
+            (&mut meshes, &mut images, &mut materials),
+        );
         return;
     }
     let frame = run.tick - run.pre_roll;
@@ -519,14 +609,6 @@ pub(super) fn tick(
         None
     };
     if let Some(label) = label {
-        probe.captured.push(label);
-        let output = run.output.join(label);
-        std::fs::create_dir_all(&output).unwrap();
-        let selected = probe.selected;
-        let captures = probe.captures.clone();
-        commands.spawn(Screenshot::primary_window()).observe(move|event:On<ScreenshotCaptured>|{
-            std::fs::write(output.join("screenshot.raw"),event.image.data.as_ref().unwrap()).unwrap();
-            std::fs::write(output.join("screenshot.json"),serde_json::to_vec_pretty(&serde_json::json!({"frame":frame,"selected":selected,"width":event.image.width(),"height":event.image.height(),"format":format!("{:?}",event.image.texture_descriptor.format),"overlay":false})).unwrap()).unwrap();captures.lock().unwrap().push(label.to_string());
-        });
+        probe.capture(&mut commands, &run, frame, label.to_string());
     }
 }

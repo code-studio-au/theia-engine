@@ -5,13 +5,15 @@ import json
 import math
 from pathlib import Path
 import subprocess
+import struct
 
 from cooked_benchmark_reference import decode, material_factors, material_pixels, ray
 from proxy_benchmark_reference import pixel_reference, color_reference, encode
 from world_camera_reference import require
 
 
-def verify(fixture_path,output,exe):
+def verify(fixture_path,output,exe,exclude_ambiguous_proxy_depth=False):
+    (output/'pixel-proof.json').unlink(missing_ok=True)
     from PIL import Image
     fixture=json.loads(fixture_path.read_bytes());meta=json.loads((output/'screenshot.json').read_bytes())
     width,height=meta['width'],meta['height'];frame=meta['frame'];selected=fixture['frames'][frame]['selected']
@@ -34,6 +36,9 @@ def verify(fixture_path,output,exe):
         x=int((clip[0]/clip[3]+1)*width/2);y=int((clip[1]/clip[3]+1)*height/2)
         if 0<=x<width and 0<=y<height:coordinates.add((x,y))
     counts=dict(world=0,proxy=0,background=0,texture_boundary_skips=0,overlay_skips=0);failures=[];max_error=0
+    ambiguous=[]
+    object_by_id={o[0]:o for o in objects}
+    depth_code=lambda d:struct.unpack('<I',struct.pack('<f',d))[0]
     def srgb(v):
         v/=255.;return v/12.92 if v<=.04045 else ((v+.055)/1.055)**2.4
     for x,y in sorted(coordinates):
@@ -44,6 +49,17 @@ def verify(fixture_path,output,exe):
             if hit[0] and hit[2]<world[2]:world=hit;winner=source
         proxy=pixel_reference(rows,objects,x,y,width,height)
         if proxy[0] and proxy[2]<world[2]:
+            if exclude_ambiguous_proxy_depth:
+                nearest=object_by_id[proxy[0]-1]
+                # This bounded sampling exclusion is independent of actual RGB.
+                # Check nearby overlapping proxies for equal *canonical forward*
+                # D32 codes; Bevy uses another projection, so do not claim this
+                # verifies its actual GPU depth ordering or accept other colours.
+                nearby=[o for o in objects if o[0]!=nearest[0] and all(abs(o[1][a]-nearest[1][a])<=1 for a in (0,1))]
+                other=pixel_reference(rows,nearby,x,y,width,height)
+                if other[0] and depth_code(other[2])==depth_code(proxy[2]):
+                    ambiguous.append(dict(pixel=[x,y],nearest=proxy,runner_up=other,canonical_forward_d32_code=depth_code(proxy[2]),gpu_depth_order_verified=False))
+                    continue
             linear=color_reference(*proxy,3);kind='proxy'
         elif world[0]:
             _,_,_,material,uv=world;factor=winner[1][material];texels=winner[2][material];side=int((len(texels)//4)**.5)
@@ -70,7 +86,9 @@ def verify(fixture_path,output,exe):
         background=tuple(encode(v) for v in [.01,.018,.03])
         require(max(abs(a-b) for a,b in zip(image.getpixel((475,290))[:3],background))<=1,'Wrong HUD panel/background')
         hud_proof=dict(rows=11,ink_pixels_per_row=ink,panel=[12,12,468,288],exact_glyph_oracle=False)
-    result=dict(passed=not failures,frame=frame,players=fixture['players'],selected=selected,probes=counts,max_rgb_error=max_error,failures=failures,hud=hud_proof)
+    if exclude_ambiguous_proxy_depth:
+        require(len(ambiguous)<=len(coordinates)/10 and counts['world']+counts['proxy']+counts['background']>=50,'Insufficient unambiguous image sampling coverage')
+    result=dict(ambiguous_proxy_depth=ambiguous,exclude_ambiguous_proxy_depth=exclude_ambiguous_proxy_depth,passed=not failures,frame=frame,players=fixture['players'],selected=selected,probes=counts,max_rgb_error=max_error,failures=failures,hud=hud_proof)
     (output/'pixel-proof.json').write_text(json.dumps(result,indent=2)+'\n')
     require(not failures,'Bevy colour/source ray mismatch: '+str(failures[:3]))
     return result

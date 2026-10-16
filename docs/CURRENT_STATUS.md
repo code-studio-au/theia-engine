@@ -4,6 +4,19 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-16.
 
+## Optional Bevy repeated camera streaming — locally qualified (2026-10-16)
+
+The reference now uses shared 20/35-metre demand and bounded fine slots over real
+cooked-file reads, GPU-ready publication, cancellation and retirement. Nine native
+plans check 6120 recorded frames, including 26 GPU-ready cancellations and an
+88-publication/88-retirement long run. Forty-nine captures pass 6400 colour probes
+with 19 explicitly excluded ambiguous proxy-depth rays; 430000 pose checks pass.
+Four-slot/FIFO and legacy/replay regressions pass. An earlier Weston/driver device
+loss remains excluded and documented. Matched streaming timings, physical-memory
+comparisons and platform stability remain unqualified.
+[Usage](../tools/theia-bevy-benchmark/README.md#repeated-camera-driven-streaming),
+[evidence and limits](validation/M4_BEVY_CAMERA_STREAM.md).
+
 ## Optional Bevy fine-stream lifetime gate — locally qualified (2026-10-16)
 
 A separate controlled profile now keeps four coarse GPU graphs while reopening

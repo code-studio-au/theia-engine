@@ -177,3 +177,32 @@ This qualifies one controlled fine load/retirement, not repeated camera demand,
 equivalent streaming, physical memory or streaming performance.
 
 [Executed contract and qualification](../../docs/validation/M4_BEVY_FINE_STREAM_PROBE.md).
+
+## Repeated camera-driven streaming
+
+`--camera-stream` runs actual cooked fine loads under the shared camera-demand
+planner, protected coarse coverage and GPU readiness/removal acknowledgements.
+`--stream-fine-slots 1..4` defaults to two; load/retain radii are 20/35 metres.
+`--stream-cpu-budget` and `--stream-upload-budget` limit unique encoded ownership
+and adapter-specific logical payloads respectively. Physical VRAM is not measured.
+This profile ignores the source report's selections and records its own.
+
+Use a newly exported fixture (at least 140 route frames) with actual cooked paths.
+Optional `--stream-capture-frames 0,30,75,...` selects at most sixteen unique
+capture frames; default is start/thirds/endpoint. The endpoint drains remaining
+fine owners outside recorded samples before success. Frame traces omit duplicated
+history; the final report retains a 64-event ring. Source-ground metadata remains
+available even when fine GPU payloads are absent.
+
+`tools/qualify_bevy_camera_stream.py --scene <scene.json> --headless-dri-prime
+<selector> --output <directory>` prepares route fixtures and runs independent
+per-frame demand/ownership checks, captures and proxy pose checks. It includes
+rapid cancellation and repeated slot/capacity pressure. Camera captures explicitly
+report excluded near-overlapping proxy rays with equal canonical depth codes;
+RGB tolerance is unchanged, and GPU depth ordering for excluded rays is unverified.
+Historical replay/probe sampling remains strict by default.
+
+This is a correctness profile with captures and serial lifecycle waits. It rejects
+HUD, GPU-timing and ordinary frozen-snapshot controls. A timed paired streaming
+comparison must still control wall-clock demand rate and cache/accounting scope.
+[Qualification and platform incident](../../docs/validation/M4_BEVY_CAMERA_STREAM.md).

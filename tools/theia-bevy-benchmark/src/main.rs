@@ -465,7 +465,7 @@ fn finish(
             sample["scene_time"] = json!(fixture.frames[index].time);
             sample["selected"] = json!(fixture.frames[index].selected);
             if probe.enabled {
-                sample["stream_probe"] = probe.report();
+                sample["stream_probe"] = probe.frame_report();
             }
         }
     }
@@ -484,7 +484,9 @@ fn finish(
             exit.write(AppExit::Success);
         }
         assert!(run.tick < run.pre_roll + 600, "Screenshot did not complete");
-    } else if run.tick == run.pre_roll + fixture.frames.len() + 2 {
+    } else if run.tick >= run.pre_roll + fixture.frames.len() + 2
+        && (!probe.is_camera() || probe.complete())
+    {
         assert!(
             probe.complete(),
             "Streaming probe did not complete cleanly: {}",
@@ -527,7 +529,7 @@ fn finish(
         } else {
             Value::Null
         };
-        let report = json!({"schema":1,"engine":"bevy-0.19.1","workload":if probe.enabled {"theia-bevy-fine-stream-probe-v1"}else{&fixture.workload},"players":fixture.players,"frames":fixture.frames.len(),"warmup_frames":fixture.warmup,"pre_roll_frames":run.pre_roll,"extent":fixture.extent,"presentation":format!("{}; requested maximum frame latency 1; pipelined rendering disabled; compositor may pace presentation", run.metadata["present_mode"].as_str().unwrap()),"materials":"opaque unlit; source textures/linear factors; proxy face colors and view-depth fog","streaming":probe.enabled,"streaming_probe":probe.report(),"asset_residency":if probe.enabled {"four protected coarse graphs; one asynchronous cooked fine reload/retirement"}else{"all eight source graphs preloaded; recorded selection replay"},"motion":"CPU ECS; shared Theia readonly motion; CPU selected-terrain query","gpu_timestamps":timings.enabled,"summary_gpu_render_graph_ms":gpu_summary,"gpu_metric":if timings.enabled {json!("two wgpu encoder timestamps surrounding RenderGraph render systems; queue interval includes renderer GPU compute/raster/postprocess/UI; excludes preceding uploads, host extraction/encoding, presentation and timestamp readback; per-frame completion wait included only in host cadence")} else {Value::Null},"overlay":stats.enabled,"ui_renderer":"Bevy UI + default font; 468x288 panel; 11 rows; updated every frame","cpu_metric":"First-to-Last main schedule only; excludes later render extraction/submission","wall_seconds":run.started.elapsed().as_secs_f64(),"source_report_sha256":fixture.source_report_sha256,"source_manifest_sha256":fixture.source_manifest_sha256,"summary_frame_interval_ms":{"mean":values.iter().sum::<f64>()/values.len() as f64,"p50":quantile(0.5),"p95":quantile(0.95),"p99":quantile(0.99),"max":values.last()},"samples":run.samples,"metadata":run.metadata});
+        let report = json!({"schema":1,"engine":"bevy-0.19.1","workload":if probe.is_camera() {"theia-bevy-camera-stream-v1"}else if probe.enabled {"theia-bevy-fine-stream-probe-v1"}else{&fixture.workload},"players":fixture.players,"frames":fixture.frames.len(),"warmup_frames":fixture.warmup,"pre_roll_frames":run.pre_roll,"extent":fixture.extent,"presentation":format!("{}; requested maximum frame latency 1; pipelined rendering disabled; compositor may pace presentation", run.metadata["present_mode"].as_str().unwrap()),"materials":"opaque unlit; source textures/linear factors; proxy face colors and view-depth fog","streaming":probe.enabled,"streaming_probe":probe.report(),"asset_residency":if probe.enabled {"protected coarse graphs; bounded cooked fine streaming; see streaming_probe mode"}else{"all eight source graphs preloaded; recorded selection replay"},"motion":"CPU ECS; shared Theia readonly motion; CPU selected-terrain query","gpu_timestamps":timings.enabled,"summary_gpu_render_graph_ms":gpu_summary,"gpu_metric":if timings.enabled {json!("two wgpu encoder timestamps surrounding RenderGraph render systems; queue interval includes renderer GPU compute/raster/postprocess/UI; excludes preceding uploads, host extraction/encoding, presentation and timestamp readback; per-frame completion wait included only in host cadence")} else {Value::Null},"overlay":stats.enabled,"ui_renderer":"Bevy UI + default font; 468x288 panel; 11 rows; updated every frame","cpu_metric":"First-to-Last main schedule only; excludes later render extraction/submission","wall_seconds":run.started.elapsed().as_secs_f64(),"source_report_sha256":fixture.source_report_sha256,"source_manifest_sha256":fixture.source_manifest_sha256,"summary_frame_interval_ms":{"mean":values.iter().sum::<f64>()/values.len() as f64,"p50":quantile(0.5),"p95":quantile(0.95),"p99":quantile(0.99),"max":values.last()},"samples":run.samples,"metadata":run.metadata});
         std::fs::write(
             run.output.join("report.json"),
             serde_json::to_vec_pretty(&report).unwrap(),
@@ -535,6 +537,11 @@ fn finish(
         .unwrap();
         exit.write(AppExit::Success);
     }
+    assert!(
+        !probe.is_camera() || run.tick < run.pre_roll + fixture.frames.len() + 600,
+        "Camera drain did not complete: {}",
+        probe.report()
+    );
     run.tick += 1;
 }
 #[derive(Resource, Clone)]
@@ -625,6 +632,9 @@ fn main() -> Result<()> {
     let mut stats_overlay = false;
     let mut gpu_timings = false;
     let mut present_mode = PresentMode::Fifo;
+    let mut camera_stream = false;
+    let mut stream_slots = None;
+    let mut stream_captures: Option<Vec<usize>> = None;
     let mut probe_region = None;
     let mut probe_cpu_budget = None;
     let mut probe_upload_budget = None;
@@ -655,6 +665,19 @@ fn main() -> Result<()> {
                     _ => return Err("Present mode must be fifo, immediate or mailbox".into()),
                 };
             }
+            "--camera-stream" => camera_stream = true,
+            "--stream-fine-slots" => {
+                stream_slots = Some(args.next().ok_or("Missing fine slots")?.parse::<usize>()?)
+            }
+            "--stream-capture-frames" => {
+                stream_captures = Some(
+                    args.next()
+                        .ok_or("Missing capture frames")?
+                        .split(',')
+                        .map(str::parse)
+                        .collect::<std::result::Result<Vec<usize>, _>>()?,
+                )
+            }
             "--streaming-probe" => {
                 probe_region = Some(
                     args.next()
@@ -662,10 +685,10 @@ fn main() -> Result<()> {
                         .parse::<usize>()?,
                 )
             }
-            "--probe-cpu-budget" => {
+            "--probe-cpu-budget" | "--stream-cpu-budget" => {
                 probe_cpu_budget = Some(args.next().ok_or("Missing CPU budget")?.parse::<usize>()?)
             }
-            "--probe-upload-budget" => {
+            "--probe-upload-budget" | "--stream-upload-budget" => {
                 probe_upload_budget = Some(
                     args.next()
                         .ok_or("Missing logical upload budget")?
@@ -685,14 +708,23 @@ fn main() -> Result<()> {
             _ => return Err(format!("Unknown argument: {arg}").into()),
         }
     }
-    if probe_region.is_none()
+    if !camera_stream && (stream_slots.is_some() || stream_captures.is_some()) {
+        return Err("Camera controls require --camera-stream".into());
+    }
+    if camera_stream && (probe_region.is_some() || probe_cancel.is_some())
+        || stream_slots.is_some_and(|s| !(1..=4).contains(&s))
+    {
+        return Err("Choose camera streaming or controlled probe; fine slots must be 1..4".into());
+    }
+    if !camera_stream
+        && probe_region.is_none()
         && (probe_cpu_budget.is_some() || probe_upload_budget.is_some() || probe_cancel.is_some())
     {
         return Err("Probe controls require --streaming-probe".into());
     }
     if probe_region.is_some_and(|r| r > 3)
         || probe_cancel.is_some_and(|f| !(21..40).contains(&f))
-        || probe_region.is_some()
+        || (camera_stream || probe_region.is_some())
             && (snapshot.is_some() || reference.is_some() || stats_overlay || gpu_timings)
     {
         return Err("Streaming probe requires region 0..3, optional cancel frame 21..39, no snapshot/reference/HUD/GPU timing; captures are automatic correctness instrumentation".into());
@@ -751,17 +783,47 @@ fn main() -> Result<()> {
         );
         return Ok(());
     }
-    let probe = if let Some(region) = probe_region {
+    let captures = stream_captures.unwrap_or_else(|| {
+        vec![
+            0,
+            fixture.frames.len() / 3,
+            2 * fixture.frames.len() / 3,
+            fixture.frames.len() - 1,
+        ]
+    });
+    if camera_stream
+        && (captures.len() > 16 || captures.iter().any(|&f| f >= fixture.frames.len()) || {
+            let mut sorted = captures.clone();
+            sorted.sort_unstable();
+            sorted.dedup();
+            sorted.len() != captures.len()
+        })
+    {
+        return Err("Camera capture frames must be unique, in range and at most sixteen".into());
+    }
+    let probe = if camera_stream || probe_region.is_some() {
         if fixture.frames.len() < 140 {
             return Err("Streaming probe requires at least 140 route frames".into());
         }
-        let probe = stream_probe::Probe::new(
-            fixture.source_bundles.clone(),
-            region,
-            probe_cpu_budget.unwrap_or(64 * 1024 * 1024),
-            probe_upload_budget.unwrap_or(32 * 1024 * 1024),
-            probe_cancel,
-        )?;
+        let probe = if camera_stream {
+            stream_probe::Probe::new_camera(
+                fixture.source_bundles.clone(),
+                stream_slots.unwrap_or(2),
+                (
+                    probe_cpu_budget.unwrap_or(64 * 1024 * 1024),
+                    probe_upload_budget.unwrap_or(32 * 1024 * 1024),
+                ),
+                captures,
+            )?
+        } else {
+            stream_probe::Probe::new(
+                fixture.source_bundles.clone(),
+                probe_region.unwrap(),
+                probe_cpu_budget.unwrap_or(64 * 1024 * 1024),
+                probe_upload_budget.unwrap_or(32 * 1024 * 1024),
+                probe_cancel,
+            )?
+        };
         // Only source-ground metadata remains for CPU proxy queries/oracles.
         // GPU payloads must be constructed from actual cooked file loads.
         for chunk in &mut fixture.chunks {
@@ -861,7 +923,7 @@ fn main() -> Result<()> {
                 .before(render_system),
         );
     gpu_timing::install(&mut app, gpu_timings, frames);
-    if probe_region.is_some() {
+    if camera_stream || probe_region.is_some() {
         stream_probe::install(&mut app);
     }
     app.run();

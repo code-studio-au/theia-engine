@@ -522,3 +522,11 @@ real cooked fine load, GPU-ready publication, cancellation and retirement over
 protected coarse coverage. The normal paired visual replay remains separate;
 this fixed operation is not equivalent camera streaming or a performance run.
 [Controlled lifetime gate](validation/M4_BEVY_FINE_STREAM_PROBE.md).
+
+The separate Bevy `--camera-stream` profile now qualifies repeated camera demand,
+real file/GPU readiness, cancellation and fine retirement, with protected coarse
+coverage and bounded slots/encoded/logical budgets. The ordinary matched replay
+remains separate. Its diagnostic captures exclude explicitly reported canonical
+depth-ambiguous proxy rays without widening RGB tolerance. Timed streaming and
+physical-memory equivalence remain open.
+[Repeated-camera evidence and platform limits](validation/M4_BEVY_CAMERA_STREAM.md).

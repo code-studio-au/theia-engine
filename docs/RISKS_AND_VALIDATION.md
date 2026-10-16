@@ -278,3 +278,13 @@ gate encoded release. Adapter-specific logical payload limits are not allocator
 or physical VRAM limits. This fixed operation leaves repeated camera scheduling,
 post-startup source failure/mid-operation shutdown qualification and streaming
 performance equivalence open. [Evidence](validation/M4_BEVY_FINE_STREAM_PROBE.md).
+
+The optional Bevy reference now qualifies repeated demand using shared distance,
+retention and slot rules, including ready-candidate cancellation and final fine
+drain. Serial backend lifecycle ordering and uncapped wall-clock demand rates
+still differ; matching logical frames alone is not a fair I/O deadline policy.
+Camera image checks explicitly exclude equal-canonical-depth proxy ambiguities
+and do not prove their GPU depth winner. An earlier kernel-reported private Weston
+SDMA fault caused device loss and cascading teardown diagnostics; fresh recovery
+runs pass, but root cause/device-loss cleanup/platform stability remain open.
+[Evidence and limits](validation/M4_BEVY_CAMERA_STREAM.md).
