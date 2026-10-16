@@ -4,6 +4,18 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-16.
 
+## Optional comparison presentation/GPU timings — locally qualified (2026-10-16)
+
+Exact FIFO/Immediate/Mailbox modes now run in both references, with unsupported
+requests rejected and mode evidence exported. Optional Bevy render-graph GPU
+queries cover every recorded logical frame and retain raw tick evidence. Three
+Immediate population pairs pass 12 captures/1462 scene probes; FIFO/HUD and
+Mailbox regressions pass. Separate 10000-proxy off/on runs each retain 600 measured
+frames, with distinct GPU/CPU scopes. Bevy still preloads all graphs; equivalent
+streaming and whole-engine performance rankings remain unqualified.
+[Usage](../tools/theia-bevy-benchmark/README.md#non-vsynced-presentation-and-gpu-timings),
+[evidence](validation/M4_BEVY_PRESENTATION_TIMINGS.md).
+
 ## Optional stats-display comparison — locally qualified (2026-10-16)
 
 Theia's fixed GPU debug HUD and a corresponding Bevy UI text panel can now run

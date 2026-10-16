@@ -76,6 +76,7 @@ pub(super) fn setup(mut commands: Commands, stats: Res<Stats>) {
 pub(super) fn update(
     fixture: Res<Fixture>,
     run: Res<Run>,
+    timings: Res<super::gpu_timing::Timings>,
     mut stats: ResMut<Stats>,
     mut text: Query<&mut Text, With<StatsText>>,
 ) {
@@ -88,10 +89,23 @@ pub(super) fn update(
             .min(fixture.frames.len() - 1),
     );
     let textures: usize = fixture.chunks.iter().map(|chunk| chunk.parts.len()).sum();
+    let gpu = if timings.enabled && run.tick > run.pre_roll {
+        timings
+            .values
+            .lock()
+            .unwrap()
+            .get(run.tick - run.pre_roll - 1)
+            .and_then(|v| *v)
+            .map(|v| format!("{:.3}", v.ms))
+    } else {
+        None
+    }
+    .unwrap_or_else(|| "N/A".into());
     stats.text = format!(
-        "BEVY STATS\nFPS {:.1}\nCPU MAIN MS {:.3}\nGPU MS N/A\nPROXIES {}\nREGIONS {}\nCHUNKS {} PRELOADED\nWORLD TEX {}\nSOURCE T {:.1}\nSOURCE FRAME {}\nSTREAM REPLAY",
+        "BEVY STATS\nFPS {:.1}\nCPU MAIN MS {:.3}\nGPU MS {}\nPROXIES {}\nREGIONS {}\nCHUNKS {} PRELOADED\nWORLD TEX {}\nSOURCE T {:.1}\nSOURCE FRAME {}\nSTREAM REPLAY",
         stats.fps(),
         stats.previous_cpu_ms,
+        gpu,
         fixture.players,
         fixture.frames[frame].selected.len(),
         fixture.chunks.len(),

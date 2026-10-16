@@ -261,3 +261,12 @@ Bevy draws UI after the scene; glyph workloads and available metrics differ.
 Matched-selection summaries preserve these limits, differing CPU scopes and
 missing Bevy GPU timestamps. This is not evidence about Theia's planned M6 UI.
 [Evidence and observed profile changes](validation/M4_STATS_DISPLAY_COMPARISON.md).
+
+Optional native reference runs now qualify Immediate/Mailbox requests and Bevy
+GPU render-graph timestamps alongside the preserved FIFO path. Bevy's private
+surface configuration is verified through matching native capabilities and its
+pinned selection path, not direct readback. Serial timestamp collection affects
+host cadence; differing GPU/CPU scopes, synthetic assets and preload versus
+streaming still prevent a whole-engine ranking. Other compositors, offscreen
+saturation and equivalent streaming remain unqualified.
+[Evidence](validation/M4_BEVY_PRESENTATION_TIMINGS.md).

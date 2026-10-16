@@ -99,6 +99,7 @@ struct Context {
     complete: vk::Fence,
     window: Arc<Window>,
     validation: Arc<Validation>,
+    present_mode: vk::PresentModeKHR,
 }
 impl Context {
     fn new(window: Arc<Window>, options: &Options, validation: Arc<Validation>) -> Result<Self> {
@@ -124,6 +125,9 @@ impl Context {
             complete: vk::Fence::null(),
             window,
             validation,
+            present_mode: options
+                .benchmark_present_mode
+                .unwrap_or(vk::PresentModeKHR::FIFO),
         };
         ctx.initialize(options)?;
         Ok(ctx)
@@ -724,6 +728,15 @@ impl Swapchain {
             {
                 return Err("Surface does not support color attachments".into());
             }
+            let present_modes =
+                surface.get_physical_device_surface_present_modes(ctx.physical, ctx.surface)?;
+            if !present_modes.contains(&ctx.present_mode) {
+                return Err(format!(
+                    "Requested present mode {:?} is unsupported; available: {:?}; no fallback",
+                    ctx.present_mode, present_modes
+                )
+                .into());
+            }
             let formats = surface.get_physical_device_surface_formats(ctx.physical, ctx.surface)?;
             let mut format = *formats
                 .iter()
@@ -760,7 +773,7 @@ impl Swapchain {
                 .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
                 .pre_transform(capabilities.current_transform)
                 .composite_alpha(alpha)
-                .present_mode(vk::PresentModeKHR::FIFO)
+                .present_mode(ctx.present_mode)
                 .clipped(true)
                 .old_swapchain(old);
             if ctx.graphics_family == ctx.present_family {
@@ -861,10 +874,11 @@ impl Swapchain {
                 chain.pending.push(false);
             }
             println!(
-                "Swapchain: {}x{}, {:?}, FIFO, {} images",
+                "Swapchain: {}x{}, {:?}, {:?}, {} images",
                 extent.width,
                 extent.height,
                 format.format,
+                ctx.present_mode,
                 chain.images.len()
             );
             Ok(Some(chain))
@@ -1146,6 +1160,11 @@ impl Renderer {
                 .to_string_lossy()
                 .into_owned();
             let mut metadata = serde_json::json!({"device":name,"vendor_id":properties.vendor_id,"device_id":properties.device_id,"driver_version":properties.driver_version,"api_version":properties.api_version,"timestamp_period_ns":properties.limits.timestamp_period,"timestamp_valid_bits":bits,"validation":!options.no_validation,"debug_assertions":cfg!(debug_assertions),"work_requested_bytes":crate::benchmark::WORK_BYTES,"shader_dir":renderer.shader_dir});
+            metadata["present_mode"] =
+                serde_json::json!(format!("{:?}", renderer.ctx.present_mode).to_lowercase());
+            metadata["present_mode_evidence"] = serde_json::json!(
+                "surface support queried and exact mode passed to every Vulkan swapchain creation; unsupported requests fail"
+            );
             metadata["scene_kind"] = serde_json::json!(if options.world_camera_timings.is_some() {
                 "streamed-world"
             } else if options.benchmark_mixed {

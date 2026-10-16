@@ -43,7 +43,7 @@ def export(report,path):
 <style>body{font:16px system-ui;background:#101720;color:#e2e8f0;max-width:1100px;margin:3rem auto;padding:0 1rem}td,th{text-align:right;padding:.5rem 1rem}td:first-child,th:first-child{text-align:left}canvas{width:100%;height:300px;background:#182230}select{padding:.5rem}a{color:#8ad}h1{font-size:1.8rem}</style>
 <h1>TITLE</h1><p>SCENE · DEVICE</p>
 <p>SCOPE</p><p>Stats overlay: OVERLAY (included in timings when enabled).</p>
-<p>FIFO presentation; one frame in flight. CPU values include draw/fence/acquire/present, exclude event loop gaps. GPU timestamps include synchronization and instrumentation. Warmup excluded. These values are not an uncapped FPS score.</p>
+<p>PRESENTATION. CPU values include draw/fence/acquire/present, exclude event loop gaps. GPU timestamps include synchronization and instrumentation. Warmup excluded. These values are not an uncapped FPS score.</p>
 <table><tr><th>Milliseconds</th><th>Mean</th><th>p50</th><th>p95</th><th>p99</th><th>Max</th></tr>ROWS</table>
 <p><label>Frame trace <select id="metric"><option>gpu_total_ms</option><option>cpu_draw_ms</option><option>gpu_compute_ms</option><option>gpu_visibility_ms</option><option>gpu_resolve_ms</option>WORLD_METRICS</select></label> <span id="point"></span></p>
 <canvas id="plot" width="1100" height="300"></canvas>
@@ -70,6 +70,7 @@ m.onchange=draw;c.onmousemove=e=>{let i=Math.round(Math.max(0,Math.min(1,(e.offs
         scene=f"Four camera-streamed regions · {report['players']} GPU visual proxies"
         scope='Protected coarse coverage and complete fine publication share visibility/depth with GPU-grounded proxies. GPU frame intervals exclude earlier uploads/rebuilds; CPU draw wall includes synchronous renderer costs. Asset memory includes current/pending graphs and the terrain table; draw memory covers work/offscreen targets. Motion starts at frame zero while warmup filters summaries. No gameplay authority, skinning or production streaming claim.'
     metrics=''.join('<option value="'+key+'">'+label+'</option>' for key,label in [('world.total_gpu_bytes','Asset GPU MiB'),('world.cpu_unique_bytes','CPU encoded MiB'),('world.publications','Fine publications'),('world.evictions','Fine retirements'),('world.deferrals','Budget deferrals'),('world.epoch','World epoch')]) if streamed else ''
+    page=page.replace('PRESENTATION',html.escape(report['presentation']))
     page=page.replace('WORLD_METRICS',metrics)
     page=page.replace('TITLE',title).replace('SCENE',scene).replace('SCOPE',scope).replace('OVERLAY',str(report['overlay'])).replace('DEVICE',html.escape(report['metadata']['device'])).replace('ROWS',rows).replace('DATA',data)
     path.with_suffix('.html').write_text(page)
@@ -94,6 +95,7 @@ def main():
     parser.add_argument('--width',type=int,default=1280);parser.add_argument('--height',type=int,default=720)
     parser.add_argument('--output',type=Path,default=ROOT/'build/benchmark')
     parser.add_argument('--gpu');parser.add_argument('--headless',action='store_true');parser.add_argument('--headless-dri-prime')
+    parser.add_argument('--present-mode',choices=['fifo','immediate','mailbox'],default='fifo',help='exact requested swapchain mode; unsupported modes fail')
     parser.add_argument('--validation',action='store_true',help='enable actual Vulkan validation; separate from performance observations')
     parser.add_argument('--no-overlay',action='store_true',help='disable stats panel for comparable timing runs')
     parser.add_argument('--profile',choices=['debug','release'],default='release')
@@ -165,6 +167,7 @@ def main():
             if bundles and args.stream_quadrant is not None:command+=['--stream-bundle',bundles[args.stream_quadrant]]
             for flag,value in [('--bundle-gpu-budget',args.bundle_gpu_budget),('--bundle-byte-budget',args.bundle_byte_budget),('--texture-budget',args.texture_budget)]:
                 if value is not None:command+=[flag,str(value)]
+            command+=['--benchmark-present-mode',args.present_mode]
             if args.gpu:command+=['--gpu',args.gpu]
             if args.no_overlay and not args.streamed_world:command+=['--benchmark-no-overlay']
             if not args.validation:command+=['--no-validation']

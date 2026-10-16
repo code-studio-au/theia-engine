@@ -91,6 +91,7 @@ struct Options {
     benchmark_report: Option<std::path::PathBuf>,
     benchmark_width: Option<u32>,
     benchmark_height: Option<u32>,
+    benchmark_present_mode: Option<ash::vk::PresentModeKHR>,
     network_address: Option<std::net::SocketAddr>,
     network_certificate: Option<std::path::PathBuf>,
     network_faults: bool,
@@ -363,6 +364,14 @@ impl Options {
                         return Err("Choose one benchmark workload".into());
                     }
                     result.benchmark = true;
+                }
+                "--benchmark-present-mode" => {
+                    result.benchmark_present_mode = Some(match args.next().as_deref() {
+                        Some("fifo") => ash::vk::PresentModeKHR::FIFO,
+                        Some("immediate") => ash::vk::PresentModeKHR::IMMEDIATE,
+                        Some("mailbox") => ash::vk::PresentModeKHR::MAILBOX,
+                        _ => return Err("Present mode must be fifo, immediate or mailbox".into()),
+                    });
                 }
                 "--benchmark-width" => {
                     result.benchmark_width =
@@ -1572,6 +1581,12 @@ impl Options {
             || result.benchmark_report.is_some()
         {
             return Err("Benchmark options require --benchmark".into());
+        }
+        if result.benchmark_present_mode.is_some()
+            && !result.benchmark
+            && result.world_camera_timings.is_none()
+        {
+            return Err("--benchmark-present-mode requires a timed benchmark".into());
         }
         Ok(result)
     }

@@ -16,7 +16,10 @@ use bevy::{
             RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor, ShaderType,
             SpecializedMeshPipelineError, StoreOp, TextureDimension, TextureFormat,
         },
-        renderer::{RenderAdapterInfo, RenderDevice, RenderQueue, render_system},
+        renderer::{
+            RenderAdapter, RenderAdapterInfo, RenderDevice, RenderInstance, RenderQueue,
+            render_system,
+        },
         settings::{Backends, RenderCreation, WgpuSettings},
         view::window::{
             ExtractedWindows,
@@ -29,7 +32,13 @@ use bevy::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::{num::NonZeroU32, path::PathBuf, time::Instant};
+use std::{
+    num::NonZeroU32,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
+mod gpu_timing;
 mod stats;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -427,6 +436,8 @@ fn finish(
     mut run: ResMut<Run>,
     mut exit: MessageWriter<AppExit>,
     mut stats: ResMut<stats::Stats>,
+    presentation: Res<Presentation>,
+    timings: Res<gpu_timing::Timings>,
 ) {
     let update_ms = run.update_started.elapsed().as_secs_f64() * 1000.;
     stats.previous_cpu_ms = update_ms;
@@ -453,7 +464,26 @@ fn finish(
             exit.write(AppExit::Success);
         }
         assert!(run.tick < run.pre_roll + 600, "Screenshot did not complete");
-    } else if run.tick == run.pre_roll + fixture.frames.len() {
+    } else if run.tick == run.pre_roll + fixture.frames.len() + 2 {
+        if timings.enabled {
+            let values = timings.values.lock().unwrap();
+            assert_eq!(values.len(), run.samples.len());
+            for (sample, value) in run.samples.iter_mut().zip(values.iter()) {
+                let interval = value.expect("Missing GPU frame interval");
+                sample["gpu_render_graph_ms"] = json!(interval.ms);
+                sample["gpu_timestamp_ticks"] = json!([interval.start, interval.end]);
+                sample["gpu_timestamp_period_ns"] = json!(interval.period_ns);
+            }
+        }
+        let evidence = presentation.evidence.lock().unwrap();
+        let evidence = evidence
+            .as_ref()
+            .expect("Presentation support was not verified");
+        run.metadata["present_mode"] = evidence["present_mode"].clone();
+        run.metadata["supported_present_modes"] = evidence["supported_present_modes"].clone();
+        run.metadata["present_mode_evidence"] = json!(
+            "same native window/adapter capability query; pinned Bevy 0.19.1 selects the explicitly supported mode; runner rejects fallback diagnostics; configured surface is private to Bevy"
+        );
         let measured = &run.samples[fixture.warmup..];
         let mut values = measured
             .iter()
@@ -461,7 +491,18 @@ fn finish(
             .collect::<Vec<_>>();
         values.sort_by(f64::total_cmp);
         let quantile = |p: f64| values[((values.len() - 1) as f64 * p).ceil() as usize];
-        let report = json!({"schema":1,"engine":"bevy-0.19.1","workload":fixture.workload,"players":fixture.players,"frames":fixture.frames.len(),"warmup_frames":fixture.warmup,"pre_roll_frames":run.pre_roll,"extent":fixture.extent,"presentation":"FIFO; requested maximum frame latency 1; pipelined rendering disabled","materials":"opaque unlit; source textures/linear factors; proxy face colors and view-depth fog","streaming":false,"asset_residency":"all eight source graphs preloaded; recorded selection replay","motion":"CPU ECS; shared Theia readonly motion; CPU selected-terrain query","gpu_timestamps":false,"overlay":stats.enabled,"ui_renderer":"Bevy UI + default font; 468x288 panel; 11 rows; updated every frame","cpu_metric":"First-to-Last main schedule only; excludes later render extraction/submission","wall_seconds":run.started.elapsed().as_secs_f64(),"source_report_sha256":fixture.source_report_sha256,"source_manifest_sha256":fixture.source_manifest_sha256,"summary_frame_interval_ms":{"mean":values.iter().sum::<f64>()/values.len() as f64,"p50":quantile(0.5),"p95":quantile(0.95),"p99":quantile(0.99),"max":values.last()},"samples":run.samples,"metadata":run.metadata});
+        let gpu_summary = if timings.enabled {
+            let mut gpu = measured
+                .iter()
+                .map(|s| s["gpu_render_graph_ms"].as_f64().unwrap())
+                .collect::<Vec<_>>();
+            gpu.sort_by(f64::total_cmp);
+            let p = |q: f64| gpu[((gpu.len() - 1) as f64 * q).ceil() as usize];
+            json!({"mean":gpu.iter().sum::<f64>()/gpu.len() as f64,"p50":p(0.5),"p95":p(0.95),"p99":p(0.99),"max":gpu.last()})
+        } else {
+            Value::Null
+        };
+        let report = json!({"schema":1,"engine":"bevy-0.19.1","workload":fixture.workload,"players":fixture.players,"frames":fixture.frames.len(),"warmup_frames":fixture.warmup,"pre_roll_frames":run.pre_roll,"extent":fixture.extent,"presentation":format!("{}; requested maximum frame latency 1; pipelined rendering disabled; compositor may pace presentation", run.metadata["present_mode"].as_str().unwrap()),"materials":"opaque unlit; source textures/linear factors; proxy face colors and view-depth fog","streaming":false,"asset_residency":"all eight source graphs preloaded; recorded selection replay","motion":"CPU ECS; shared Theia readonly motion; CPU selected-terrain query","gpu_timestamps":timings.enabled,"summary_gpu_render_graph_ms":gpu_summary,"gpu_metric":if timings.enabled {json!("two wgpu encoder timestamps surrounding RenderGraph render systems; queue interval includes renderer GPU compute/raster/postprocess/UI; excludes preceding uploads, host extraction/encoding, presentation and timestamp readback; per-frame completion wait included only in host cadence")} else {Value::Null},"overlay":stats.enabled,"ui_renderer":"Bevy UI + default font; 468x288 panel; 11 rows; updated every frame","cpu_metric":"First-to-Last main schedule only; excludes later render extraction/submission","wall_seconds":run.started.elapsed().as_secs_f64(),"source_report_sha256":fixture.source_report_sha256,"source_manifest_sha256":fixture.source_manifest_sha256,"summary_frame_interval_ms":{"mean":values.iter().sum::<f64>()/values.len() as f64,"p50":quantile(0.5),"p95":quantile(0.95),"p99":quantile(0.99),"max":values.last()},"samples":run.samples,"metadata":run.metadata});
         std::fs::write(
             run.output.join("report.json"),
             serde_json::to_vec_pretty(&report).unwrap(),
@@ -470,6 +511,49 @@ fn finish(
         exit.write(AppExit::Success);
     }
     run.tick += 1;
+}
+#[derive(Resource, Clone)]
+struct Presentation {
+    mode: PresentMode,
+    evidence: Arc<Mutex<Option<Value>>>,
+}
+/// Query the same native window/adapter before the first rendered frame.
+/// Bevy's private surface configuration selects an explicit mode first when
+/// supported. Reject unsupported requests instead of allowing its FIFO fallback.
+fn verify_present_mode(
+    windows: Res<ExtractedWindows>,
+    adapter: Res<RenderAdapter>,
+    instance: Res<RenderInstance>,
+    presentation: Res<Presentation>,
+) {
+    let mut evidence = presentation.evidence.lock().unwrap();
+    if evidence.is_some() {
+        return;
+    }
+    let Some(window) = windows.windows.values().next() else {
+        return;
+    };
+    // SAFETY: Pipelined rendering is disabled, so this executes on the native
+    // event-loop thread. ExtractedWindows retains the live window. The temporary
+    // query-only surface drops before its handle owner or instance can release.
+    let surface = instance
+        .create_surface(unsafe { window.handle.get_handle() })
+        .expect("Query surface");
+    let caps = surface.get_capabilities(&adapter);
+    let requested = match presentation.mode {
+        PresentMode::Fifo => wgpu::PresentMode::Fifo,
+        PresentMode::Immediate => wgpu::PresentMode::Immediate,
+        PresentMode::Mailbox => wgpu::PresentMode::Mailbox,
+        _ => unreachable!(),
+    };
+    assert!(
+        caps.present_modes.contains(&requested),
+        "Requested present mode {requested:?} is unsupported; available: {:?}; no fallback",
+        caps.present_modes
+    );
+    *evidence = Some(
+        json!({"present_mode":format!("{requested:?}").to_lowercase(),"supported_present_modes":caps.present_modes.iter().map(|m| format!("{m:?}").to_lowercase()).collect::<Vec<_>>()}),
+    );
 }
 /// Bevy 0.19.1 can present its initial acquired surface before a camera view
 /// has rendered. Explicitly initialize that image; later frames skip this pass.
@@ -514,6 +598,8 @@ fn main() -> Result<()> {
     let mut reference = None;
     let mut pre_roll = 120;
     let mut stats_overlay = false;
+    let mut gpu_timings = false;
+    let mut present_mode = PresentMode::Fifo;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--fixture" => path = Some(PathBuf::from(args.next().ok_or("Missing fixture")?)),
@@ -532,6 +618,15 @@ fn main() -> Result<()> {
                         .parse::<usize>()?,
                 )
             }
+            "--present-mode" => {
+                present_mode = match args.next().as_deref() {
+                    Some("fifo") => PresentMode::Fifo,
+                    Some("immediate") => PresentMode::Immediate,
+                    Some("mailbox") => PresentMode::Mailbox,
+                    _ => return Err("Present mode must be fifo, immediate or mailbox".into()),
+                };
+            }
+            "--gpu-timings" => gpu_timings = true,
             "--stats-overlay" => stats_overlay = true,
             "--pre-roll" => pre_roll = args.next().ok_or("Missing pre-roll")?.parse::<usize>()?,
             _ => return Err(format!("Unknown argument: {arg}").into()),
@@ -601,7 +696,12 @@ fn main() -> Result<()> {
     let extent = fixture.extent;
     let frames = fixture.frames.len();
     let now = Instant::now();
+    let presentation = Presentation {
+        mode: present_mode,
+        evidence: default(),
+    };
     let mut app = App::new();
+    app.insert_resource(presentation.clone());
     app.insert_resource(ClearColor(Color::linear_rgb(0.025, 0.07, 0.12)))
         .insert_resource(WinitSettings {
             focused_mode: UpdateMode::Continuous,
@@ -631,6 +731,13 @@ fn main() -> Result<()> {
                 .set(RenderPlugin {
                     render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
                         backends: Some(Backends::VULKAN),
+                        features: WgpuSettings::default().features
+                            | if gpu_timings {
+                                wgpu::Features::TIMESTAMP_QUERY
+                                    | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS
+                            } else {
+                                wgpu::Features::empty()
+                            },
                         ..default()
                     })),
                     synchronous_pipeline_compilation: true,
@@ -641,7 +748,7 @@ fn main() -> Result<()> {
                         title: "Theia benchmark — Bevy reference".into(),
                         resolution: WindowResolution::new(extent[0], extent[1])
                             .with_scale_factor_override(1.),
-                        present_mode: PresentMode::Fifo,
+                        present_mode,
                         desired_maximum_frame_latency: NonZeroU32::new(1),
                         ..default()
                     }),
@@ -654,12 +761,16 @@ fn main() -> Result<()> {
         .add_systems(First, begin)
         .add_systems(Update, (update, stats::update).chain())
         .add_systems(Last, finish);
-    app.sub_app_mut(RenderApp).add_systems(
-        Render,
-        initialize_first_surface
-            .in_set(RenderSystems::Render)
-            .before(render_system),
-    );
+    app.sub_app_mut(RenderApp)
+        .insert_resource(presentation)
+        .add_systems(
+            Render,
+            (verify_present_mode, initialize_first_surface)
+                .chain()
+                .in_set(RenderSystems::Render)
+                .before(render_system),
+        );
+    gpu_timing::install(&mut app, gpu_timings, frames);
     app.run();
     Ok(())
 }

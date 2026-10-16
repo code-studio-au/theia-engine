@@ -509,3 +509,10 @@ records both engines with their displays disabled/enabled and filters summaries
 to matching source selections. Their fonts, available metrics and pipeline
 placement differ; no general UI ranking is implied.
 [Stats profile and evidence](validation/M4_STATS_DISPLAY_COMPARISON.md).
+
+Both comparison launchers now accept `--present-mode fifo|immediate|mailbox` and
+optional `--gpu-timings` for frame-associated Bevy render-graph queries. The
+standalone Theia launcher accepts the same presentation option. Exact support
+checks reject unavailable modes; compositor pacing can still apply. GPU/CPU
+scopes and Bevy's preload/replay policy remain explicit.
+[Presentation and timestamp qualification](validation/M4_BEVY_PRESENTATION_TIMINGS.md).
