@@ -38,8 +38,10 @@ use std::{
     sync::{Arc, Mutex},
     time::Instant,
 };
+mod cooked;
 mod gpu_timing;
 mod stats;
+mod stream_probe;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 // Share the engine's qualified readonly workload/camera functions. Vulkan
@@ -88,6 +90,8 @@ struct Fixture {
     warmup: usize,
     frames: Vec<Frame>,
     chunks: Vec<Chunk>,
+    #[serde(default)]
+    source_bundles: Vec<PathBuf>,
     source_report_sha256: String,
     source_manifest_sha256: String,
 }
@@ -289,15 +293,20 @@ fn pose(fixture: &Fixture, ground: &Ground, frame: usize, id: u32) -> ([f32; 3],
         < 35. * 35.;
     (center, near)
 }
+type SurfaceAssets<'w> = (
+    ResMut<'w, Assets<Mesh>>,
+    ResMut<'w, Assets<Image>>,
+    ResMut<'w, Assets<SurfaceMaterial>>,
+);
 fn setup(
     mut commands: Commands,
     fixture: Res<Fixture>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut images: ResMut<Assets<Image>>,
-    mut materials: ResMut<Assets<SurfaceMaterial>>,
+    assets: SurfaceAssets,
     gpu: (Res<RenderAdapterInfo>, Res<RenderDevice>),
+    mut probe: ResMut<stream_probe::Probe>,
     mut run: ResMut<Run>,
 ) {
+    let (mut meshes, mut images, mut materials) = assets;
     let (adapter, device) = gpu;
     run.metadata = json!({"device":adapter.name,"backend":format!("{:?}",adapter.backend),"vendor_id":adapter.vendor,"device_id":adapter.device,"driver":adapter.driver,"driver_info":adapter.driver_info,"bindless_material_supported":SurfaceMaterial::bindless_supported(&device),"wgpu_instance_layers_env":std::env::var("VK_INSTANCE_LAYERS").ok()});
     commands.spawn((
@@ -312,37 +321,41 @@ fn setup(
         DebandDither::Disabled,
         Msaa::Off,
     ));
-    for chunk in &fixture.chunks {
-        for part in &chunk.parts {
-            let mut image = Image::new(
-                Extent3d {
-                    width: part.texture.width,
-                    height: part.texture.height,
-                    depth_or_array_layers: 1,
-                },
-                TextureDimension::D2,
-                part.texture.rgba.clone(),
-                TextureFormat::Rgba8UnormSrgb,
-                RenderAssetUsages::RENDER_WORLD,
-            );
-            let mut sampler = ImageSamplerDescriptor::nearest();
-            sampler.address_mode_u = ImageAddressMode::Repeat;
-            sampler.address_mode_v = ImageAddressMode::Repeat;
-            image.sampler = ImageSampler::Descriptor(sampler);
-            let texture = images.add(image);
-            let material = materials.add(SurfaceMaterial {
-                surface: SurfaceUniform {
-                    factor: Vec4::from_array(part.factor),
-                    options: Vec4::ZERO,
-                },
-                texture,
-            });
-            commands.spawn((
-                Mesh3d(meshes.add(mesh(part.positions.clone(), part.uvs.clone(), None))),
-                MeshMaterial3d(material),
-                WorldPart(chunk.id),
-                Visibility::Hidden,
-            ));
+    if probe.enabled {
+        probe.setup(&mut commands, &mut meshes, &mut images, &mut materials);
+    } else {
+        for chunk in &fixture.chunks {
+            for part in &chunk.parts {
+                let mut image = Image::new(
+                    Extent3d {
+                        width: part.texture.width,
+                        height: part.texture.height,
+                        depth_or_array_layers: 1,
+                    },
+                    TextureDimension::D2,
+                    part.texture.rgba.clone(),
+                    TextureFormat::Rgba8UnormSrgb,
+                    RenderAssetUsages::RENDER_WORLD,
+                );
+                let mut sampler = ImageSamplerDescriptor::nearest();
+                sampler.address_mode_u = ImageAddressMode::Repeat;
+                sampler.address_mode_v = ImageAddressMode::Repeat;
+                image.sampler = ImageSampler::Descriptor(sampler);
+                let texture = images.add(image);
+                let material = materials.add(SurfaceMaterial {
+                    surface: SurfaceUniform {
+                        factor: Vec4::from_array(part.factor),
+                        options: Vec4::ZERO,
+                    },
+                    texture,
+                });
+                commands.spawn((
+                    Mesh3d(meshes.add(mesh(part.positions.clone(), part.uvs.clone(), None))),
+                    MeshMaterial3d(material),
+                    WorldPart(chunk.id),
+                    Visibility::Hidden,
+                ));
+            }
         }
     }
     let near = std::array::from_fn(|i| meshes.add(proxy_mesh(i, true)));
@@ -436,9 +449,13 @@ fn finish(
     mut run: ResMut<Run>,
     mut exit: MessageWriter<AppExit>,
     mut stats: ResMut<stats::Stats>,
-    presentation: Res<Presentation>,
-    timings: Res<gpu_timing::Timings>,
+    evidence: (
+        Res<Presentation>,
+        Res<gpu_timing::Timings>,
+        Res<stream_probe::Probe>,
+    ),
 ) {
+    let (presentation, timings, probe) = evidence;
     let update_ms = run.update_started.elapsed().as_secs_f64() * 1000.;
     stats.previous_cpu_ms = update_ms;
     if run.tick >= run.pre_roll && run.tick - run.pre_roll < fixture.frames.len() {
@@ -447,6 +464,9 @@ fn finish(
             sample["cpu_main_schedule_ms"] = json!(update_ms);
             sample["scene_time"] = json!(fixture.frames[index].time);
             sample["selected"] = json!(fixture.frames[index].selected);
+            if probe.enabled {
+                sample["stream_probe"] = probe.report();
+            }
         }
     }
     if let Some(frame) = run.snapshot {
@@ -465,6 +485,11 @@ fn finish(
         }
         assert!(run.tick < run.pre_roll + 600, "Screenshot did not complete");
     } else if run.tick == run.pre_roll + fixture.frames.len() + 2 {
+        assert!(
+            probe.complete(),
+            "Streaming probe did not complete cleanly: {}",
+            probe.report()
+        );
         if timings.enabled {
             let values = timings.values.lock().unwrap();
             assert_eq!(values.len(), run.samples.len());
@@ -502,7 +527,7 @@ fn finish(
         } else {
             Value::Null
         };
-        let report = json!({"schema":1,"engine":"bevy-0.19.1","workload":fixture.workload,"players":fixture.players,"frames":fixture.frames.len(),"warmup_frames":fixture.warmup,"pre_roll_frames":run.pre_roll,"extent":fixture.extent,"presentation":format!("{}; requested maximum frame latency 1; pipelined rendering disabled; compositor may pace presentation", run.metadata["present_mode"].as_str().unwrap()),"materials":"opaque unlit; source textures/linear factors; proxy face colors and view-depth fog","streaming":false,"asset_residency":"all eight source graphs preloaded; recorded selection replay","motion":"CPU ECS; shared Theia readonly motion; CPU selected-terrain query","gpu_timestamps":timings.enabled,"summary_gpu_render_graph_ms":gpu_summary,"gpu_metric":if timings.enabled {json!("two wgpu encoder timestamps surrounding RenderGraph render systems; queue interval includes renderer GPU compute/raster/postprocess/UI; excludes preceding uploads, host extraction/encoding, presentation and timestamp readback; per-frame completion wait included only in host cadence")} else {Value::Null},"overlay":stats.enabled,"ui_renderer":"Bevy UI + default font; 468x288 panel; 11 rows; updated every frame","cpu_metric":"First-to-Last main schedule only; excludes later render extraction/submission","wall_seconds":run.started.elapsed().as_secs_f64(),"source_report_sha256":fixture.source_report_sha256,"source_manifest_sha256":fixture.source_manifest_sha256,"summary_frame_interval_ms":{"mean":values.iter().sum::<f64>()/values.len() as f64,"p50":quantile(0.5),"p95":quantile(0.95),"p99":quantile(0.99),"max":values.last()},"samples":run.samples,"metadata":run.metadata});
+        let report = json!({"schema":1,"engine":"bevy-0.19.1","workload":if probe.enabled {"theia-bevy-fine-stream-probe-v1"}else{&fixture.workload},"players":fixture.players,"frames":fixture.frames.len(),"warmup_frames":fixture.warmup,"pre_roll_frames":run.pre_roll,"extent":fixture.extent,"presentation":format!("{}; requested maximum frame latency 1; pipelined rendering disabled; compositor may pace presentation", run.metadata["present_mode"].as_str().unwrap()),"materials":"opaque unlit; source textures/linear factors; proxy face colors and view-depth fog","streaming":probe.enabled,"streaming_probe":probe.report(),"asset_residency":if probe.enabled {"four protected coarse graphs; one asynchronous cooked fine reload/retirement"}else{"all eight source graphs preloaded; recorded selection replay"},"motion":"CPU ECS; shared Theia readonly motion; CPU selected-terrain query","gpu_timestamps":timings.enabled,"summary_gpu_render_graph_ms":gpu_summary,"gpu_metric":if timings.enabled {json!("two wgpu encoder timestamps surrounding RenderGraph render systems; queue interval includes renderer GPU compute/raster/postprocess/UI; excludes preceding uploads, host extraction/encoding, presentation and timestamp readback; per-frame completion wait included only in host cadence")} else {Value::Null},"overlay":stats.enabled,"ui_renderer":"Bevy UI + default font; 468x288 panel; 11 rows; updated every frame","cpu_metric":"First-to-Last main schedule only; excludes later render extraction/submission","wall_seconds":run.started.elapsed().as_secs_f64(),"source_report_sha256":fixture.source_report_sha256,"source_manifest_sha256":fixture.source_manifest_sha256,"summary_frame_interval_ms":{"mean":values.iter().sum::<f64>()/values.len() as f64,"p50":quantile(0.5),"p95":quantile(0.95),"p99":quantile(0.99),"max":values.last()},"samples":run.samples,"metadata":run.metadata});
         std::fs::write(
             run.output.join("report.json"),
             serde_json::to_vec_pretty(&report).unwrap(),
@@ -600,6 +625,10 @@ fn main() -> Result<()> {
     let mut stats_overlay = false;
     let mut gpu_timings = false;
     let mut present_mode = PresentMode::Fifo;
+    let mut probe_region = None;
+    let mut probe_cpu_budget = None;
+    let mut probe_upload_budget = None;
+    let mut probe_cancel = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--fixture" => path = Some(PathBuf::from(args.next().ok_or("Missing fixture")?)),
@@ -626,18 +655,55 @@ fn main() -> Result<()> {
                     _ => return Err("Present mode must be fifo, immediate or mailbox".into()),
                 };
             }
+            "--streaming-probe" => {
+                probe_region = Some(
+                    args.next()
+                        .ok_or("Missing probe region")?
+                        .parse::<usize>()?,
+                )
+            }
+            "--probe-cpu-budget" => {
+                probe_cpu_budget = Some(args.next().ok_or("Missing CPU budget")?.parse::<usize>()?)
+            }
+            "--probe-upload-budget" => {
+                probe_upload_budget = Some(
+                    args.next()
+                        .ok_or("Missing logical upload budget")?
+                        .parse::<u64>()?,
+                )
+            }
+            "--probe-cancel-frame" => {
+                probe_cancel = Some(
+                    args.next()
+                        .ok_or("Missing cancellation frame")?
+                        .parse::<usize>()?,
+                )
+            }
             "--gpu-timings" => gpu_timings = true,
             "--stats-overlay" => stats_overlay = true,
             "--pre-roll" => pre_roll = args.next().ok_or("Missing pre-roll")?.parse::<usize>()?,
             _ => return Err(format!("Unknown argument: {arg}").into()),
         }
     }
+    if probe_region.is_none()
+        && (probe_cpu_budget.is_some() || probe_upload_budget.is_some() || probe_cancel.is_some())
+    {
+        return Err("Probe controls require --streaming-probe".into());
+    }
+    if probe_region.is_some_and(|r| r > 3)
+        || probe_cancel.is_some_and(|f| !(21..40).contains(&f))
+        || probe_region.is_some()
+            && (snapshot.is_some() || reference.is_some() || stats_overlay || gpu_timings)
+    {
+        return Err("Streaming probe requires region 0..3, optional cancel frame 21..39, no snapshot/reference/HUD/GPU timing; captures are automatic correctness instrumentation".into());
+    }
     let path = path.ok_or("--fixture is required")?;
     let bytes = std::fs::read(path)?;
     if bytes.len() > 32 * 1024 * 1024 {
         return Err("Fixture exceeds 32 MiB".into());
     }
-    let fixture: Fixture = serde_json::from_slice(&bytes)?;
+    let mut fixture: Fixture = serde_json::from_slice(&bytes)?;
+    drop(bytes);
     if fixture.schema != 1
         || fixture.players > 10000
         || fixture.chunks.len() != 8
@@ -685,6 +751,29 @@ fn main() -> Result<()> {
         );
         return Ok(());
     }
+    let probe = if let Some(region) = probe_region {
+        if fixture.frames.len() < 140 {
+            return Err("Streaming probe requires at least 140 route frames".into());
+        }
+        let probe = stream_probe::Probe::new(
+            fixture.source_bundles.clone(),
+            region,
+            probe_cpu_budget.unwrap_or(64 * 1024 * 1024),
+            probe_upload_budget.unwrap_or(32 * 1024 * 1024),
+            probe_cancel,
+        )?;
+        // Only source-ground metadata remains for CPU proxy queries/oracles.
+        // GPU payloads must be constructed from actual cooked file loads.
+        for chunk in &mut fixture.chunks {
+            chunk.parts.clear();
+        }
+        for frame in &mut fixture.frames {
+            frame.selected = [4, 5, 6, 7];
+        }
+        probe
+    } else {
+        stream_probe::Probe::default()
+    };
     let output = output.ok_or("--output is required")?;
     std::fs::create_dir_all(&output)?;
     for name in ["report.json", "screenshot.raw", "screenshot.json"] {
@@ -702,6 +791,7 @@ fn main() -> Result<()> {
     };
     let mut app = App::new();
     app.insert_resource(presentation.clone());
+    app.insert_resource(probe);
     app.insert_resource(ClearColor(Color::linear_rgb(0.025, 0.07, 0.12)))
         .insert_resource(WinitSettings {
             focused_mode: UpdateMode::Continuous,
@@ -759,7 +849,7 @@ fn main() -> Result<()> {
         .add_plugins(MaterialPlugin::<SurfaceMaterial>::default())
         .add_systems(Startup, (setup, stats::setup))
         .add_systems(First, begin)
-        .add_systems(Update, (update, stats::update).chain())
+        .add_systems(Update, (stream_probe::tick, update, stats::update).chain())
         .add_systems(Last, finish);
     app.sub_app_mut(RenderApp)
         .insert_resource(presentation)
@@ -771,6 +861,9 @@ fn main() -> Result<()> {
                 .before(render_system),
         );
     gpu_timing::install(&mut app, gpu_timings, frames);
+    if probe_region.is_some() {
+        stream_probe::install(&mut app);
+    }
     app.run();
     Ok(())
 }

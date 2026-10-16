@@ -516,3 +516,9 @@ standalone Theia launcher accepts the same presentation option. Exact support
 checks reject unavailable modes; compositor pacing can still apply. GPU/CPU
 scopes and Bevy's preload/replay policy remain explicit.
 [Presentation and timestamp qualification](validation/M4_BEVY_PRESENTATION_TIMINGS.md).
+
+A separate `--streaming-probe` reference profile now qualifies one asynchronous
+real cooked fine load, GPU-ready publication, cancellation and retirement over
+protected coarse coverage. The normal paired visual replay remains separate;
+this fixed operation is not equivalent camera streaming or a performance run.
+[Controlled lifetime gate](validation/M4_BEVY_FINE_STREAM_PROBE.md).

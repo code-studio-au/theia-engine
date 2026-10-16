@@ -152,3 +152,28 @@ is `--benchmark-present-mode`. Shader modules and default FIFO behavior remain.
 This does not implement equivalent Bevy streaming: all eight graphs still preload.
 
 [Native qualification, observations and limits](../../docs/validation/M4_BEVY_PRESENTATION_TIMINGS.md).
+
+## Controlled fine-streaming lifetime gate
+
+The ordinary comparison above still preloads/replays. A separate correctness
+profile, `--streaming-probe <region 0..3>`, now reopens an actual cooked fine graph
+on one file worker over four protected coarse GPU graphs. It checks prepared
+meshes/images/materials and queue completion before publication, then waits for
+render-asset removal/completion before releasing encoded ownership.
+
+Re-export an overlay-disabled source fixture to include cooked bundle paths, with
+at least 140 route frames. The profile requests at frame 20, permits publication
+from frame 40 and retires from frame 80. It automatically captures coarse, fine
+and final coverage. Optional `--probe-cpu-budget`, `--probe-upload-budget` and
+`--probe-cancel-frame 21..39` exercise admission and cancellation. Upload bytes are
+adapter-specific logical payloads, not physical GPU memory. It rejects ordinary
+snapshot/HUD/GPU-timing flags because these lifecycle captures/waits are diagnostic.
+
+`tools/qualify_bevy_stream_probe.py --scene <scene.json> --source-report
+<completed-Theia-report.json> --headless-dri-prime <selector> --output <directory>`
+exports the inputs and executes the full owned-headless validation, budget,
+cancellation, source, pixel and pose matrix. The cooked assets remain unchanged.
+This qualifies one controlled fine load/retirement, not repeated camera demand,
+equivalent streaming, physical memory or streaming performance.
+
+[Executed contract and qualification](../../docs/validation/M4_BEVY_FINE_STREAM_PROBE.md).

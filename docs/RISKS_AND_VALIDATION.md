@@ -270,3 +270,11 @@ host cadence; differing GPU/CPU scopes, synthetic assets and preload versus
 streaming still prevent a whole-engine ranking. Other compositors, offscreen
 saturation and equivalent streaming remain unqualified.
 [Evidence](validation/M4_BEVY_PRESENTATION_TIMINGS.md).
+
+The optional Bevy reference now qualifies one actual cooked fine-file reload over
+protected coarse resources. Prepared render-asset presence plus queue completion
+gates publication; last-handle Unused, render-entry removal and queue retirement
+gate encoded release. Adapter-specific logical payload limits are not allocator
+or physical VRAM limits. This fixed operation leaves repeated camera scheduling,
+post-startup source failure/mid-operation shutdown qualification and streaming
+performance equivalence open. [Evidence](validation/M4_BEVY_FINE_STREAM_PROBE.md).

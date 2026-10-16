@@ -46,6 +46,7 @@ def export(scene_path,report_path,output,renderer,allow_overlay=False):
         require(sample['frame']==index and abs(reference['time']-sample['scene_time'])<1e-5,'Source timeline differs from shared route')
         frames.append(dict(frame=index,time=sample['scene_time'],selected=sample['world']['selected'],eye=reference['eye'],rows=reference['rows']))
     result=dict(schema=1,workload='theia-streamed-visual-replay-v1',players=report['players'],
+        source_bundles=[str(Path(e['cook']['bundle']['path']).resolve()) for group in ('quadrants','fallbacks') for e in scene[group]],
         source_overlay=report['overlay'],extent=report['samples'][0]['extent'],warmup=report['warmup_frames'],frames=frames,chunks=chunks,
         source_manifest=str(scene_path.resolve()),source_manifest_sha256=hashlib.sha256(scene_path.read_bytes()).hexdigest(),
         source_report=str(report_path.resolve()),source_report_sha256=hashlib.sha256(report_path.read_bytes()).hexdigest(),source_resources=source_files,

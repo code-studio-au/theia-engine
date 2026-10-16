@@ -4,6 +4,18 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-16.
 
+## Optional Bevy fine-stream lifetime gate — locally qualified (2026-10-16)
+
+A separate controlled profile now keeps four coarse GPU graphs while reopening
+one real cooked fine graph on a bounded file worker. Prepared mesh/image/material
+checks and queue completion precede publication; GPU removal/retirement precedes
+encoded release. Ten native cases pass exact/short budgets and worker/ready
+cancellation, with 25 captures/3411 scene probes and 350000 pose checks. Existing
+FIFO, HUD and GPU-timing replay modes pass regressions. This is one fixed
+operation; equivalent camera streaming and physical-memory comparisons remain
+outstanding. [Usage](../tools/theia-bevy-benchmark/README.md#controlled-fine-streaming-lifetime-gate),
+[evidence](validation/M4_BEVY_FINE_STREAM_PROBE.md).
+
 ## Optional comparison presentation/GPU timings — locally qualified (2026-10-16)
 
 Exact FIFO/Immediate/Mailbox modes now run in both references, with unsupported
