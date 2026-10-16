@@ -18,11 +18,13 @@ ROOT=Path(__file__).resolve().parents[1]
 def export(report,path):
     streamed=report['workload']=='theia-streamed-mmo-v1'
     columns=['frame','scene_time','warmup','frame_interval_ms','cpu_draw_ms','gpu_total_ms','gpu_compute_ms','gpu_visibility_ms','gpu_resolve_ms','tracked_image_and_work_allocation_bytes']
+    if report['metadata'].get('frame_pacing'):columns+=['frame_pacing']
     if report['workload'] in ('theia-cooked-bundle-route-v1','theia-cooked-mmo-v1'):columns+=['active_bundle_allocation_bytes','resident_texture_count','bundle_publications','bundle_deferrals']
     if streamed:columns+=['world_epoch','world_selected','world_publications','world_evictions','world_deferrals','world_cpu_unique_bytes','world_graph_gpu_bytes','world_pending_gpu_bytes','world_fixed_gpu_bytes','world_total_gpu_bytes','world_image_bytes','world_pending_image_bytes','world_selected_images','world_owned_chunks','world_route_cycle']
     def csv_rows():
         for sample in report['samples']:
             row=dict(sample);cooked=sample.get('cooked',{})
+            if 'frame_pacing' in row:row['frame_pacing']=json.dumps(row['frame_pacing'],separators=(',',':'))
             row.update(active_bundle_allocation_bytes=cooked.get('active_bundle_allocation_bytes'),resident_texture_count=cooked.get('resident_texture_count'),bundle_publications=cooked.get('publications'),bundle_deferrals=cooked.get('deferrals'))
             if streamed:
                 world=sample['world'];pending=world.get('pending') or {}
@@ -70,6 +72,11 @@ m.onchange=draw;c.onmousemove=e=>{let i=Math.round(Math.max(0,Math.min(1,(e.offs
         scene=f"Four camera-streamed regions · {report['players']} GPU visual proxies"
         scope='Protected coarse coverage and complete fine publication share visibility/depth with GPU-grounded proxies. GPU frame intervals exclude earlier uploads/rebuilds; CPU draw wall includes synchronous renderer costs. Asset memory includes current/pending graphs and the terrain table; draw memory covers work/offscreen targets. Motion starts at frame zero while warmup filters summaries. No gameplay authority, skinning or production streaming claim.'
     metrics=''.join('<option value="'+key+'">'+label+'</option>' for key,label in [('world.total_gpu_bytes','Asset GPU MiB'),('world.cpu_unique_bytes','CPU encoded MiB'),('world.publications','Fine publications'),('world.evictions','Fine retirements'),('world.deferrals','Budget deferrals'),('world.epoch','World epoch')]) if streamed else ''
+    if report['metadata'].get('frame_pacing'):
+        from benchmark_clock import verify
+        clock=verify(report,report['metadata']['frame_pacing']['target_hz'])
+        scope+=' Requested %d Hz absolute frame schedule: p95 lateness %.3f ms, maximum %.3f ms, %d frames at least one period late. No skipped frames or rebasing; CPU work excludes pacing sleep. Host intervals include the requested cap.'%(clock['target_hz'],clock['p95_lateness_ms'],clock['max_lateness_ms'],clock['frames_at_least_one_period_late'])
+        metrics+='<option value="frame_pacing.lateness_ms">Frame start lateness ms</option>'
     page=page.replace('PRESENTATION',html.escape(report['presentation']))
     page=page.replace('WORLD_METRICS',metrics)
     page=page.replace('TITLE',title).replace('SCENE',scene).replace('SCOPE',scope).replace('OVERLAY',str(report['overlay'])).replace('DEVICE',html.escape(report['metadata']['device'])).replace('ROWS',rows).replace('DATA',data)
@@ -96,12 +103,14 @@ def main():
     parser.add_argument('--output',type=Path,default=ROOT/'build/benchmark')
     parser.add_argument('--gpu');parser.add_argument('--headless',action='store_true');parser.add_argument('--headless-dri-prime')
     parser.add_argument('--present-mode',choices=['fifo','immediate','mailbox'],default='fifo',help='exact requested swapchain mode; unsupported modes fail')
+    parser.add_argument('--target-hz',type=int,help='optional 1..240 Hz absolute frame schedule; records lateness without skipping frames')
     parser.add_argument('--validation',action='store_true',help='enable actual Vulkan validation; separate from performance observations')
     parser.add_argument('--no-overlay',action='store_true',help='disable stats panel for comparable timing runs')
     parser.add_argument('--profile',choices=['debug','release'],default='release')
     parser.add_argument('--slangc',default=shutil.which('slangc'))
     parser.add_argument('--skip-build',action='store_true',help='use already built matching binaries/SPIR-V')
     args=parser.parse_args();os.chdir(ROOT)
+    if args.target_hz is not None and not 1<=args.target_hz<=240:parser.error('Target Hz must be 1..240')
     if args.streamed_world and (args.mixed_world or args.whole_world or args.quadrant is not None or args.stream_quadrant is not None):parser.error('--streamed-world cannot combine resident-world or quadrant/replacement selection')
     if args.streamed_world and args.seconds!=60:parser.error('Streamed routes currently use 60 logical seconds per camera period')
     if not args.streamed_world and (args.route_frames is not None or args.fine_slots is not None):parser.error('--route-frames and --fine-slots require --streamed-world')
@@ -168,13 +177,14 @@ def main():
             for flag,value in [('--bundle-gpu-budget',args.bundle_gpu_budget),('--bundle-byte-budget',args.bundle_byte_budget),('--texture-budget',args.texture_budget)]:
                 if value is not None:command+=[flag,str(value)]
             command+=['--benchmark-present-mode',args.present_mode]
+            if args.target_hz is not None:command+=['--benchmark-target-hz',str(args.target_hz)]
             if args.gpu:command+=['--gpu',args.gpu]
             if args.no_overlay and not args.streamed_world:command+=['--benchmark-no-overlay']
             if not args.validation:command+=['--no-validation']
             print(f'Running {"streamed "+str(players)+" visual proxies" if args.streamed_world else "mixed "+str(players)+" visual proxies" if args.mixed_world else "cooked "+selection if bundles else str(players)+" visual proxies"}, {args.frames} frames ({args.profile}, validation={args.validation})',flush=True)
             try:
                 with (output/'run.log').open('w') as log:
-                    subprocess.run(command,env=env,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=max(120,args.frames/10))
+                    subprocess.run(command,env=env,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=max(120,args.frames/10,2*args.frames/(args.target_hz or 240)+60))
             except subprocess.SubprocessError:
                 report_path.unlink(missing_ok=True)
                 raise

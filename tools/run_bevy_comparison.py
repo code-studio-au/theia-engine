@@ -35,12 +35,14 @@ def main():
     parser.add_argument('--gpu');parser.add_argument('--headless',action='store_true');parser.add_argument('--headless-dri-prime')
     parser.add_argument('--gpu-timings',action='store_true',help='collect Bevy render-graph GPU intervals with exact logical frame tags and serial completion')
     parser.add_argument('--present-mode',choices=['fifo','immediate','mailbox'],default='fifo',help='exact mode for both renderers; unsupported modes fail')
+    parser.add_argument('--target-hz',type=int,help='optional shared 1..240 Hz schedule; inspect recorded lateness before interpreting I/O deadlines')
     parser.add_argument('--stats-overlay',action='store_true',help='show Theia GPU HUD and a corresponding native Bevy UI stats panel')
     parser.add_argument('--validation',action='store_true')
     parser.add_argument('--skip-build',action='store_true',help='reuse both release executables and existing Theia SPIR-V')
     parser.add_argument('--slangc',default=shutil.which('slangc'))
     parser.add_argument('--snapshot-frames',type=int,nargs='*',default=[],help='additional frozen Bevy frames with independent source-pixel checks; excluded from timing')
     args=parser.parse_args();os.chdir(ROOT)
+    if args.target_hz is not None and not 1<=args.target_hz<=240:parser.error('Target Hz must be 1..240')
     if not args.players or any(not 0<=p<=10000 for p in args.players) or not 3<=args.frames<=120000 or not 0<=args.warmup<args.frames-2 or not 2<=args.pre_roll<=1200:parser.error('Invalid bounded population/frame/warmup/pre-roll')
     if any(not 0<=f<args.frames for f in args.snapshot_frames):parser.error('Snapshot outside route')
     if args.stats_overlay and (args.width<480 or args.height<300):parser.error('Full stats display comparison requires at least 480x300')
@@ -67,17 +69,20 @@ def main():
             for path in (case/'bevy/report.json',case/'bevy/report.csv',case/'fixture.json'):path.unlink(missing_ok=True)
             command=[sys.executable,'tools/run_scene_benchmark.py','--streamed-world','--cooked-scene',str(args.scene.resolve()),'--players',str(players),'--frames',str(args.frames),'--warmup',str(args.warmup),'--width',str(args.width),'--height',str(args.height),'--skip-build','--output',str(case/'theia')]
             command+=['--present-mode',args.present_mode]
+            if args.target_hz is not None:command+=['--target-hz',str(args.target_hz)]
             if not args.stats_overlay:command+=['--no-overlay']
             if args.route_frames:command+=['--route-frames',str(args.route_frames)]
             if args.gpu:command+=['--gpu',args.gpu]
             if args.validation:command+=['--validation']
             print('Running Theia source route:',players,'proxies',flush=True)
-            run(command,native,case/'theia-launcher.log',max(180,args.frames/10))
+            timeout=max(180,args.frames/10,2*args.frames/(args.target_hz or 240)+60)
+            run(command,native,case/'theia-launcher.log',timeout)
             source=case/'theia'/('00-streamed-%d-proxies'%players)/'report.json'
             fixture=case/'fixture.json';export(args.scene,source,fixture,theia,args.stats_overlay)
             print('Running Bevy native visual replay:',players,'proxies',flush=True)
             overlay_flags=['--present-mode',args.present_mode]+(['--stats-overlay'] if args.stats_overlay else [])
-            run([str(bevy),'--fixture',str(fixture),'--output',str(case/'bevy'),'--pre-roll',str(args.pre_roll),*overlay_flags,*(['--gpu-timings'] if args.gpu_timings else [])],bevy_env,case/'bevy.log',max(180,args.frames/10))
+            pacing_flags=['--target-hz',str(args.target_hz)] if args.target_hz is not None else []
+            run([str(bevy),'--fixture',str(fixture),'--output',str(case/'bevy'),'--pre-roll',str(args.pre_roll),*overlay_flags,*pacing_flags,*(['--gpu-timings'] if args.gpu_timings else [])],bevy_env,case/'bevy.log',timeout)
             report=json.loads((case/'bevy/report.json').read_bytes());original=json.loads(source.read_bytes())
             require(report['gpu_timestamps']==args.gpu_timings,'GPU timing instrumentation differs')
             if args.gpu_timings:
@@ -90,6 +95,10 @@ def main():
             require(report['metadata']['present_mode']==original['metadata']['present_mode']==args.present_mode,'Presentation modes differ')
             require(report['overlay']==original['overlay']==args.stats_overlay,'Overlay configuration differs')
             require(len(report['samples'])==args.frames,'Incomplete Bevy report')
+            clock_proof=None
+            if args.target_hz is not None:
+                from benchmark_clock import verify
+                clock_proof={'theia':verify(original,args.target_hz),'bevy':verify(report,args.target_hz)}
             require(report['source_report_sha256']==hashlib.sha256(source.read_bytes()).hexdigest(),'Replay source changed')
             require(report['metadata']['backend']=='Vulkan' and report['metadata']['device_id']==original['metadata']['device_id'] and report['extent']==original['samples'][0]['extent'],'Different GPU/backend/extent')
             for sample,other in zip(report['samples'],original['samples']):
@@ -97,16 +106,20 @@ def main():
             from qualify_bevy_workload import verify as verify_poses
             poses=verify_poses(fixture,bevy,theia,case/'pose-proof.json')
             with (case/'bevy/report.csv').open('w',newline='') as file:
-                writer=csv.DictWriter(file,fieldnames=['frame','scene_time','frame_interval_ms','cpu_main_schedule_ms','selected']+(['gpu_render_graph_ms','gpu_timestamp_ticks','gpu_timestamp_period_ns'] if args.gpu_timings else []));writer.writeheader();writer.writerows(report['samples'])
+                writer=csv.DictWriter(file,fieldnames=['frame','scene_time','frame_interval_ms','cpu_main_schedule_ms','selected']+(['frame_pacing'] if args.target_hz is not None else [])+(['gpu_render_graph_ms','gpu_timestamp_ticks','gpu_timestamp_period_ns'] if args.gpu_timings else []));writer.writeheader()
+                for sample in report['samples']:
+                    row=dict(sample)
+                    if 'frame_pacing' in row:row['frame_pacing']=json.dumps(row['frame_pacing'],separators=(',',':'))
+                    writer.writerow(row)
             proofs=[]
             for frame in args.snapshot_frames:
                 capture=case/('snapshot-%d'%frame);capture.mkdir(exist_ok=True)
                 run([str(bevy),'--fixture',str(fixture),'--output',str(capture),'--pre-roll',str(args.pre_roll),'--snapshot',str(frame),*overlay_flags],bevy_env,capture/'run.log')
                 from verify_bevy_snapshot import verify
                 proofs.append(verify(fixture,capture,bevy))
-            records.append(dict(players=players,theia_report=str(source),bevy_report=str(case/'bevy/report.json'),fixture_sha256=hashlib.sha256(fixture.read_bytes()).hexdigest(),pixel_proofs=proofs,pose_proof=poses))
+            records.append(dict(players=players,theia_report=str(source),bevy_report=str(case/'bevy/report.json'),fixture_sha256=hashlib.sha256(fixture.read_bytes()).hexdigest(),pixel_proofs=proofs,pose_proof=poses,clock_proof=clock_proof))
     provenance={str(path.relative_to(ROOT)):hashlib.sha256(path.read_bytes()).hexdigest() for path in [bevy,theia,ROOT/'tools/theia-bevy-benchmark/Cargo.lock',ROOT/'tools/theia-bevy-benchmark/assets/shaders/theia_unlit.wgsl']}
-    result=dict(completed=True,visual_route_match=True,stats_overlay=args.stats_overlay,present_mode=args.present_mode,gpu_timings=args.gpu_timings,display=display,validation_requested=args.validation,cases=records,provenance=provenance,
+    result=dict(completed=True,visual_route_match=True,stats_overlay=args.stats_overlay,present_mode=args.present_mode,gpu_timings=args.gpu_timings,target_hz=args.target_hz,display=display,validation_requested=args.validation,cases=records,provenance=provenance,
         scope='Matched geometry/textures/camera/logical times/proxy rules/selected regions. Bevy preloads eight graphs and computes proxy presentation on CPU; Theia streams and computes it on GPU. Host-frame intervals may remain compositor-limited even with non-vsynced presentation; CPU scopes differ. No streaming, memory or total-engine performance ranking.')
     (out/'comparison.json').write_text(json.dumps(result,indent=2)+'\n')
     from bevy_comparison_report import write

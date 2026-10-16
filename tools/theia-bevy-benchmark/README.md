@@ -206,3 +206,25 @@ This is a correctness profile with captures and serial lifecycle waits. It rejec
 HUD, GPU-timing and ordinary frozen-snapshot controls. A timed paired streaming
 comparison must still control wall-clock demand rate and cache/accounting scope.
 [Qualification and platform incident](../../docs/validation/M4_BEVY_CAMERA_STREAM.md).
+
+## Optional shared frame schedule
+
+Add `--target-hz 60 --present-mode immediate` to `run_bevy_comparison.py` or
+`run_scene_benchmark.py` to request matching nominal frame-start deadlines. The
+standalone Bevy route accepts `--target-hz 1..240`, including `--camera-stream`;
+Render Lab's equivalent is `--benchmark-target-hz`. Default pacing is unchanged.
+The fixed operation probe and frozen snapshot/reference controls reject this clock.
+
+The clock starts at recorded frame zero after startup/pre-roll. Absolute deadlines
+never skip frames or rebase after a miss. Sleep is outside the CPU work metric;
+host intervals include it. JSON/CSV retain each deadline and lateness, and HTML
+shows clock evidence. Check those observations before treating I/O deadlines as
+comparable: FIFO or an overloaded renderer can fall behind the requested rate.
+A cap deliberately limits host cadence; this is not an uncapped FPS score.
+
+`tools/qualify_benchmark_clock.py --scene <scene.json> --headless-dri-prime
+<selector>` exercises paired replay, independently streamed camera compatibility,
+deliberate FIFO overload and invalid/forged inputs. Camera streaming still uses
+diagnostic captures and rejects GPU-timing/HUD controls; measured independent
+streaming comparison remains a separate gate.
+[Executed evidence](../../docs/validation/M4_BENCHMARK_CLOCK.md).

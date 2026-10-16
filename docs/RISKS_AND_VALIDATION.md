@@ -288,3 +288,10 @@ and do not prove their GPU depth winner. An earlier kernel-reported private West
 SDMA fault caused device loss and cascading teardown diagnostics; fresh recovery
 runs pass, but root cause/device-loss cleanup/platform stability remain open.
 [Evidence and limits](validation/M4_BEVY_CAMERA_STREAM.md).
+
+Optional absolute benchmark deadlines now qualify matching nominal frame-start
+rates with exported lateness and no skipped/rebased frames. FIFO overload retains
+and reports its misses; a requested rate alone does not prove equivalent I/O
+deadlines or actual presentation cadence. Capture-free independent streaming,
+cache policy, physical-memory accounting and native Windows GPU remain open.
+[Clock evidence and limits](validation/M4_BENCHMARK_CLOCK.md).

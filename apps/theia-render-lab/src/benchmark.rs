@@ -217,6 +217,7 @@ struct PendingFrame {
     interval_ms: f64,
     cooked: Option<CookedStats>,
     world: Option<Value>,
+    pacing: Value,
 }
 
 pub struct Recorder {
@@ -230,6 +231,8 @@ pub struct Recorder {
     started: Instant,
     last_submit: Instant,
     metadata: Value,
+    pacer: Option<crate::frame_pacing::FramePacer>,
+    pacing_sample: Value,
 }
 impl Recorder {
     pub fn new(
@@ -237,7 +240,8 @@ impl Recorder {
         config: Config,
         period: f32,
         valid_bits: u32,
-        metadata: Value,
+        mut metadata: Value,
+        target_hz: Option<u32>,
     ) -> Result<Self> {
         config.validate()?;
         if valid_bits == 0 || valid_bits > 64 || !period.is_finite() || period <= 0. {
@@ -252,6 +256,8 @@ impl Recorder {
                 None,
             )?
         };
+        let pacer = target_hz.map(crate::frame_pacing::FramePacer::new);
+        metadata["frame_pacing"] = pacer.as_ref().map_or(Value::Null, |p| p.description());
         Ok(Self {
             device: device.clone(),
             pool,
@@ -263,7 +269,14 @@ impl Recorder {
             started: Instant::now(),
             last_submit: Instant::now(),
             metadata,
+            pacer,
+            pacing_sample: Value::Null,
         })
+    }
+    pub fn pace(&mut self, frame: u64) {
+        if let Some(pacer) = &mut self.pacer {
+            self.pacing_sample = pacer.wait(frame);
+        }
     }
     /// Caller has retired the sole frame fence. No GPU-dependent work sizing is read back.
     pub fn collect(&mut self) -> Result<()> {
@@ -275,6 +288,7 @@ impl Recorder {
             interval_ms,
             cooked,
             world,
+            pacing,
         }) = self.pending.take()
         {
             let mut values = [0u64; 4];
@@ -297,6 +311,9 @@ impl Recorder {
             }
             if let Some(world) = world {
                 sample["world"] = world;
+            }
+            if !pacing.is_null() {
+                sample["frame_pacing"] = pacing;
             }
             self.samples.push(sample);
         }
@@ -339,6 +356,7 @@ impl Recorder {
             interval_ms: interval,
             cooked,
             world,
+            pacing: self.pacing_sample.clone(),
         });
     }
     fn route_time(&self, frame: u64) -> f32 {

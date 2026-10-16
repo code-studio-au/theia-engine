@@ -4,6 +4,16 @@
 records user-supplied terminal evidence. Entries below record independently executed local qualification; the latest
 update is 2026-10-16.
 
+## Shared benchmark frame schedule — locally qualified (2026-10-16)
+
+Both native tools now support optional absolute frame-start deadlines with retained
+late frames and exported lateness. The 60 Hz zero/10000-proxy replay pairs and a
+camera-stream run pass; deliberately overloaded FIFO cases record misses without
+skipping frames. Seven captures/823 scene probes and 130000 pose checks pass.
+Default pacing remains unchanged. This qualifies a clock prerequisite; measured
+independent streaming pairs and physical-memory comparisons remain outstanding.
+[Usage and evidence](validation/M4_BENCHMARK_CLOCK.md).
+
 ## Optional Bevy repeated camera streaming — locally qualified (2026-10-16)
 
 The reference now uses shared 20/35-metre demand and bounded fine slots over real

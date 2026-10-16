@@ -4,6 +4,7 @@ mod authority_demo;
 mod benchmark;
 mod bundle_streaming;
 mod camera;
+mod frame_pacing;
 mod gpu;
 mod indirect;
 mod lod_reference;
@@ -92,6 +93,7 @@ struct Options {
     benchmark_width: Option<u32>,
     benchmark_height: Option<u32>,
     benchmark_present_mode: Option<ash::vk::PresentModeKHR>,
+    benchmark_target_hz: Option<u32>,
     network_address: Option<std::net::SocketAddr>,
     network_certificate: Option<std::path::PathBuf>,
     network_faults: bool,
@@ -372,6 +374,10 @@ impl Options {
                         Some("mailbox") => ash::vk::PresentModeKHR::MAILBOX,
                         _ => return Err("Present mode must be fifo, immediate or mailbox".into()),
                     });
+                }
+                "--benchmark-target-hz" => {
+                    result.benchmark_target_hz =
+                        Some(args.next().ok_or("Missing target Hz")?.parse()?);
                 }
                 "--benchmark-width" => {
                     result.benchmark_width =
@@ -1587,6 +1593,15 @@ impl Options {
             && result.world_camera_timings.is_none()
         {
             return Err("--benchmark-present-mode requires a timed benchmark".into());
+        }
+        if result
+            .benchmark_target_hz
+            .is_some_and(|hz| !(1..=240).contains(&hz))
+            || result.benchmark_target_hz.is_some()
+                && !result.benchmark
+                && result.world_camera_timings.is_none()
+        {
+            return Err("--benchmark-target-hz requires a timed benchmark and 1..240 Hz".into());
         }
         Ok(result)
     }

@@ -1234,6 +1234,7 @@ impl Renderer {
                 properties.limits.timestamp_period,
                 bits,
                 metadata,
+                options.benchmark_target_hz,
             )?);
         }
         if renderer.mode == RenderMode::Authority {
@@ -2382,6 +2383,12 @@ impl Renderer {
         Ok(())
     }
     pub fn draw(&mut self, size: PhysicalSize<u32>) -> Result<bool> {
+        if size.width > 0
+            && size.height > 0
+            && let Some(recorder) = &mut self.benchmark
+        {
+            recorder.pace(self.presented);
+        }
         let cpu_started = std::time::Instant::now();
         if size.width == 0 || size.height == 0 {
             self.recreate = true;

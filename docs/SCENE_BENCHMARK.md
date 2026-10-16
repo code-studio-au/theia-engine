@@ -530,3 +530,11 @@ remains separate. Its diagnostic captures exclude explicitly reported canonical
 depth-ambiguous proxy rays without widening RGB tolerance. Timed streaming and
 physical-memory equivalence remain open.
 [Repeated-camera evidence and platform limits](validation/M4_BEVY_CAMERA_STREAM.md).
+
+Both public launchers now accept optional `--target-hz 1..240`. This requests
+absolute recorded-frame deadlines without skipping or rebasing late frames;
+JSON/CSV and HTML retain lateness evidence. Omission preserves existing pacing.
+The standalone Bevy camera profile accepts the same control, while retaining its
+diagnostic captures. A requested cap constrains host cadence and does not itself
+establish equal I/O deadlines or streaming performance.
+[Clock contract, overload checks and evidence](validation/M4_BENCHMARK_CLOCK.md).

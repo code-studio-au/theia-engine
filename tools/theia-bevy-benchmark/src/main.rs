@@ -52,6 +52,8 @@ mod benchmark;
 #[allow(dead_code)]
 #[path = "../../../apps/theia-render-lab/src/camera.rs"]
 mod camera;
+#[path = "../../../apps/theia-render-lab/src/frame_pacing.rs"]
+mod frame_pacing;
 
 #[derive(Deserialize)]
 struct TextureData {
@@ -107,6 +109,7 @@ struct Run {
     samples: Vec<Value>,
     captured: bool,
     metadata: Value,
+    pacer: Option<frame_pacing::FramePacer>,
 }
 #[derive(Component)]
 struct Proxy(u32);
@@ -389,6 +392,11 @@ fn setup(
     commands.insert_resource(ProxyMeshes { near, far });
 }
 fn begin(fixture: Res<Fixture>, mut run: ResMut<Run>, mut stats: ResMut<stats::Stats>) {
+    let index = run
+        .tick
+        .checked_sub(run.pre_roll)
+        .filter(|&i| i < fixture.frames.len());
+    let pacing = index.and_then(|i| run.pacer.as_mut().map(|p| p.wait(i as u64)));
     let now = Instant::now();
     let interval = (now - run.last).as_secs_f64() * 1000.;
     run.last = now;
@@ -398,6 +406,9 @@ fn begin(fixture: Res<Fixture>, mut run: ResMut<Run>, mut stats: ResMut<stats::S
         let index = run.tick - run.pre_roll;
         run.samples
             .push(json!({"frame":index,"frame_interval_ms":interval}));
+        if let Some(pacing) = pacing {
+            run.samples.last_mut().unwrap()["frame_pacing"] = pacing;
+        }
     }
 }
 fn update(
@@ -507,6 +518,7 @@ fn finish(
             .as_ref()
             .expect("Presentation support was not verified");
         run.metadata["present_mode"] = evidence["present_mode"].clone();
+        run.metadata["frame_pacing"] = run.pacer.as_ref().map_or(Value::Null, |p| p.description());
         run.metadata["supported_present_modes"] = evidence["supported_present_modes"].clone();
         run.metadata["present_mode_evidence"] = json!(
             "same native window/adapter capability query; pinned Bevy 0.19.1 selects the explicitly supported mode; runner rejects fallback diagnostics; configured surface is private to Bevy"
@@ -632,6 +644,7 @@ fn main() -> Result<()> {
     let mut stats_overlay = false;
     let mut gpu_timings = false;
     let mut present_mode = PresentMode::Fifo;
+    let mut target_hz = None;
     let mut camera_stream = false;
     let mut stream_slots = None;
     let mut stream_captures: Option<Vec<usize>> = None;
@@ -666,6 +679,9 @@ fn main() -> Result<()> {
                 };
             }
             "--camera-stream" => camera_stream = true,
+            "--target-hz" => {
+                target_hz = Some(args.next().ok_or("Missing target Hz")?.parse::<u32>()?)
+            }
             "--stream-fine-slots" => {
                 stream_slots = Some(args.next().ok_or("Missing fine slots")?.parse::<usize>()?)
             }
@@ -710,6 +726,12 @@ fn main() -> Result<()> {
     }
     if !camera_stream && (stream_slots.is_some() || stream_captures.is_some()) {
         return Err("Camera controls require --camera-stream".into());
+    }
+    if target_hz.is_some_and(|hz| !(1..=240).contains(&hz))
+        || target_hz.is_some()
+            && (snapshot.is_some() || reference.is_some() || probe_region.is_some())
+    {
+        return Err("Target Hz must be 1..240 and requires a route run, without snapshot/reference/controlled probe".into());
     }
     if camera_stream && (probe_region.is_some() || probe_cancel.is_some())
         || stream_slots.is_some_and(|s| !(1..=4).contains(&s))
@@ -873,6 +895,7 @@ fn main() -> Result<()> {
             samples: Vec::with_capacity(frames),
             captured: false,
             metadata: Value::Null,
+            pacer: target_hz.map(frame_pacing::FramePacer::new),
         })
         .add_plugins(
             DefaultPlugins
