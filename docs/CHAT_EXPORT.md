@@ -2,6 +2,12 @@
 
 **Important:** This handoff package is detailed but is **not the full original conversation**. The assistant does not have a direct action to download an exact, complete raw account chat transcript from this session. Use an official export, or an accessible chat sharing/export control.
 
+## Repository reference archive
+
+[THEIA_FULL_CONVERSATION.md](THEIA_FULL_CONVERSATION.md) preserves the user and assistant text from the public shared conversation, captured on 2026-10-10. It includes 332 messages in conversation order, with source provenance and metadata for two attachment-only messages. Attachment contents and ChatGPT-specific interactive rendering are not embedded. This is a historical reference: `DECISIONS.md` remains the primary source for approved decisions, and `CURRENT_STATUS.md` records implementation evidence.
+
+The current exploratory story preferences are distilled in [MMO_STORY.md](MMO_STORY.md). The pasted story conversation is not checked into the repository; the brief records user-stated direction without treating assistant-generated pitches as canon.
+
 ## Official ChatGPT export (account/workspace availability varies)
 
 For eligible personal accounts: ChatGPT profile → **Settings → Data Controls → Export data → Export → Confirm export**. Wait for download notification and retrieve the ZIP. See https://help.openai.com/en/articles/7260999-how-do-i-export-my-chatgpt-history-and-data . The export can include `conversations.json` and account information. Check account-specific features and permissions. The export covers more than this one chat; do not commit it to a public repository.
