@@ -7,6 +7,7 @@ permissions:
 jobs:
   rust:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
         package: [apps/theia-gpu-test, apps/theia-render-lab, crates/theia-ecs, apps/theia-ecs-lab, crates/theia-assets, tools/theia-gltf-import, crates/theia-sim, crates/theia-protocol, crates/theia-network-fixture, apps/theia-server-lab, apps/theia-network-lab]
@@ -189,7 +190,9 @@ jobs:
           echo "9412cb45045a503005acd47d98f9e8b47154634a50b4df21e17a1dfa8971d323  $RUNNER_TEMP/ktx-source.tar.gz" | sha256sum --check -
           mkdir "$RUNNER_TEMP/ktx-source"
           tar -xzf "$RUNNER_TEMP/ktx-source.tar.gz" -C "$RUNNER_TEMP/ktx-source"
-          cmake -S "$RUNNER_TEMP/ktx-source/KTX-Software-4.4.2" -B "$RUNNER_TEMP/ktx-build" -DCMAKE_BUILD_TYPE=Release -DKTX_GIT_VERSION_FULL=v4.4.2 -DKTX_FEATURE_ETC_UNPACK=OFF -DKTX_FEATURE_TESTS=OFF -DKTX_FEATURE_DOC=OFF -DKTX_FEATURE_TOOLS=ON
+          # These RGBA8 fixtures do not use BasisU encoding. Its optional SSE kernel
+          # rejects AVX-enabled compiler defaults on newer Ubuntu runners.
+          cmake -S "$RUNNER_TEMP/ktx-source/KTX-Software-4.4.2" -B "$RUNNER_TEMP/ktx-build" -DCMAKE_BUILD_TYPE=Release -DKTX_GIT_VERSION_FULL=v4.4.2 -DKTX_FEATURE_ETC_UNPACK=OFF -DKTX_FEATURE_TESTS=OFF -DKTX_FEATURE_DOC=OFF -DKTX_FEATURE_TOOLS=ON -DBASISU_SUPPORT_SSE=OFF
           cmake --build "$RUNNER_TEMP/ktx-build" --target ktxtools --parallel 2
           python3 -m unittest discover -s tools -p test_texture_cook.py
           python3 tools/cook_texture.py --ktx "$RUNNER_TEMP/ktx-build/Release/ktx" --build-dir "$RUNNER_TEMP/ktx-build" --source-archive "$RUNNER_TEMP/ktx-source.tar.gz" --source fixtures/textures/opaque_2x2.json > build/texture-report.json
