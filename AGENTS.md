@@ -15,7 +15,7 @@ Keep this repository self-contained for Rust engine experiments and qualificatio
 7. **Data-oriented:** dense SoA/AoSoA chunks, stable handles, change streams, explicit allocation ownership and synchronization. Avoid per-entity host calls, draws, allocations, or unnecessary FFI.
 8. **Conserve complexity.** Do not implement advanced GI, complete ECS, massive networking, streaming or complex UI in M0. Build and test one verifiable slice at a time.
 9. **Be precise about the evidence.** Mark APIs/features untested until tested; do not claim benchmarks or implemented capabilities without logs.
-10. **Security and privacy.** Never commit ChatGPT account exports, secrets, `.env`, private keys, credentials or private conversation dumps to a public repo. Use `docs/CHAT_EXPORT.md`.
+10. **Security and privacy.** Never commit ChatGPT account exports, secrets, `.env`, private keys, credentials or private conversation dumps to a public repo.
 11. **Record decisions.** Do not overturn locked ADRs without explicitly flagging the tradeoff for user approval; record benchmark-gated fallbacks separately.
 12. **Code standards.** Rust 2024 explicit `unsafe` blocks with safety comments for genuinely unsafe operations; RAII ownership for Vulkan objects in reusable library code; error paths should release resources. `cargo fmt`, `cargo clippy`, SPIR-V validation, Vulkan validation and tests as applicable.
 

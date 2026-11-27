@@ -37,4 +37,4 @@ build and unit-test results alone do not qualify GPU behavior.
 
 Runtime/source languages are Rust, Go and Slang under the existing architecture
 decisions; Python scripts support offline development. Keep private exports and
-credentials outside the repository as described in [CHAT_EXPORT](docs/CHAT_EXPORT.md).
+credentials outside the repository.
