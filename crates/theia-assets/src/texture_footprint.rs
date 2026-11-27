@@ -214,8 +214,8 @@ mod tests {
                         / r
                 })
             };
-            for axis in 0..2 {
-                assert!((g.uv[axis] - evaluate(p)[axis]).abs() < 1e-12);
+            for (actual, expected) in g.uv.into_iter().zip(evaluate(p)) {
+                assert!((actual - expected).abs() < 1e-12);
             }
             for (direction, want) in [g.dx, g.dy].into_iter().enumerate() {
                 let mut a = p;
