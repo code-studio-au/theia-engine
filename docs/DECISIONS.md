@@ -44,3 +44,21 @@
 ## Approval process
 
 Before changing a locked decision, describe performance/correctness impact, alternatives, the proposed new ADR and explicit user approval. Record concrete benchmarks separately from design assertions. Maintain short per-ADR files if decisions grow beyond this register.
+
+
+## Qualification note — optional storage-buffer arrays (2026-10-15)
+
+An opt-in Render Lab compute probe now qualifies nonuniform storage-buffer array
+access on the local RADV target. Its two extra indexing features are queried and
+requested only for that profile. This is benchmark/qualification work under the
+existing explicit Vulkan and data-oriented targets; it changes no locked baseline
+and approves no production scene-binding policy. Fragment/four-chunk composition
+and cross-vendor/native Windows execution remain open.
+[Evidence](validation/M4_STORAGE_DESCRIPTOR_ARRAYS.md).
+
+The subsequent opt-in four-chunk fixture also qualifies fragment storage/image
+array composition, differing image counts and material factors. Explicit scalar
+selection of pushed texture bases replaces a direct divergent vector-index form
+that failed colour replay. This bounded qualification does not approve a final
+binding policy or expand the mandatory baseline. Cross-vendor/native Windows GPU
+remains open. [Evidence](validation/M4_FOUR_RESIDENT_CHUNKS.md).

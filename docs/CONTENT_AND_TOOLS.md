@@ -27,6 +27,68 @@ Stream independent geometry, texture, collision, navigation, SDF, animation and 
 
 meshoptimizer primitives do not deliver a complete Nanite-class virtualized renderer. Theia must integrate hierarchical simplification/error, crack/seam correctness, cluster-page dependencies, streaming fallback and mesh-shader decode; GPU work selection and HZB across epochs. Benchmark rather than assume zero gaps.
 
+The bounded heightfield prototype now calls official meshoptimizer 1.3
+`meshopt_simplify` with `LockBorder|ErrorAbsolute`, then existing meshlet cooking.
+Native configuration/error is recorded with source/tool/library hashes. Independent
+checks preserve exact source boundary edges and measure sampled vertical error;
+this is not a general hierarchy, geometric error bound or authoring importer.
+See [meshoptimizer's simplification contract](https://github.com/zeux/meshoptimizer/blob/v1.3/README.md#simplification)
+and [local qualification evidence](validation/M4_COOKED_MESHLETS.md).
+
 ## No full editor first
 
+Pinned offline KTX-Software 4.4.2 now qualifies bounded synthetic opaque RGBA8
+sRGB single-mip textures. The source build excludes the separately licensed ETC
+decoder; no native tool enters the runtime. The pure Rust KTX2 reader borrows
+verified dense texels. A resident Vulkan upload/nearest-repeat mip-zero path now
+qualifies perspective sampling with unlit factors. Opt-in glTF shared external
+PNG import now feeds that fixed bundle, with bounded source/sampler checks and
+offline decode. Multiple per-material texture dependencies, mip/gradient and
+residency integration remain open.
+[Profile/evidence](validation/M4_TEXTURES.md).
+
+`tools/theia-gltf-import` now evaluates pinned Rust `gltf` 1.4.1 offline for a
+bounded static position-only subset. It bakes node transforms/reflections into
+Z-up geometry and supplies the existing meshlet cooker, preserving tool/source
+provenance. Optional `--unlit-factors` now imports bounded opaque double-sided
+KHR_materials_unlit factors with material assignments preserved through native
+triangle reordering. Optional `--unlit-uv` adds authored float2 TEXCOORD_0 with
+exact-geometry binding and qualified perspective reconstruction. Other material/
+UV/normal/animation/extension/camera inputs fail;
+this is not a general glTF scene importer or GPU instancing implementation.
+[Workflow/limits](../tools/theia-gltf-import/README.md).
+
 Begin with Blender/CLI exporters and focused visualization tools (asset viewer, world cell inspector, residency debugging, ECS inspection). Dedicated native Rust world editor only when clear authoring requirements exceed existing tools. Use immutable base world + authored overrides + mutable gameplay-state layer; but **environment physical geometry is static in gameplay**.
+
+Multiple authored external PNGs now normalize with exact encoded-image alias
+deduplication and cook into a material-bound table plus THEIABND v2. Complete
+root/leaf admission and fixed resident GPU sampling pass local qualification.
+Next: bounded whole-resource-set CPU staging/publication and retained-reader
+accounting before extending asynchronous GPU publication. Mips, gradients,
+filtering and virtual texture streaming remain open.
+
+The complete-bundle CPU store now qualifies atomic full-set reservation and
+publication with retained-reader ownership and unique encoded-byte accounting.
+It includes manifests, shares exact children across v1/v2 sets, and excludes
+I/O/decoded temporary memory and physical GPU allocation. Next qualify the
+separate asynchronous GPU publication/retirement path.
+
+The bounded two-v2-bundle viewer now performs asynchronous complete I/O and
+uploads, then frame-safe complete generation publication. CPU child sharing,
+active/pending physical buffer/image budgets, image-only budgets and count
+changes qualify locally. Publication currently retires/rebuilds a graphics
+generation with device idle; general world streaming and allocation reuse remain
+open. Next qualify a bounded LOD error/selection contract alongside existing
+immutable bundle ownership, keeping advanced GI deferred.
+
+The bounded terrain LOD cooker now checks continuous vertical error using an
+exact rational triangle overlay after native simplification. It admits continuous
+rectangular XY heightfields, verifies coverage/shared-boundary continuity and
+records the exact fraction plus a conservative floating upper bound. General
+3D error/seams and projected-error selection remain open.
+
+Two resident heightfield LOD pages now feed GPU projected-error selection,
+selected-page culling and indirect task/mesh rendering. The offline guard
+fixture builder recomputes continuous error after represented translations;
+its native provenance is nested rather than claiming new native simplification.
+General streaming LOD/hierarchies and virtual texture pages remain open.

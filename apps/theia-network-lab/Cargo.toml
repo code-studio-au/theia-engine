@@ -1,0 +1,12 @@
+[package]
+name = "theia-network-lab"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+theia-sim = { path = "../../crates/theia-sim" }
+theia-protocol = { path = "../../crates/theia-protocol" }
+quinn = { version = "=0.11.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "net"] }
+theia-network-fixture = { path = "../../crates/theia-network-fixture" }
+serde_json = "1"

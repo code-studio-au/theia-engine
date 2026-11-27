@@ -1,0 +1,239 @@
+"""Owned RenderDoc process: verify a cooked quadrant on the benchmark camera route."""
+import json
+import math
+import os
+from pathlib import Path
+import shlex
+import struct
+import subprocess
+import time
+import traceback
+import renderdoc as rd
+
+
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+
+
+def success(result):
+    require(result == rd.ResultCode.Succeeded, str(result))
+
+
+def walk(actions):
+    for action in actions:
+        yield action
+        yield from walk(action.children)
+
+
+import sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path.cwd() / 'tools'))
+from cooked_benchmark_reference import decode, ray, dot, sub, cross
+
+
+def qualify(report):
+    output = Path(os.environ['THEIA_COOKED_CAPTURE_OUTPUT']).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    scene = json.loads(Path(os.environ['THEIA_COOKED_SCENE']).read_bytes())
+    quadrant = int(os.environ.get('THEIA_COOKED_QUADRANT', '0'))
+    frame = int(os.environ.get('THEIA_COOKED_FRAME', '90'))
+    require(0 <= quadrant < 4 and 0 <= frame < 181, 'Invalid quadrant/frame')
+    whole_world = os.environ.get('THEIA_COOKED_WHOLE_WORLD') == '1'
+    cook = scene['whole_world']['cook'] if whole_world else scene['quadrants'][quadrant]['cook']
+    exe = Path('apps/theia-render-lab/target/debug/theia-render-lab').resolve()
+    args = ['--benchmark-cooked', '--bundle', cook['bundle']['path'], '--frames', '181',
+            '--benchmark-warmup', '0', '--benchmark-report', str(output / 'timings.json'),
+            '--no-validation', '--gpu', os.environ.get('THEIA_COOKED_GPU', '7900')]
+    overlay = os.environ.get('THEIA_COOKED_OVERLAY') == '1'
+    if not overlay:
+        args.append('--benchmark-no-overlay')
+    stream_index = os.environ.get('THEIA_COOKED_STREAM_QUADRANT')
+    if stream_index is not None:
+        stream_index = int(stream_index)
+        require(not whole_world and 0 <= stream_index < 4 and stream_index != quadrant, 'Invalid capture replacement')
+        args.extend(['--stream-bundle', scene['quadrants'][stream_index]['cook']['bundle']['path']])
+    gpu_budget = os.environ.get('THEIA_COOKED_GPU_BUDGET')
+    if gpu_budget is not None:
+        args.extend(['--bundle-gpu-budget', str(int(gpu_budget))])
+    options = rd.CaptureOptions()
+    options.apiValidation = False
+    options.debugOutputMute = False
+    result = rd.ExecuteAndInject(str(exe), str(Path.cwd()), shlex.join(args), [], str(output / 'scene'), options, False)
+    success(result.result)
+    target = rd.CreateTargetControl('', result.ident, 'Theia cooked route qualification', True)
+    require(target is not None, 'Missing capture target')
+    capture = None
+    try:
+        target.QueueCapture(frame, 1)
+        deadline = time.monotonic() + 45
+        while target.Connected() and time.monotonic() < deadline:
+            message = target.ReceiveMessage(None)
+            if message.type == rd.TargetControlMessageType.NewCapture:
+                capture = message.newCapture.path
+        require(not target.Connected() and capture is not None, 'Capture missing or timed out')
+    finally:
+        target.Shutdown()
+    timings = json.loads((output / 'timings.json').read_bytes())
+    stats = timings['samples'][frame]['cooked']
+    if stream_index is not None and stats['publications'] % 2:
+        cook = scene['quadrants'][stream_index]['cook']
+    blobs, triangles, hulls, texels = decode(cook)
+    cap = rd.OpenCaptureFile()
+    controller = None
+    try:
+        success(cap.OpenFile(capture, '', None))
+        result, controller = cap.OpenCapture(rd.ReplayOptions(), None)
+        success(result)
+        actions = list(walk(controller.GetRootActions()))
+        draws = [a for a in actions if a.flags & rd.ActionFlags.MeshDispatch and a.flags & rd.ActionFlags.Indirect and not a.flags & rd.ActionFlags.MultiAction]
+        require(len(draws) == 1, 'Expected one indirect cooked draw')
+        controller.SetFrameEvent(draws[0].eventId, True)
+        buffers = controller.GetBuffers()
+        for blob in blobs:
+            require(any(bytes(controller.GetBufferData(b.resourceId, 0, len(blob))) == blob
+                        for b in buffers if b.length == len(blob)), 'Cooked GPU buffer differs from immutable source')
+        work = [b for b in buffers if b.length == 256]
+        require(len(work) == 1, 'Missing unique cooked work buffer')
+        data = controller.GetBufferData(work[0].resourceId, 0, 256)
+        count, mask = struct.unpack_from('<2I', data, 36)
+        ids = list(struct.unpack_from(f'<{count}I', data, 64))
+        present = next(a for a in actions if a.flags & rd.ActionFlags.Present)
+        controller.SetFrameEvent(present.eventId, True)
+        textures = controller.GetTextures()
+        color = next(t for t in textures if t.resourceId == present.copyDestination)
+        width, height = color.width, color.height
+        reference = json.loads(subprocess.check_output([str(exe), '--benchmark-reference', '0', str(frame), '181', str(width), str(height)]))
+        rows = reference['rows']
+        visible = []
+        for i, hull in enumerate(hulls):
+            common = 63
+            for point in hull:
+                x, y, z, w = [dot(row[:3], point) + row[3] for row in rows]
+                common &= int(x < -w) | (int(x > w) << 1) | (int(y < -w) << 2) | (int(y > w) << 3) | (int(z < 0) << 4) | (int(z > w) << 5)
+            if common == 0:
+                visible.append(i)
+        require(sorted(ids) == visible and len(set(ids)) == count and mask == sum(1 << i for i in visible), 'Cooked culling differs from CPU hull oracle')
+        images = [t for t in textures if (t.width, t.height) == (64, 64)]
+        require(len(images) == 4, 'Missing four resident cooked images')
+        require(sorted(bytes(controller.GetTextureData(t.resourceId, rd.Subresource())) for t in images) == sorted(texels), 'GPU texture set differs from native cooked texels')
+        identity = next(t for t in textures if t.format.compType == rd.CompType.UInt and t.format.compCount == 2)
+        depth = next(t for t in textures if t.format.compType == rd.CompType.Depth)
+        identities = controller.GetTextureData(identity.resourceId, rd.Subresource())
+        depths = controller.GetTextureData(depth.resourceId, rd.Subresource())
+        rgb = controller.GetTextureData(color.resourceId, rd.Subresource())
+        limits = {i: sum(t[0] == i for t in triangles) for i in range(1, len(hulls) + 1)}
+        covered = 0
+        for offset in range(width * height):
+            ident, primitive = struct.unpack_from('<2I', identities, offset * 8)
+            d = struct.unpack_from('<f', depths, offset * 4)[0]
+            require(math.isfinite(d) and 0 <= d <= 1, 'Invalid depth')
+            require((ident in limits and ident - 1 in ids and primitive < limits[ident] and d < 1) if ident else d == 1, 'Invalid identity/depth/visible set')
+            covered += int(ident != 0)
+        require(covered > 0, 'Empty cooked scene')
+        samples, materials, boundary_probes = [], set(), 0
+
+        def probe(x, y):
+            nonlocal boundary_probes
+            if overlay and 12 <= x < 420 and 12 <= y < 252:
+                return
+            ident, primitive, expected_depth, material, uv = ray(rows, triangles, x, y, width, height)
+            offset = y * width + x
+            actual = struct.unpack_from('<2I', identities, offset * 8)
+            d = struct.unpack_from('<f', depths, offset * 4)[0]
+            require(actual == (ident, primitive) and abs(d - expected_depth) <= 2e-5, f'Ray/raster identity/depth differs at {x},{y}: {actual} vs {(ident, primitive)}')
+            if ident:
+                # The bounded f32 interpolation profile permits 0.002 texel of
+                # coordinate error at a nearest-cell edge. Admit only its adjacent
+                # source texels, never another material or an arbitrary colour.
+                indices = [{math.floor(v * 64 + delta) % 64 for delta in (-.002, .002)} for v in uv]
+                boundary_probes += int(any(len(values) > 1 for values in indices))
+                expected = [list(texels[material][(ty * 64 + tx) * 4:(ty * 64 + tx) * 4 + 3])
+                            for tx in indices[0] for ty in indices[1]]
+                materials.add(material)
+            else:
+                expected = [[round((v * 12.92 if v <= .0031308 else 1.055 * v ** (1 / 2.4) - .055) * 255) for v in (.025, .07, .12)]]
+            actual_rgb = list(rgb[offset * 4:offset * 4 + 3])
+            if color.format.BGRAOrder():
+                actual_rgb.reverse()
+            require(any(all(abs(a - b) <= 2 for a, b in zip(actual_rgb, candidate)) for candidate in expected), f'Cooked texture colour differs at {x},{y}: {actual_rgb} vs {expected}')
+            samples.append({'pixel': [x, y], 'identity': actual, 'material': material, 'color': actual_rgb})
+
+        for yf in (.113, .317, .519, .723, .911):
+            for xf in (.113, .317, .519, .723, .911):
+                probe(int(width * xf), int(height * yf))
+        # Try projected triangle interiors to cover small roofs/trees missed by the grid.
+        for _, _, points, _, material in triangles:
+            if material in materials:
+                continue
+            center = [sum(p[a] for p in points) / 3 for a in range(3)]
+            clip = [dot(row[:3], center) + row[3] for row in rows]
+            if clip[3] <= 0:
+                continue
+            x, y = [int((clip[a] / clip[3] + 1) * .5 * (width if a == 0 else height)) for a in (0, 1)]
+            if 0 <= x < width and 0 <= y < height:
+                probe(x, y)
+        require(len(samples) >= 20, 'Insufficient stable ray/colour probes')
+        if overlay:
+            import re
+            recent = timings['samples'][max(0, frame - 30):frame]
+            last = timings['samples'][max(0, frame - 1)]
+            scaled = lambda value, scale: math.floor(value * scale + .5)
+            fps = scaled(1000 * len(recent) / sum(s['frame_interval_ms'] for s in recent), 10) if recent else 0
+            cpu = scaled(last['cpu_draw_ms'], 1000) if frame else 0
+            gpu = scaled(last['gpu_total_ms'], 1000) if frame else 0
+            draw_mib = scaled(timings['samples'][frame]['tracked_image_and_work_allocation_bytes'] / 1048576, 10)
+            bundle_mib = scaled(stats['active_bundle_allocation_bytes'] / 1048576, 1000)
+            clock = scaled(timings['samples'][frame]['scene_time'], 10)
+            phase = min(2, math.floor(timings['samples'][frame]['scene_time'] / 60 * 3)) + 1
+            lines = ['THEIA COOKED', f'FPS {fps / 10:.1f}', f'CPU MS {cpu / 1000:.3f}', f'GPU MS {gpu / 1000:.3f}',
+                     f'MESHLETS {count}/{len(hulls)} TEX {stats["resident_texture_count"]}',
+                     f'BUNDLE MIB {bundle_mib / 1000:.3f}', f'DRAW MIB {draw_mib / 10:.1f}',
+                     f'PUB {stats["publications"]} DEF {stats["deferrals"]}', f'PHASE {phase} T {clock / 10:.1f}']
+            font = [(int(a, 16), int(b)) for a, b in re.findall(r'uint2\(0x([0-9a-f]+)u,(\d+)u\)', Path('shaders/render/benchmark_hud.slang').read_text())]
+            chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ./'
+            checks = 0
+            encode = lambda v: round((v * 12.92 if v <= .0031308 else 1.055 * v ** (1 / 2.4) - .055) * 255)
+            for line, text in enumerate(lines):
+                for column, char in enumerate(text):
+                    for row in range(7):
+                        for cell in range(5):
+                            index = chars.find(char)
+                            bits = (((font[index][0] >> (row * 5)) & 31) if row < 6 else font[index][1]) if index >= 0 else 0
+                            lit = bits & (1 << (4 - cell)) != 0
+                            x = 24 + column * 18 + cell * 3 + 1
+                            y = 24 + line * 24 + row * 3 + 1
+                            actual = list(rgb[(y * width + x) * 4:(y * width + x) * 4 + 3])
+                            if color.format.BGRAOrder():
+                                actual.reverse()
+                            expected = list(map(encode, [.7, .92, .76] if lit else [.012, .025, .04]))
+                            require(all(abs(a - b) <= 2 for a, b in zip(actual, expected)), f'Cooked stats glyph differs: {line}/{column}/{row}/{cell} {text}')
+                            checks += 1
+            report.update(overlay_verified=True, overlay_glyph_pixels=checks, overlay_lines=lines)
+        save = rd.TextureSave()
+        save.resourceId = present.copyDestination
+        save.destType = rd.FileType.PNG
+        success(controller.SaveTexture(save, str(output / 'preview.png')))
+        report.update(passed=True, capture=capture, quadrant=None if whole_world else quadrant, frame=frame,
+                      scene_selection='whole-world' if whole_world else f'quadrant-{quadrant}',
+                      visible_meshlets=ids, overlay=overlay, stream_outcome=stats, gpu_buffers_verified=4, gpu_texture_texels_verified=16384,
+                      whole_image_identity_depth_verified=True, covered_pixels=covered,
+                      samples=samples, sampled_materials=sorted(materials), boundary_envelope_probes=boundary_probes, texel_coordinate_envelope=.002)
+    finally:
+        if controller is not None:
+            controller.Shutdown()
+        cap.Shutdown()
+
+
+report = {'passed': False, 'validation_in_capture': False, 'renderdoc': rd.GetVersionString()}
+code = 0
+try:
+    qualify(report)
+except Exception:
+    report['error'] = traceback.format_exc()
+    code = 1
+finally:
+    output = Path(os.environ['THEIA_COOKED_CAPTURE_OUTPUT'])
+    output.mkdir(parents=True, exist_ok=True)
+    (output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
+os._exit(code)

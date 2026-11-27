@@ -1,5 +1,5 @@
-//! Minimal task/mesh pipeline ownership. No vertex/index buffers or descriptors.
-use crate::{RenderMode, Result};
+//! Minimal task/mesh pipeline ownership. No conventional vertex/index buffers.
+use crate::{RenderMode, Result, asset::Transfer};
 use ash::vk;
 use std::{fs::File, io::BufReader, path::Path};
 
@@ -32,12 +32,68 @@ impl Drop for ShaderModule {
         }
     }
 }
+#[derive(Clone, Copy)]
+pub struct ResolveMode {
+    pub scene: bool,
+    pub world_hud: bool,
+    pub world_pair: bool,
+    pub world_textures: bool,
+    pub mixed: bool,
+    pub cooked_hud: bool,
+    pub cooked: bool,
+    pub authored: bool,
+    pub uv: bool,
+    pub texture: bool,
+    pub texture_table: bool,
+    pub automatic_mips: bool,
+    pub mip_tail: bool,
+}
 pub struct Pipeline {
     device: ash::Device,
     pub handle: vk::Pipeline,
     pub layout: vk::PipelineLayout,
 }
+struct ShaderStages {
+    mesh: &'static str,
+    task: Option<&'static str>,
+    fragment: &'static str,
+    depth: Option<vk::Format>,
+    push: Option<vk::ShaderStageFlags>,
+}
 impl Pipeline {
+    pub fn benchmark(
+        device: &ash::Device,
+        format: vk::Format,
+        shaders: &Path,
+        layout: vk::DescriptorSetLayout,
+        resolve: bool,
+    ) -> Result<Self> {
+        Self::configured(
+            device,
+            format,
+            shaders,
+            Some(layout),
+            ShaderStages {
+                mesh: if resolve {
+                    "resolve.mesh.spv"
+                } else {
+                    "benchmark.mesh.spv"
+                },
+                task: (!resolve).then_some("benchmark.task.spv"),
+                fragment: if resolve {
+                    "benchmark.resolve.frag.spv"
+                } else {
+                    "benchmark.visibility.frag.spv"
+                },
+                depth: (!resolve).then_some(vk::Format::D32_SFLOAT),
+                push: Some(if resolve {
+                    vk::ShaderStageFlags::FRAGMENT
+                } else {
+                    vk::ShaderStageFlags::MESH_EXT
+                }),
+            },
+        )
+    }
     pub fn new(
         device: &ash::Device,
         format: vk::Format,
@@ -45,26 +101,236 @@ impl Pipeline {
         mode: RenderMode,
         descriptor_layout: Option<vk::DescriptorSetLayout>,
     ) -> Result<Self> {
-        let task_amplification = matches!(mode, RenderMode::Indirect | RenderMode::DirectTask);
-        let mesh_file = if task_amplification {
+        let task_amplification = matches!(
+            mode,
+            RenderMode::Indirect
+                | RenderMode::DirectTask
+                | RenderMode::Spatial
+                | RenderMode::Asset
+                | RenderMode::AssetCamera
+                | RenderMode::AssetCull
+                | RenderMode::AssetLod
+        );
+        let mesh_file = if mode == RenderMode::Authority {
+            "authority.mesh.spv"
+        } else if mode == RenderMode::AssetLod {
+            "asset.lod.mesh.spv"
+        } else if mode == RenderMode::AssetCull {
+            "asset.cull.mesh.spv"
+        } else if mode == RenderMode::AssetCamera {
+            "asset.camera.mesh.spv"
+        } else if mode == RenderMode::Asset {
+            "asset.mesh.spv"
+        } else if mode == RenderMode::Spatial {
+            "spatial.mesh.spv"
+        } else if task_amplification {
             "triangle.amplified.mesh.spv"
         } else {
             "triangle.mesh.spv"
         };
-        let mesh = ShaderModule::load(device, &shader_dir.join(mesh_file))?;
-        let fragment = ShaderModule::load(device, &shader_dir.join("triangle.frag.spv"))?;
-        let task = if task_amplification {
-            Some(ShaderModule::load(
-                device,
-                &shader_dir.join(if mode == RenderMode::Indirect {
+        let task_file = if task_amplification {
+            Some(
+                if matches!(
+                    mode,
+                    RenderMode::Asset
+                        | RenderMode::AssetCamera
+                        | RenderMode::AssetCull
+                        | RenderMode::AssetLod
+                ) {
+                    "asset.task.spv"
+                } else if mode == RenderMode::Spatial {
+                    "spatial.task.spv"
+                } else if mode == RenderMode::Indirect {
                     "triangle.indirect.task.spv"
                 } else {
                     "triangle.task.spv"
-                }),
-            )?)
+                },
+            )
         } else {
             None
         };
+        let pipeline = Self::configured(
+            device,
+            format,
+            shader_dir,
+            descriptor_layout,
+            ShaderStages {
+                mesh: mesh_file,
+                task: task_file,
+                fragment: if mode == RenderMode::Authority {
+                    "authority.frag.spv"
+                } else {
+                    "triangle.frag.spv"
+                },
+                depth: matches!(
+                    mode,
+                    RenderMode::AssetCamera | RenderMode::AssetCull | RenderMode::AssetLod
+                )
+                .then_some(vk::Format::D32_SFLOAT),
+                push: matches!(
+                    mode,
+                    RenderMode::Authority
+                        | RenderMode::AssetCamera
+                        | RenderMode::AssetCull
+                        | RenderMode::AssetLod
+                )
+                .then_some(vk::ShaderStageFlags::MESH_EXT),
+            },
+        )?;
+        println!("Graphics pipeline ready for {mode:?}");
+        Ok(pipeline)
+    }
+    pub fn visibility(
+        device: &ash::Device,
+        shader_dir: &Path,
+        descriptor_layout: vk::DescriptorSetLayout,
+        cooked: bool,
+    ) -> Result<Self> {
+        Self::configured(
+            device,
+            vk::Format::R32G32_UINT,
+            shader_dir,
+            Some(descriptor_layout),
+            ShaderStages {
+                mesh: if cooked {
+                    "asset.visibility.mesh.spv"
+                } else {
+                    "visibility.mesh.spv"
+                },
+                task: Some(if cooked {
+                    "asset.task.spv"
+                } else {
+                    "visibility.task.spv"
+                }),
+                fragment: if cooked {
+                    "asset.visibility.frag.spv"
+                } else {
+                    "visibility.frag.spv"
+                },
+                depth: Some(vk::Format::D32_SFLOAT),
+                push: cooked.then_some(vk::ShaderStageFlags::MESH_EXT),
+            },
+        )
+    }
+    pub fn world_scene_visibility(
+        device: &ash::Device,
+        shaders: &Path,
+        layout: vk::DescriptorSetLayout,
+    ) -> Result<Self> {
+        Self::configured(
+            device,
+            vk::Format::R32G32_UINT,
+            shaders,
+            Some(layout),
+            ShaderStages {
+                mesh: "world.scene.visibility.mesh.spv",
+                task: Some("asset.task.spv"),
+                fragment: "world.pair.visibility.frag.spv",
+                depth: Some(vk::Format::D32_SFLOAT),
+                push: Some(vk::ShaderStageFlags::MESH_EXT),
+            },
+        )
+    }
+    pub fn world_pair_visibility(
+        device: &ash::Device,
+        shaders: &Path,
+        layout: vk::DescriptorSetLayout,
+    ) -> Result<Self> {
+        Self::configured(
+            device,
+            vk::Format::R32G32_UINT,
+            shaders,
+            Some(layout),
+            ShaderStages {
+                mesh: "world.pair.visibility.mesh.spv",
+                task: Some("asset.task.spv"),
+                fragment: "world.pair.visibility.frag.spv",
+                depth: Some(vk::Format::D32_SFLOAT),
+                push: Some(vk::ShaderStageFlags::MESH_EXT),
+            },
+        )
+    }
+    pub fn resolve(
+        device: &ash::Device,
+        format: vk::Format,
+        shader_dir: &Path,
+        descriptor_layout: vk::DescriptorSetLayout,
+        mode: ResolveMode,
+    ) -> Result<Self> {
+        let ResolveMode {
+            scene,
+            world_hud,
+            world_pair,
+            world_textures,
+            mixed,
+            cooked_hud,
+            cooked,
+            authored,
+            uv,
+            texture,
+            texture_table,
+            automatic_mips,
+            mip_tail,
+        } = mode;
+        Self::configured(
+            device,
+            format,
+            shader_dir,
+            Some(descriptor_layout),
+            ShaderStages {
+                mesh: "resolve.mesh.spv",
+                task: None,
+                fragment: if world_hud {
+                    "world.crowd.hud.resolve.frag.spv"
+                } else if scene && mixed {
+                    "world.crowd.resolve.frag.spv"
+                } else if scene {
+                    "world.scene.resolve.frag.spv"
+                } else if world_textures {
+                    "world.pair.textured.resolve.frag.spv"
+                } else if world_pair {
+                    "world.pair.resolve.frag.spv"
+                } else if mixed && cooked_hud {
+                    "mixed.benchmark.hud.resolve.frag.spv"
+                } else if mixed {
+                    "mixed.benchmark.resolve.frag.spv"
+                } else if cooked_hud {
+                    "cooked.benchmark.resolve.frag.spv"
+                } else if mip_tail {
+                    "asset.texture.tail.resolve.frag.spv"
+                } else if automatic_mips {
+                    "asset.texture.auto.resolve.frag.spv"
+                } else if texture_table {
+                    "asset.texture.table.resolve.frag.spv"
+                } else if texture {
+                    "asset.texture.resolve.frag.spv"
+                } else if uv {
+                    "asset.uv.resolve.frag.spv"
+                } else if authored {
+                    "asset.authored.resolve.frag.spv"
+                } else if cooked {
+                    "asset.resolve.frag.spv"
+                } else {
+                    "resolve.frag.spv"
+                },
+                depth: None,
+                push: (cooked && (!authored || uv)).then_some(vk::ShaderStageFlags::FRAGMENT),
+            },
+        )
+    }
+    fn configured(
+        device: &ash::Device,
+        format: vk::Format,
+        shader_dir: &Path,
+        descriptor_layout: Option<vk::DescriptorSetLayout>,
+        shaders: ShaderStages,
+    ) -> Result<Self> {
+        let mesh = ShaderModule::load(device, &shader_dir.join(shaders.mesh))?;
+        let fragment = ShaderModule::load(device, &shader_dir.join(shaders.fragment))?;
+        let task = shaders
+            .task
+            .map(|path| ShaderModule::load(device, &shader_dir.join(path)))
+            .transpose()?;
         let mut pipeline = Self {
             device: device.clone(),
             handle: vk::Pipeline::null(),
@@ -75,8 +341,39 @@ impl Pipeline {
         // on error Drop releases the layout and partial Vulkan pipeline outputs are destroyed below.
         unsafe {
             let layouts: Vec<_> = descriptor_layout.into_iter().collect();
+            let push: Vec<_> = shaders
+                .push
+                .map(|stage| {
+                    vk::PushConstantRange::default().stage_flags(stage).size(
+                        if shaders.fragment == "world.crowd.hud.resolve.frag.spv" {
+                            128
+                        } else if matches!(
+                            shaders.fragment,
+                            "cooked.benchmark.resolve.frag.spv"
+                                | "mixed.benchmark.hud.resolve.frag.spv"
+                        ) {
+                            112
+                        } else if shaders.fragment == "benchmark.resolve.frag.spv" {
+                            32
+                        } else if shaders.mesh == "benchmark.mesh.spv" {
+                            96
+                        } else if shaders.fragment == "asset.texture.tail.resolve.frag.spv"
+                            || shaders.fragment == "world.scene.resolve.frag.spv"
+                            || shaders.fragment == "world.crowd.resolve.frag.spv"
+                            || shaders.mesh == "world.scene.visibility.mesh.spv"
+                        {
+                            80
+                        } else {
+                            64
+                        },
+                    )
+                })
+                .into_iter()
+                .collect();
             pipeline.layout = device.create_pipeline_layout(
-                &vk::PipelineLayoutCreateInfo::default().set_layouts(&layouts),
+                &vk::PipelineLayoutCreateInfo::default()
+                    .set_layouts(&layouts)
+                    .push_constant_ranges(&push),
                 None,
             )?;
             // Slang's SPIR-V entry-point name is "main", independently of source function names.
@@ -115,9 +412,14 @@ impl Pipeline {
             let dynamics = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
             let dynamic = vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamics);
             let formats = [format];
-            let mut rendering =
-                vk::PipelineRenderingCreateInfo::default().color_attachment_formats(&formats);
-            // Mesh pipelines omit vertex input and input assembly. No depth attachment in this slice.
+            let mut rendering = vk::PipelineRenderingCreateInfo::default()
+                .color_attachment_formats(&formats)
+                .depth_attachment_format(shaders.depth.unwrap_or(vk::Format::UNDEFINED));
+            let depth = vk::PipelineDepthStencilStateCreateInfo::default()
+                .depth_test_enable(shaders.depth.is_some())
+                .depth_write_enable(shaders.depth.is_some())
+                .depth_compare_op(vk::CompareOp::LESS);
+            // Mesh pipelines omit conventional vertex input and input assembly.
             let info = vk::GraphicsPipelineCreateInfo::default()
                 .stages(&stages)
                 .viewport_state(&viewport)
@@ -126,6 +428,7 @@ impl Pipeline {
                 .color_blend_state(&blend)
                 .dynamic_state(&dynamic)
                 .layout(pipeline.layout)
+                .depth_stencil_state(&depth)
                 .push_next(&mut rendering);
             match device.create_graphics_pipelines(vk::PipelineCache::null(), &[info], None) {
                 Ok(handles) => pipeline.handle = handles[0],
@@ -138,19 +441,6 @@ impl Pipeline {
                     return Err(format!("Slang graphics pipeline creation failed: {error}").into());
                 }
             }
-        }
-        if mode == RenderMode::Indirect {
-            println!(
-                "GPU indirect graphics pipeline created: task reads compute-generated work descriptor; mesh uses shared transforms"
-            );
-        } else if task_amplification {
-            println!(
-                "Task amplification pipeline created: TaskEXT -> 2 MeshEXT groups -> fragment; 32 lanes per stage, 20-byte transform payload; no vertex/index buffers"
-            );
-        } else {
-            println!(
-                "Mesh-only triangle pipeline created: MeshEXT + fragment, 32 lanes, 3 vertices, 1 primitive; no vertex/index buffers"
-            );
         }
         Ok(pipeline)
     }
@@ -166,6 +456,49 @@ impl Drop for Pipeline {
             if self.layout != vk::PipelineLayout::null() {
                 self.device.destroy_pipeline_layout(self.layout, None);
             }
+        }
+    }
+}
+
+pub(super) struct ComputeSubmission {
+    // Retire commands before deleting referenced layouts/pipelines/descriptors.
+    pub(super) transfer: Option<Transfer>,
+    pub(super) device: ash::Device,
+    pub(super) descriptor_layout: vk::DescriptorSetLayout,
+    pub(super) pool: vk::DescriptorPool,
+    pub(super) layout: vk::PipelineLayout,
+    pub(super) pipeline: vk::Pipeline,
+}
+impl Drop for ComputeSubmission {
+    fn drop(&mut self) {
+        drop(self.transfer.take());
+        // SAFETY: Transfer retirement completed; caller retains the parent device.
+        unsafe {
+            if self.pipeline != vk::Pipeline::null() {
+                self.device.destroy_pipeline(self.pipeline, None);
+            }
+            if self.layout != vk::PipelineLayout::null() {
+                self.device.destroy_pipeline_layout(self.layout, None);
+            }
+            if self.pool != vk::DescriptorPool::null() {
+                self.device.destroy_descriptor_pool(self.pool, None);
+            }
+            if self.descriptor_layout != vk::DescriptorSetLayout::null() {
+                self.device
+                    .destroy_descriptor_set_layout(self.descriptor_layout, None);
+            }
+        }
+    }
+}
+impl ComputeSubmission {
+    pub(super) fn new(device: &ash::Device) -> Self {
+        Self {
+            transfer: None,
+            device: device.clone(),
+            descriptor_layout: vk::DescriptorSetLayout::null(),
+            pool: vk::DescriptorPool::null(),
+            layout: vk::PipelineLayout::null(),
+            pipeline: vk::Pipeline::null(),
         }
     }
 }

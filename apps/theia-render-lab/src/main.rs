@@ -1,6 +1,31 @@
+mod asset;
+mod authority;
+mod authority_demo;
+mod benchmark;
+mod bundle_streaming;
+mod camera;
+mod frame_pacing;
 mod gpu;
 mod indirect;
+mod lod_reference;
+mod network;
 mod pipeline;
+mod spatial;
+mod streaming;
+mod surface_reference;
+mod texture;
+mod texture_footprint_reference;
+mod texture_refinement;
+mod visibility;
+mod world_camera;
+mod world_descriptors;
+mod world_ground;
+mod world_ground_gpu;
+mod world_refinement;
+mod world_scene;
+mod world_streaming;
+mod world_upload;
+mod wsi;
 
 use std::{
     error::Error,
@@ -10,16 +35,26 @@ use std::{
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::WindowEvent,
+    event::{ElementState, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    keyboard::{Key, NamedKey},
+    keyboard::{Key, KeyCode, NamedKey, PhysicalKey},
+    raw_window_handle::{HasDisplayHandle, RawDisplayHandle},
     window::{Window, WindowId},
 };
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RenderMode {
+    Benchmark,
+    Authority,
     Indirect,
+    Spatial,
+    Visibility,
+    Asset,
+    AssetCamera,
+    AssetCull,
+    AssetLod,
+    AssetResolve,
     DirectTask,
     MeshOnly,
     Clear,
@@ -27,23 +62,909 @@ enum RenderMode {
 
 #[derive(Default)]
 struct Options {
+    world_upload: Option<std::path::PathBuf>,
+    world_descriptor_test: bool,
+    world_ground_test: Option<(std::path::PathBuf, std::path::PathBuf, std::path::PathBuf)>,
+    world_scene: Option<std::path::PathBuf>,
+    world_covered: bool,
+    world_camera: bool,
+    world_camera_crowd: Option<u32>,
+    world_camera_timings: Option<std::path::PathBuf>,
+    world_camera_hud: bool,
+    world_camera_warmup: Option<u64>,
+    world_camera_period: Option<u64>,
+    world_camera_slots: Option<usize>,
+    world_camera_report: Option<std::path::PathBuf>,
+    world_covered_retire: bool,
+    world_covered_reload: bool,
+    world_covered_report: Option<std::path::PathBuf>,
+    world_pair: Option<std::path::PathBuf>,
+    world_bundle_pair: Option<std::path::PathBuf>,
+    world_stream_bundle: Option<std::path::PathBuf>,
+    world_stream_report: Option<std::path::PathBuf>,
+    benchmark: bool,
+    benchmark_cooked: bool,
+    benchmark_mixed: bool,
+    benchmark_no_overlay: bool,
+    benchmark_players: Option<u32>,
+    benchmark_warmup: Option<u64>,
+    benchmark_seconds: Option<f32>,
+    benchmark_report: Option<std::path::PathBuf>,
+    benchmark_width: Option<u32>,
+    benchmark_height: Option<u32>,
+    benchmark_present_mode: Option<ash::vk::PresentModeKHR>,
+    benchmark_target_hz: Option<u32>,
+    network_address: Option<std::net::SocketAddr>,
+    network_certificate: Option<std::path::PathBuf>,
+    network_faults: bool,
+    network_repair_test: bool,
+    authority_alpha: Option<f32>,
+    authority_demo: bool,
+    authority_script: bool,
     no_validation: bool,
     gpu: Option<String>,
     frames: Option<u64>,
     smoke: bool,
+    wsi_smoke: bool,
     mode: Option<RenderMode>,
     work_items: Option<u32>,
     shader_dir: Option<std::path::PathBuf>,
+    asset: Option<std::path::PathBuf>,
+    fallback: Option<std::path::PathBuf>,
+    asset_budget: Option<usize>,
+    cell: Option<std::path::PathBuf>,
+    resident_budget: Option<u64>,
+    camera: bool,
+    frustum: bool,
+    material: bool,
+    materials: Option<std::path::PathBuf>,
+    uvs: Option<std::path::PathBuf>,
+    texture: Option<std::path::PathBuf>,
+    texture_mip_level: Option<u32>,
+    texture_auto_mips: bool,
+    texture_linear_filter: bool,
+    texture_tail_budget: Option<usize>,
+    texture_refine_budget: Option<usize>,
+    texture_budget: Option<u64>,
+    texture_table: Option<std::path::PathBuf>,
+    bundle: Option<std::path::PathBuf>,
+    stream_bundle: Option<std::path::PathBuf>,
+    bundle_byte_budget: Option<usize>,
+    bundle_gpu_budget: Option<u64>,
+    lod: Option<(std::path::PathBuf, std::path::PathBuf)>,
+    lod_pixels: Option<f32>,
+    lod_budget: Option<u64>,
+    lod_hysteresis: Option<f32>,
+    lod_hysteresis_test: bool,
 }
 impl Options {
+    fn benchmark_config(&self) -> benchmark::Config {
+        if let Some(report) = &self.world_camera_timings {
+            return benchmark::Config {
+                players: self.world_camera_crowd.unwrap_or(0),
+                overlay: self.world_camera_hud,
+                frames: self.frames.unwrap_or(240),
+                warmup: self.world_camera_warmup.unwrap_or(0),
+                seconds: 60.,
+                report: report.clone(),
+            };
+        }
+
+        benchmark::Config {
+            players: if self.benchmark_cooked && !self.benchmark_mixed {
+                0
+            } else {
+                self.benchmark_players.unwrap_or(1000)
+            },
+            overlay: !self.benchmark_no_overlay,
+            frames: self.frames.unwrap_or(3660),
+            warmup: self.benchmark_warmup.unwrap_or(60),
+            seconds: self.benchmark_seconds.unwrap_or(60.),
+            report: self
+                .benchmark_report
+                .clone()
+                .unwrap_or_else(|| "build/benchmark/report.json".into()),
+        }
+    }
+    fn storage_array_requirement(&self) -> u32 {
+        if self.world_scene.is_some() {
+            if self.world_camera_hud { 21 } else { 16 }
+        } else if self.world_descriptor_test {
+            5
+        } else {
+            0
+        }
+    }
     fn render_mode(&self) -> RenderMode {
-        self.mode.unwrap_or(RenderMode::Indirect)
+        if self.lod.is_some() {
+            RenderMode::AssetLod
+        } else if self.material {
+            RenderMode::AssetResolve
+        } else if self.frustum {
+            RenderMode::AssetCull
+        } else if self.camera {
+            RenderMode::AssetCamera
+        } else {
+            self.mode.unwrap_or(RenderMode::Indirect)
+        }
     }
     fn parse() -> Result<Self> {
         let mut result = Self::default();
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
+                "--world-scene-test" | "--world-covered-test" | "--world-camera-test" => {
+                    result.world_camera = arg == "--world-camera-test";
+                    result.world_covered = arg != "--world-scene-test";
+                    if result.mode.replace(RenderMode::AssetResolve).is_some()
+                        || result.world_scene.is_some()
+                    {
+                        return Err("Four-chunk world fixture owns its render mode".into());
+                    }
+                    result.world_scene =
+                        Some(args.next().ok_or("Missing world fixture manifest")?.into());
+                }
+                "--world-camera-hud" => result.world_camera_hud = true,
+                "--world-camera-timings" => {
+                    result.world_camera_timings =
+                        Some(args.next().ok_or("Missing camera timing report")?.into())
+                }
+                "--world-camera-warmup" => {
+                    result.world_camera_warmup =
+                        Some(args.next().ok_or("Missing camera timing warmup")?.parse()?)
+                }
+                "--world-camera-crowd" => {
+                    result.world_camera_crowd =
+                        Some(args.next().ok_or("Missing camera crowd count")?.parse()?)
+                }
+                "--world-camera-period" => {
+                    result.world_camera_period =
+                        Some(args.next().ok_or("Missing camera route period")?.parse()?)
+                }
+                "--world-camera-slots" => {
+                    result.world_camera_slots =
+                        Some(args.next().ok_or("Missing camera fine slots")?.parse()?)
+                }
+                "--world-camera-report" => {
+                    result.world_camera_report =
+                        Some(args.next().ok_or("Missing camera report path")?.into())
+                }
+                "--world-covered-reload-test" => {
+                    result.world_covered_reload = true;
+                    result.world_covered_retire = true;
+                }
+                "--world-covered-retire-test" => result.world_covered_retire = true,
+                "--world-covered-report" => {
+                    result.world_covered_report = Some(
+                        args.next()
+                            .ok_or("Missing protected retirement report path")?
+                            .into(),
+                    )
+                }
+                "--world-ground-gpu-test" => {
+                    if result.mode.replace(RenderMode::Clear).is_some() {
+                        return Err("Ground GPU probe requires its own clear-only mode".into());
+                    }
+                    result.world_ground_test = Some((
+                        args.next().ok_or("Missing ground scene")?.into(),
+                        args.next().ok_or("Missing ground points")?.into(),
+                        args.next().ok_or("Missing ground report")?.into(),
+                    ));
+                    result.frames = Some(3);
+                }
+                "--world-descriptor-test" => {
+                    if result.mode.replace(RenderMode::Clear).is_some() {
+                        return Err(
+                            "Storage descriptor qualification requires its own clear-only mode"
+                                .into(),
+                        );
+                    }
+                    result.world_descriptor_test = true;
+                    result.frames = Some(3);
+                }
+                "--world-pair-reference" => {
+                    let width = args.next().ok_or("Missing width")?.parse()?;
+                    let height = args.next().ok_or("Missing height")?.parse()?;
+                    let view = args.next().ok_or("Missing world view")?.parse()?;
+                    if args.next().is_some() {
+                        return Err("Unexpected world reference argument".into());
+                    }
+                    println!(
+                        "{}",
+                        serde_json::json!({"rows": camera::world_pair_rows(width,height,view)?})
+                    );
+                    std::process::exit(0);
+                }
+                "--world-stream-bundle" => {
+                    if result.world_stream_bundle.is_some() {
+                        return Err("Duplicate world replacement input".into());
+                    }
+                    result.world_stream_bundle = Some(
+                        args.next()
+                            .ok_or("Missing world replacement bundle")?
+                            .into(),
+                    );
+                }
+                "--world-stream-report" => {
+                    if result.world_stream_report.is_some() {
+                        return Err("Duplicate world stream report".into());
+                    }
+                    result.world_stream_report = Some(
+                        args.next()
+                            .ok_or("Missing world stream report path")?
+                            .into(),
+                    );
+                }
+                "--world-bundle-pair" => {
+                    if result.bundle.is_some()
+                        || result.world_bundle_pair.is_some()
+                        || result.world_pair.is_some()
+                    {
+                        return Err("Choose one resident world pair".into());
+                    }
+                    result.bundle = Some(args.next().ok_or("Missing first indexed bundle")?.into());
+                    result.world_bundle_pair =
+                        Some(args.next().ok_or("Missing second indexed bundle")?.into());
+                }
+                "--world-pair-test" => {
+                    if result.asset.is_some()
+                        || result.world_pair.is_some()
+                        || result.mode.replace(RenderMode::Asset).is_some()
+                    {
+                        return Err("World pair qualification owns both geometry inputs".into());
+                    }
+                    result.asset = Some(args.next().ok_or("Missing first world mesh")?.into());
+                    result.world_pair =
+                        Some(args.next().ok_or("Missing second world mesh")?.into());
+                    result.material = true;
+                }
+                "--world-upload-test" => {
+                    if result.world_upload.is_some()
+                        || result.mode.replace(RenderMode::Clear).is_some()
+                    {
+                        return Err(
+                            "World upload qualification requires its own clear-only mode".into(),
+                        );
+                    }
+                    result.world_upload =
+                        Some(args.next().ok_or("Missing world scene manifest")?.into());
+                    result.frames = Some(3);
+                }
+                "--world-ground-reference" => {
+                    let scene = args.next().ok_or("Missing ground scene")?;
+                    let queries = args.next().ok_or("Missing ground query JSON")?;
+                    if args.next().is_some() {
+                        return Err("Unexpected ground reference argument".into());
+                    }
+                    println!(
+                        "{}",
+                        world_ground::reference(
+                            std::path::Path::new(&scene),
+                            std::path::Path::new(&queries)
+                        )?
+                    );
+                    std::process::exit(0);
+                }
+                "--benchmark-mixed" => {
+                    if result.benchmark {
+                        return Err("Choose one benchmark workload".into());
+                    }
+                    result.benchmark = true;
+                    result.benchmark_cooked = true;
+                    result.benchmark_mixed = true;
+                }
+                "--benchmark-cooked" => {
+                    if result.benchmark_mixed || (result.benchmark && !result.benchmark_cooked) {
+                        return Err("Choose one benchmark workload".into());
+                    }
+                    result.benchmark = true;
+                    result.benchmark_cooked = true;
+                }
+                "--benchmark-no-overlay" => result.benchmark_no_overlay = true,
+                "--benchmark" => {
+                    if result.benchmark_cooked {
+                        return Err("Choose one benchmark workload".into());
+                    }
+                    result.benchmark = true;
+                }
+                "--benchmark-present-mode" => {
+                    result.benchmark_present_mode = Some(match args.next().as_deref() {
+                        Some("fifo") => ash::vk::PresentModeKHR::FIFO,
+                        Some("immediate") => ash::vk::PresentModeKHR::IMMEDIATE,
+                        Some("mailbox") => ash::vk::PresentModeKHR::MAILBOX,
+                        _ => return Err("Present mode must be fifo, immediate or mailbox".into()),
+                    });
+                }
+                "--benchmark-target-hz" => {
+                    result.benchmark_target_hz =
+                        Some(args.next().ok_or("Missing target Hz")?.parse()?);
+                }
+                "--benchmark-width" => {
+                    result.benchmark_width =
+                        Some(args.next().ok_or("Missing benchmark width")?.parse()?)
+                }
+                "--benchmark-height" => {
+                    result.benchmark_height =
+                        Some(args.next().ok_or("Missing benchmark height")?.parse()?)
+                }
+                "--benchmark-players" => {
+                    result.benchmark_players = Some(
+                        args.next()
+                            .ok_or("Missing benchmark player count")?
+                            .parse()?,
+                    )
+                }
+                "--benchmark-warmup" => {
+                    result.benchmark_warmup = Some(
+                        args.next()
+                            .ok_or("Missing benchmark warmup frames")?
+                            .parse()?,
+                    )
+                }
+                "--benchmark-seconds" => {
+                    result.benchmark_seconds = Some(
+                        args.next()
+                            .ok_or("Missing benchmark logical duration")?
+                            .parse()?,
+                    )
+                }
+                "--benchmark-report" => {
+                    result.benchmark_report =
+                        Some(args.next().ok_or("Missing benchmark report path")?.into())
+                }
+                "--benchmark-reference" | "--benchmark-mixed-reference" => {
+                    let mixed = arg == "--benchmark-mixed-reference";
+                    let players = args.next().ok_or("Missing players")?.parse()?;
+                    let frame = args.next().ok_or("Missing frame")?.parse()?;
+                    let frames = args.next().ok_or("Missing total frames")?.parse()?;
+                    let width = args.next().ok_or("Missing width")?.parse()?;
+                    let height = args.next().ok_or("Missing height")?.parse()?;
+                    if args.next().is_some() {
+                        return Err("Unexpected benchmark reference argument".into());
+                    }
+                    let config = benchmark::Config {
+                        overlay: false,
+                        players,
+                        frames,
+                        warmup: 0,
+                        seconds: 60.,
+                        report: "unused.json".into(),
+                    };
+                    config.validate()?;
+                    if frame >= frames {
+                        return Err("Benchmark reference frame outside route".into());
+                    }
+                    println!(
+                        "{}",
+                        if mixed {
+                            benchmark::mixed_reference(&config, frame, width, height)?
+                        } else {
+                            benchmark::reference(&config, frame, width, height)?
+                        }
+                    );
+                    std::process::exit(0);
+                }
+                "--network-client" => {
+                    result.network_address = Some(
+                        args.next()
+                            .ok_or("--network-client needs loopback address")?
+                            .parse()?,
+                    );
+                    if result.mode.replace(RenderMode::Authority).is_some() {
+                        return Err("Network client is a separate render mode".into());
+                    }
+                }
+                "--network-faults" => result.network_faults = true,
+                "--network-repair-test" => result.network_repair_test = true,
+                "--network-certificate" => {
+                    result.network_certificate = Some(
+                        args.next()
+                            .ok_or("--network-certificate needs public DER file")?
+                            .into(),
+                    )
+                }
+                "--authority-script-reference" => {
+                    if args.next().is_some() {
+                        return Err("Unexpected script reference argument".into());
+                    }
+                    println!("{}", authority_demo::script_reference()?);
+                    std::process::exit(0);
+                }
+                "--authority-script" => result.authority_script = true,
+                "--authority-alpha" => {
+                    result.authority_alpha = Some(
+                        args.next()
+                            .ok_or("--authority-alpha needs fraction")?
+                            .parse()?,
+                    )
+                }
+                "--authority-reference" => {
+                    let alpha = args
+                        .next()
+                        .ok_or("--authority-reference needs fraction")?
+                        .parse()?;
+                    if args.next().is_some() {
+                        return Err("Unexpected authority reference argument".into());
+                    }
+                    println!("{}", authority::fixture(alpha)?.reference);
+                    std::process::exit(0);
+                }
+                "--frustum-ids" => {
+                    let path = args.next().ok_or("--frustum-ids needs mesh")?;
+                    let width = args.next().ok_or("--frustum-ids needs width")?.parse()?;
+                    let height = args.next().ok_or("--frustum-ids needs height")?.parse()?;
+                    let view = args.next().ok_or("--frustum-ids needs view")?.parse()?;
+                    let mesh = theia_assets::Mesh::decode(
+                        &asset::load(std::path::Path::new(&path))?,
+                        None,
+                        theia_assets::DEFAULT_BUDGET,
+                    )?;
+                    println!(
+                        "{}",
+                        serde_json::json!({"ids":camera::visible(&mesh,camera::view_rows(width,height,view)?)?})
+                    );
+                    std::process::exit(0);
+                }
+                "--lod-test" => {
+                    result.lod = Some((
+                        args.next().ok_or("--lod-test needs fine mesh")?.into(),
+                        args.next().ok_or("--lod-test needs coarse mesh")?.into(),
+                    ))
+                }
+                "--lod-budget" => {
+                    result.lod_budget =
+                        Some(args.next().ok_or("--lod-budget needs bytes")?.parse()?)
+                }
+                "--lod-pixels" => {
+                    result.lod_pixels = Some(
+                        args.next()
+                            .ok_or("--lod-pixels needs a pixel budget")?
+                            .parse()?,
+                    )
+                }
+                "--lod-hysteresis" => {
+                    result.lod_hysteresis = Some(
+                        args.next()
+                            .ok_or("--lod-hysteresis needs an entry fraction")?
+                            .parse()?,
+                    );
+                }
+                "--lod-hysteresis-test" => result.lod_hysteresis_test = true,
+                "--texture-footprint-reference" => {
+                    texture_footprint_reference::run(&mut args)?;
+                    std::process::exit(0);
+                }
+                "--lod-reference" => {
+                    lod_reference::run(&mut args)?;
+                    std::process::exit(0);
+                }
+                "--stream-bundle" => {
+                    result.stream_bundle = Some(
+                        args.next()
+                            .ok_or("--stream-bundle needs replacement manifest")?
+                            .into(),
+                    )
+                }
+                "--bundle-byte-budget" => {
+                    result.bundle_byte_budget = Some(
+                        args.next()
+                            .ok_or("--bundle-byte-budget needs bytes")?
+                            .parse()?,
+                    )
+                }
+                "--bundle-gpu-budget" => {
+                    result.bundle_gpu_budget = Some(
+                        args.next()
+                            .ok_or("--bundle-gpu-budget needs bytes")?
+                            .parse()?,
+                    )
+                }
+                "--bundle" => {
+                    result.bundle = Some(
+                        args.next()
+                            .ok_or("--bundle needs a content-addressed manifest")?
+                            .into(),
+                    )
+                }
+                "--camera-test" => result.camera = true,
+                "--frustum-test" => result.frustum = true,
+                "--material-test" => result.material = true,
+                "--texture-table" => {
+                    result.material = true;
+                    result.texture_table = Some(
+                        args.next()
+                            .ok_or("--texture-table needs a content-addressed table")?
+                            .into(),
+                    );
+                }
+                "--texture-test" => {
+                    if result.texture_mip_level.is_some() || result.texture_auto_mips {
+                        return Err("Choose one texture profile".into());
+                    }
+                    result.material = true;
+                    result.texture = Some(
+                        args.next()
+                            .ok_or("--texture-test needs a content-addressed KTX2")?
+                            .into(),
+                    );
+                }
+                "--texture-mip-test" => {
+                    if result.texture.is_some() {
+                        return Err("Choose one texture profile".into());
+                    }
+                    result.material = true;
+                    result.texture = Some(
+                        args.next()
+                            .ok_or("--texture-mip-test needs a cooked mip chain")?
+                            .into(),
+                    );
+                    result.texture_mip_level = Some(
+                        args.next()
+                            .ok_or("--texture-mip-test needs a fixed mip level")?
+                            .parse()?,
+                    );
+                }
+                "--texture-auto-mips" => {
+                    if result.texture.is_some() {
+                        return Err("Choose one texture profile".into());
+                    }
+                    result.material = true;
+                    result.texture = Some(
+                        args.next()
+                            .ok_or("--texture-auto-mips needs a cooked mip chain")?
+                            .into(),
+                    );
+                    result.texture_auto_mips = true;
+                }
+                "--texture-linear-filter" => result.texture_linear_filter = true,
+                "--texture-tail-budget" => {
+                    result.texture_tail_budget = Some(
+                        args.next()
+                            .ok_or("--texture-tail-budget needs dense texel bytes")?
+                            .parse()?,
+                    )
+                }
+                "--texture-refine-budget" => {
+                    result.texture_refine_budget = Some(
+                        args.next()
+                            .ok_or("--texture-refine-budget needs dense texel bytes")?
+                            .parse()?,
+                    )
+                }
+                "--texture-budget" => {
+                    result.texture_budget =
+                        Some(args.next().ok_or("--texture-budget needs bytes")?.parse()?);
+                }
+                "--uv-test" => {
+                    result.material = true;
+                    result.uvs = Some(
+                        args.next()
+                            .ok_or("--uv-test needs a content-addressed UV page")?
+                            .into(),
+                    );
+                }
+                "--materials" => {
+                    result.material = true;
+                    result.materials = Some(
+                        args.next()
+                            .ok_or("--materials needs a content-addressed material sidecar")?
+                            .into(),
+                    );
+                }
+                "--camera-reference"
+                | "--frustum-reference"
+                | "--material-reference"
+                | "--authored-reference"
+                | "--uv-reference"
+                | "--texture-reference"
+                | "--texture-mip-reference"
+                | "--texture-auto-reference"
+                | "--texture-linear-reference"
+                | "--texture-tail-reference"
+                | "--texture-tail-linear-reference"
+                | "--texture-table-reference" => {
+                    use std::io::Read;
+                    let path = args.next().ok_or(
+                        "--camera-reference needs mesh path and x y width height scenario",
+                    )?;
+                    let mip_reference = arg == "--texture-mip-reference";
+                    let tail_reference = arg == "--texture-tail-reference"
+                        || arg == "--texture-tail-linear-reference";
+                    let linear_reference = arg == "--texture-linear-reference"
+                        || arg == "--texture-tail-linear-reference";
+                    let auto_reference =
+                        arg == "--texture-auto-reference" || linear_reference || tail_reference;
+                    let authored =
+                        if arg == "--authored-reference"
+                            || (arg == "--texture-reference"
+                                || arg == "--texture-table-reference"
+                                || mip_reference
+                                || auto_reference)
+                        {
+                            Some(args.next().ok_or(
+                                "--authored-reference needs material sidecar after mesh path",
+                            )?)
+                        } else {
+                            None
+                        };
+                    let uv_path = if arg == "--uv-reference"
+                        || (arg == "--texture-reference"
+                            || arg == "--texture-table-reference"
+                            || mip_reference
+                            || auto_reference)
+                    {
+                        Some(
+                            args.next()
+                                .ok_or("--uv-reference needs UV page after mesh path")?,
+                        )
+                    } else {
+                        None
+                    };
+                    let texture_path =
+                        if arg == "--texture-reference"
+                            || arg == "--texture-table-reference"
+                            || mip_reference
+                            || auto_reference
+                        {
+                            Some(args.next().ok_or(
+                                "--texture-reference needs KTX2 after mesh/material/UV paths",
+                            )?)
+                        } else {
+                            None
+                        };
+                    let mip_level = if mip_reference {
+                        Some(
+                            args.next()
+                                .ok_or("Mip reference needs level before pixel coordinates")?
+                                .parse::<u32>()?,
+                        )
+                    } else {
+                        None
+                    };
+                    let tail_budget = if tail_reference {
+                        Some(args.next().ok_or("Tail reference needs dense texel budget before pixel coordinates")?.parse::<usize>()?)
+                    } else {
+                        None
+                    };
+                    if let Some(level) = mip_level {
+                        let bytes = texture::load_mips(std::path::Path::new(
+                            texture_path.as_ref().unwrap(),
+                        ))?;
+                        let chain = theia_assets::texture_mips::TextureMipChain::decode(
+                            &bytes,
+                            None,
+                            theia_assets::texture::DEFAULT_BUDGET,
+                        )?;
+                        if level as usize >= chain.levels.len() {
+                            return Err("CPU mip view is outside the chain".into());
+                        }
+                    }
+                    if auto_reference {
+                        let data = texture::load_mips(std::path::Path::new(
+                            texture_path.as_ref().unwrap(),
+                        ))?;
+                        if let Some(budget) = tail_budget {
+                            let chain = theia_assets::texture_mips::TextureMipChain::decode(
+                                &data,
+                                None,
+                                theia_assets::texture::DEFAULT_BUDGET,
+                            )?;
+                            theia_assets::texture_residency::MipTail::fit(&chain, budget)?;
+                        }
+                    }
+                    let mut values = [0u32; 5];
+                    for value in &mut values {
+                        *value = args
+                            .next()
+                            .ok_or("--camera-reference needs x y width height scenario")?
+                            .parse()?;
+                    }
+                    let filter_precision = if linear_reference {
+                        match args.next().as_deref() {
+                            None => None,
+                            Some("--filter-precision") => {
+                                let bits = args
+                                    .next()
+                                    .ok_or("Missing filter precision bits")?
+                                    .parse::<u32>()?;
+                                if !(4..=16).contains(&bits) || args.next().is_some() {
+                                    return Err("Filter precision requires 4..16 bits and no trailing arguments".into());
+                                }
+                                Some(bits)
+                            }
+                            Some(_) => return Err("Unexpected linear reference argument".into()),
+                        }
+                    } else {
+                        None
+                    };
+                    let mut bytes = Vec::new();
+                    std::fs::File::open(path)?
+                        .take(theia_assets::DEFAULT_BUDGET as u64 + 1)
+                        .read_to_end(&mut bytes)?;
+                    let mesh =
+                        theia_assets::Mesh::decode(&bytes, None, theia_assets::DEFAULT_BUDGET)?;
+                    let [x, y, width, height, scenario] = values;
+                    let material = arg == "--material-reference";
+                    let frustum = arg != "--camera-reference";
+                    let mut pixel = camera::pixel(&mesh, x, y, width, height, scenario, frustum)?;
+                    if material && pixel.identity[0] != 0 && (pixel.identity[0] - 1) & 1 != 0 {
+                        pixel.color[0] *= 89. / 255.;
+                        pixel.color[1] *= 153. / 255.;
+                    }
+                    let mut material_page = None;
+                    if let Some(path) = authored {
+                        let data = asset::load_material(std::path::Path::new(&path), &mesh)?;
+                        let page = theia_assets::material::MaterialPage::decode(
+                            &data,
+                            None,
+                            &mesh,
+                            theia_assets::material::DEFAULT_BUDGET,
+                        )?;
+                        if pixel.identity[0] != 0 {
+                            let color = page
+                                .color(pixel.identity[0] - 1, pixel.identity[1])
+                                .ok_or("Invalid CPU material identity")?;
+                            pixel.color.copy_from_slice(&color[..3]);
+                        }
+                        material_page = Some(page);
+                    }
+                    let factor = pixel.color;
+                    let mut uv_value = None;
+                    let mut selected_material = None;
+                    let mut selected_texture = None;
+                    let mut selected_mip = None;
+                    let mut selected_view_mip = None;
+                    let mut color_bounds = None;
+                    if let Some(path) = uv_path {
+                        let data = asset::load_uv(std::path::Path::new(&path), &mesh)?;
+                        let page = theia_assets::uv::UvPage::decode(
+                            &data,
+                            None,
+                            &mesh,
+                            theia_assets::uv::DEFAULT_BUDGET,
+                        )?;
+                        if pixel.covered {
+                            let uv: [f32; 2] = std::array::from_fn(|axis| {
+                                (0..3)
+                                    .map(|i| {
+                                        page.texcoords[pixel.vertices[i] as usize][axis]
+                                            * pixel.weights[i]
+                                    })
+                                    .sum()
+                            });
+                            pixel.color = [
+                                (uv[0] * 0.4 + 0.1).clamp(0., 1.),
+                                (uv[1] * 0.4 + 0.1).clamp(0., 1.),
+                                0.5,
+                            ];
+                            if let Some(path) = &texture_path {
+                                if arg == "--texture-table-reference" {
+                                    let materials = material_page
+                                        .as_ref()
+                                        .ok_or("Texture reference requires material page")?;
+                                    let set =
+                                        texture::load_set(std::path::Path::new(path), materials)?;
+                                    let table = theia_assets::texture_table::TextureTable::decode(
+                                        &set.table,
+                                        None,
+                                        materials,
+                                        theia_assets::texture_table::DEFAULT_BUDGET,
+                                    )?;
+                                    let material = materials.triangle_materials[materials
+                                        .triangle_offsets
+                                        [(pixel.identity[0] - 1) as usize]
+                                        as usize
+                                        + pixel.identity[1] as usize];
+                                    let index = table
+                                        .texture_for(material)
+                                        .ok_or("Invalid CPU texture material")?;
+                                    let tex = theia_assets::texture::Texture::decode(
+                                        &set.images[index as usize],
+                                        None,
+                                        theia_assets::texture::DEFAULT_BUDGET,
+                                    )?;
+                                    let sampled = texture::reference_sample(&tex, uv);
+                                    pixel.color =
+                                        std::array::from_fn(|axis| sampled[axis] * factor[axis]);
+                                    selected_material = Some(material);
+                                    selected_texture = Some(index);
+                                } else {
+                                    let sampled = if auto_reference {
+                                        let bytes = texture::load_mips(std::path::Path::new(path))?;
+                                        let tex =
+                                            theia_assets::texture_mips::TextureMipChain::decode(
+                                                &bytes,
+                                                None,
+                                                theia_assets::texture::DEFAULT_BUDGET,
+                                            )?;
+                                        let rows = camera::view_rows(width, height, scenario)?;
+                                        let clip = pixel.vertices.map(|v| {
+                                            camera::project(rows, mesh.positions[v as usize])
+                                        });
+                                        let coords =
+                                            pixel.vertices.map(|v| page.texcoords[v as usize]);
+                                        let level =
+                                            match theia_assets::texture_footprint::differential(
+                                                clip,
+                                                coords,
+                                                [f64::from(x) + 0.5, f64::from(y) + 0.5],
+                                                [width, height],
+                                            ) {
+                                                Ok(gradient) => {
+                                                    theia_assets::texture_footprint::choose_mip(
+                                                        gradient,
+                                                        [tex.width, tex.height],
+                                                        tex.levels.len() as u32,
+                                                    )?
+                                                    .mip_level
+                                                }
+                                                Err(_) => 0,
+                                            };
+                                        let level = if let Some(budget) = tail_budget {
+                                            let tail =
+                                                theia_assets::texture_residency::MipTail::fit(
+                                                    &tex, budget,
+                                                )?;
+                                            let selected = tail.select(level)?;
+                                            selected_view_mip = Some(selected.view_level);
+                                            selected.source_level
+                                        } else {
+                                            level
+                                        };
+                                        selected_mip = Some(level);
+                                        if linear_reference {
+                                            if let Some(bits) = filter_precision {
+                                                let bounds=theia_assets::texture_filter::linear_repeat_bounds(
+                                                    &tex.levels[level as usize],uv.map(f64::from),bits)?;
+                                                color_bounds = Some(serde_json::json!({
+                                                    "min":std::array::from_fn::<_,3,_>(|i|bounds.min[i]*f64::from(factor[i])),
+                                                    "max":std::array::from_fn::<_,3,_>(|i|bounds.max[i]*f64::from(factor[i]))
+                                                }));
+                                            }
+                                            theia_assets::texture_filter::linear_repeat(
+                                                &tex.levels[level as usize],
+                                                uv.map(f64::from),
+                                            )?
+                                            .map(|v| v as f32)
+                                        } else {
+                                            texture::reference_mip(&tex, level, uv)?
+                                        }
+                                    } else if let Some(level) = mip_level {
+                                        let bytes = texture::load_mips(std::path::Path::new(path))?;
+                                        let tex =
+                                            theia_assets::texture_mips::TextureMipChain::decode(
+                                                &bytes,
+                                                None,
+                                                theia_assets::texture::DEFAULT_BUDGET,
+                                            )?;
+                                        texture::reference_mip(&tex, level, uv)?
+                                    } else {
+                                        let bytes = texture::load(std::path::Path::new(path))?;
+                                        let tex = theia_assets::texture::Texture::decode(
+                                            &bytes,
+                                            None,
+                                            theia_assets::texture::DEFAULT_BUDGET,
+                                        )?;
+                                        texture::reference_sample(&tex, uv)
+                                    };
+                                    pixel.color =
+                                        std::array::from_fn(|axis| sampled[axis] * factor[axis]);
+                                }
+                            }
+                            uv_value = Some(uv);
+                        }
+                    }
+                    let ids = if frustum {
+                        camera::visible(&mesh, camera::view_rows(width, height, scenario)?)?
+                    } else {
+                        Vec::new()
+                    };
+                    println!(
+                        "{}",
+                        serde_json::json!({"color":pixel.color,"color_bounds":color_bounds,"depth":pixel.depth,"covered":pixel.covered,"identity":pixel.identity,"ids":ids,"uv":uv_value,"material_id":selected_material,"texture_index":selected_texture,"mip_level":selected_mip,"view_mip_level":selected_view_mip})
+                    );
+                    std::process::exit(0);
+                }
                 "--no-validation" => result.no_validation = true,
                 "--gpu" => result.gpu = Some(args.next().ok_or("--gpu needs a name substring")?),
                 "--frames" => {
@@ -56,15 +977,67 @@ impl Options {
                     }
                     result.frames = Some(count);
                 }
-                "--mesh-only" | "--clear-only" | "--direct-task" => {
+                "--mesh-only" | "--clear-only" | "--direct-task" | "--spatial-test"
+                | "--visibility-test" | "--authority-test" | "--authority-demo" => {
                     let mode = match arg.as_str() {
+                        "--authority-demo" => {
+                            result.authority_demo = true;
+                            RenderMode::Authority
+                        }
+                        "--authority-test" => RenderMode::Authority,
                         "--mesh-only" => RenderMode::MeshOnly,
                         "--clear-only" => RenderMode::Clear,
+                        "--spatial-test" => RenderMode::Spatial,
+                        "--visibility-test" => RenderMode::Visibility,
                         _ => RenderMode::DirectTask,
                     };
                     if result.mode.replace(mode).is_some() {
                         return Err("Regression modes are mutually exclusive".into());
                     }
+                }
+                "--fallback" => {
+                    result.fallback =
+                        Some(args.next().ok_or("--fallback needs a cooked mesh")?.into())
+                }
+                "--asset-budget" => {
+                    let bytes: usize = args
+                        .next()
+                        .ok_or("--asset-budget needs positive encoded bytes")?
+                        .parse()?;
+                    if bytes == 0 || bytes > theia_assets::DEFAULT_BUDGET {
+                        return Err("Asset budget must be 1..64 MiB encoded bytes".into());
+                    }
+                    result.asset_budget = Some(bytes);
+                }
+                "--asset" => {
+                    if result.mode.replace(RenderMode::Asset).is_some() {
+                        return Err("Render modes are mutually exclusive".into());
+                    }
+                    result.asset = Some(
+                        args.next()
+                            .ok_or("--asset needs a content-addressed cooked mesh")?
+                            .into(),
+                    );
+                }
+                "--cell" => {
+                    if result.mode.replace(RenderMode::Asset).is_some() {
+                        return Err("Render modes are mutually exclusive".into());
+                    }
+                    result.cell = Some(
+                        args.next()
+                            .ok_or("--cell needs a hash-named cell manifest")?
+                            .into(),
+                    );
+                }
+                "--resident-budget" => {
+                    let bytes: u64 = args
+                        .next()
+                        .ok_or("--resident-budget needs physical geometry bytes")?
+                        .parse()?;
+                    if bytes == 0 {
+                        return Err("Resident budget must be positive".into());
+                    }
+                    result.resident_budget = Some(bytes);
                 }
                 "--work-items" => {
                     let count = args.next().ok_or("--work-items needs 0, 1 or 2")?.parse()?;
@@ -73,27 +1046,337 @@ impl Options {
                     }
                     result.work_items = Some(count);
                 }
+                "--visibility-reference" => {
+                    let mut values = [0u32; 5];
+                    for value in &mut values {
+                        *value = args
+                            .next()
+                            .ok_or("--visibility-reference needs x y width height count")?
+                            .parse()?;
+                    }
+                    let [x, y, width, height, count] = values;
+                    if width == 0 || height == 0 || x >= width || y >= height || count > 2 {
+                        return Err("Invalid visibility reference pixel/extent/count".into());
+                    }
+                    surface_reference::print_pixel(x, y, width, height, count);
+                    std::process::exit(0);
+                }
+                "--spatial-reference" => {
+                    let scenario = args
+                        .next()
+                        .ok_or("--spatial-reference needs 0, 1 or 2")?
+                        .parse()?;
+                    if scenario > 2 {
+                        return Err("Spatial reference scenario must be 0, 1 or 2".into());
+                    }
+                    spatial::print_reference(scenario);
+                    std::process::exit(0);
+                }
                 "--shader-dir" => {
                     result.shader_dir =
                         Some(args.next().ok_or("--shader-dir needs a directory")?.into())
                 }
                 "--smoke-test" => result.smoke = true,
+                "--wsi-smoke-test" => {
+                    result.smoke = true;
+                    result.wsi_smoke = true;
+                }
                 "--help" => {
                     println!(
-                        "Theia Render Lab: GPU indirect task/mesh qualification\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --shader-dir <directory>  compiled SPIR-V directory\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
+                        "Mixed resident scene: --benchmark-mixed --bundle <indexed world> [--benchmark-players 0..10000]\nCooked route/timings: --benchmark-cooked --bundle <indexed bundle> [--stream-bundle <replacement>]\nMMO visual benchmark: --benchmark [--benchmark-players 0..10000] [--benchmark-width 1280 --benchmark-height 720] [--frames 3660 --benchmark-warmup 60 --benchmark-seconds 60] [--benchmark-report path.json]\nCPU oracle: --benchmark-reference <players frame frames width height>"
+                    );
+                    println!(
+                        "Theia Render Lab: GPU task/mesh qualification\n  --world-ground-gpu-test <scene.json points.json report.json>  batched GPU terrain query probe\n  --world-ground-reference <scene.json points.json>  cooked fine/coarse terrain heights without Vulkan\n  --world-camera-test <scene.json>  camera-driven fine/coarse residency\n  --world-camera-hud  live streamed-world/proxy stats (requires timings)\n  --world-camera-timings <json> --world-camera-warmup <frames>  frame timings and residency snapshots; warmup excludes samples without delaying the route\n  --world-camera-crowd <0..10000>  moving GPU proxies on selected streamed terrain\n  --world-camera-period <frames> --world-camera-slots <1..4> --world-camera-report <json>\n  --world-covered-reload-test  retire then asynchronously reload fine region 2\n  --world-covered-retire-test  retire fine chunks at frames 20/40/60/80\n  --world-covered-report <json>  bounded retirement history\n  --world-covered-test <scene.json>  protected coarse startup with budget-gated fine chunks\n  --world-scene-test <scene.json>  four complete resident cooked chunks\n  --world-descriptor-test  qualify optional nonuniform storage-buffer arrays\n  --world-stream-bundle <replacement>  asynchronously alternate chunk 1 while chunk 0 stays resident\n  --world-stream-report <json>  bounded CPU publication history on completion\n  --world-bundle-pair <bundle0 bundle1>  two complete resident textured chunks\n  --world-pair-test <mesh0 mesh1>  two resident chunks with shared identity/depth\n  --world-pair-reference <width height view>  CPU camera JSON\n  --world-upload-test <scene.json>  isolated four-chunk GPU ownership probe (no chunk draws)\n  --network-client <loopback address> --network-certificate <public DER>  live readonly GPU viewer\n  --network-faults  bounded encrypted post-bootstrap packet faults\n  --network-repair-test  qualification ACK withholding until full repair\n  --authority-demo  WASD/arrows movement, Space attack, Escape quit\n  --authority-script  bounded demo intent sequence for qualification\n  --authority-test  fixed server-owned two-tick actor presentation\n  --authority-alpha <0..1>  GPU interpolation fraction (default .5)\n  --authority-reference <0..1>  readonly CPU fixture JSON without Vulkan\n  --gpu <name substring>\n  --frames <positive count>\n  --smoke-test  120 frames, resize/minimize/restore with validation\n  --wsi-smoke-test  smoke plus labeled acquire/present recovery injection\n  --shader-dir <directory>  compiled SPIR-V directory\n  --bundle <file>  admit complete immutable geometry/material/UV/texture set\n  --lod-test <fine coarse>  GPU resident heightfield LOD selection\n  --lod-budget <bytes>  combined physical geometry cap (default 4 MiB)\n  --lod-pixels <pixels>  projected-error budget (default 6)\n  --lod-hysteresis <0..1>  stricter coarsening entry fraction (default 0)\n  --lod-hysteresis-test  explicit eight-phase budget trajectory\n  --lod-reference <fine coarse width height view pixels>  CPU projected vertical-error selection\n  --stream-bundle <file>  alternate two complete v2 bundles with bounded I/O/uploads\n  --bundle-byte-budget <bytes>  unique live encoded budget (default 64 MiB)\n  --bundle-gpu-budget <bytes>  active+pending bundle buffers/images (default 32 MiB)\n  --texture-table <file> --uv-test <file> --materials <file>  dense material texture selection\n  --texture-table-reference <mesh material uv table x y width height view>  CPU indexed sampling JSON\n  --texture-test <file> --uv-test <file> --materials <file>  resident opaque sRGB texture\n  --texture-auto-mips <file>  GPU analytic-footprint mip choice\n  --texture-refine-budget <dense texel bytes>  one asynchronous finer-tail publication\n  --texture-tail-budget <dense texel bytes>  coarse resident suffix for automatic mips\n  --texture-tail-reference <mesh material uv texture budget x y width height view>  CPU suffix sampling JSON\n  --texture-tail-linear-reference <mesh material uv texture budget x y width height view>  CPU bilinear suffix sampling JSON\n  --texture-linear-filter  opt-in bilinear repeat within automatic mip\n  --texture-linear-reference <mesh material uv texture x y width height view>  CPU bilinear sampling JSON\n  --texture-auto-reference <mesh material uv texture x y width height view>  CPU automatic sampling JSON\n  --texture-mip-test <file level>  upload complete chain with a fixed mip view\n  --texture-mip-reference <mesh material uv texture level x y width height view>  CPU mip sampling JSON\n  --texture-footprint-reference <mesh uv texture x y width height view>  CPU UV-gradient/mip oracle\n  --texture-budget <bytes>  physical image allocation cap (default 4 MiB)\n  --texture-reference <mesh material uv texture x y width height view>  CPU sampling JSON\n  --uv-test <file>  fixed cooked TEXCOORD_0 perspective reconstruction\n  --uv-reference <mesh uv x y width height view>  CPU UV/color JSON\n  --materials <file>  opaque unlit sidecar for fixed --asset\n  --authored-reference <mesh material x y width height view>  CPU material JSON\n  --material-test  cooked identity/depth and diagnostic material resolve\n  --material-reference <file x y width height view>  CPU identity/color/depth JSON\n  --frustum-test  GPU conservative meshlet selection for --asset/--cell\n  --frustum-ids <file width height view>  CPU IDs without raster/clipping oracle\n  --frustum-reference <file x y width height view>  CPU pixel and IDs JSON\n  --camera-test  perspective and D32 depth for --asset/--cell\n  --camera-reference <file x y width height scenario>  CPU pixel JSON\n  --cell <file>  M4 two-page asynchronous residency qualification\n  --resident-budget <bytes>  cell geometry allocation budget (default 16 MiB)\n  --asset <file>  M4 cooked immutable meshlet viewer\n  --fallback <file> --asset-budget <encoded bytes>  explicit capacity fallback\n  --visibility-test  M3 identity/depth and material resolve\n  --visibility-reference <x y width height count>  CPU pixel reference JSON\n  --spatial-test  M2 grid/height culling with GPU-generated resident bounds\n  --spatial-reference <0|1|2>  print CPU reference JSON without Vulkan\n  --direct-task  run the qualified direct task amplification path\n  --work-items <0|1|2>  fixed qualification input for compute\n  --mesh-only  run the qualified single-triangle mesh path\n  --clear-only  run the qualified clear-screen path without shaders\n  --no-validation  explicitly disable validation"
                     );
                     std::process::exit(0);
                 }
                 _ => return Err(format!("Unknown argument: {arg}").into()),
             }
         }
-        if result.work_items.is_some()
-            && (result.render_mode() != RenderMode::Indirect || result.smoke)
+        if let Some((fine, coarse)) = &result.lod {
+            if result.asset.is_some()
+                || result.cell.is_some()
+                || result.fallback.is_some()
+                || result.asset_budget.is_some()
+                || result.mode.is_some()
+                || result.camera
+                || result.frustum
+                || result.material
+                || result.materials.is_some()
+                || result.uvs.is_some()
+                || result.texture.is_some()
+                || result.texture_table.is_some()
+                || result.bundle.is_some()
+            {
+                return Err("--lod-test owns the two geometry pages; do not combine other render/asset modes".into());
+            }
+            if result.lod_pixels.is_some_and(|v| !v.is_finite() || v < 0.) {
+                return Err("LOD pixel budget must be finite and nonnegative".into());
+            }
+            if result
+                .lod_hysteresis
+                .is_some_and(|v| !v.is_finite() || !(0.0..=1.0).contains(&v))
+            {
+                return Err("LOD hysteresis entry fraction must be finite in [0,1]".into());
+            }
+            if result.lod_hysteresis_test
+                && (result.lod_pixels.is_some() || result.lod_hysteresis.is_some())
+            {
+                return Err(
+                    "LOD hysteresis test owns the pixel-budget trajectory and entry fraction"
+                        .into(),
+                );
+            }
+            lod_reference::load(fine, coarse)?;
+            result.asset = Some(fine.clone());
+            result.mode = Some(RenderMode::Asset);
+        } else if result.lod_pixels.is_some()
+            || result.lod_budget.is_some()
+            || result.lod_hysteresis.is_some()
+            || result.lod_hysteresis_test
+        {
+            return Err("LOD pixels/budget require --lod-test".into());
+        }
+        if let Some(path) = &result.bundle {
+            if result.asset.is_some()
+                || result.cell.is_some()
+                || result.fallback.is_some()
+                || result.asset_budget.is_some()
+                || result.materials.is_some()
+                || result.uvs.is_some()
+                || result.texture.is_some()
+                || result.texture_table.is_some()
+                || result.mode.is_some()
+            {
+                return Err("--bundle owns all four asset roles; do not combine explicit asset/cell/fallback/material/UV/texture paths".into());
+            }
+            let bundle = texture::load_bundle(path)?;
+            let [mesh, materials, uvs, texture] = bundle.paths;
+            result.asset = Some(mesh);
+            result.materials = Some(materials);
+            result.uvs = Some(uvs);
+            if bundle.indexed {
+                result.texture_table = Some(texture);
+            } else {
+                result.texture = Some(texture);
+            }
+            result.material = true;
+            result.mode = Some(RenderMode::Asset);
+        }
+        if let Some(path) = &result.world_bundle_pair {
+            let second = texture::load_bundle(path)?;
+            if !second.indexed || result.texture_table.is_none() {
+                return Err("Resident world pair requires two indexed v2 bundles".into());
+            }
+            result.world_pair = Some(second.paths[0].clone());
+        }
+        if let Some(path) = &result.world_stream_bundle {
+            let initial = result
+                .world_bundle_pair
+                .as_ref()
+                .ok_or("World replacement needs --world-bundle-pair")?;
+            if result.stream_bundle.is_some()
+                || initial.file_stem() == path.file_stem()
+                || !texture::load_bundle(path)?.indexed
+            {
+                return Err(
+                    "World replacement needs a different indexed bundle and its own stream mode"
+                        .into(),
+                );
+            }
+        } else if result.world_stream_report.is_some() {
+            return Err("World stream report requires --world-stream-bundle".into());
+        }
+        if let Some(path) = &result.stream_bundle {
+            if result.bundle.is_none() || result.texture_table.is_none() {
+                return Err("--stream-bundle requires an initial v2 --bundle".into());
+            }
+            if !texture::load_bundle(path)?.indexed {
+                return Err("Replacement bundle must use v2 texture table".into());
+            }
+        } else if (result.bundle_byte_budget.is_some() || result.bundle_gpu_budget.is_some())
+            && result.world_bundle_pair.is_none()
+            && result.world_scene.is_none()
+        {
+            return Err("Bundle residency budgets require --stream-bundle".into());
+        }
+        if (result.camera || result.frustum || result.material)
+            && result.mode != Some(RenderMode::Asset)
         {
             return Err(
-                "--work-items requires indirect mode without --smoke-test (which cycles inputs)"
+                "--camera-test/--frustum-test/--material-test require --asset or --cell".into(),
+            );
+        }
+        if result.uvs.is_some()
+            && (result.asset.is_none()
+                || result.cell.is_some()
+                || result.fallback.is_some()
+                || (result.materials.is_some()
+                    && result.texture.is_none()
+                    && result.texture_table.is_none()))
+        {
+            return Err(
+                "--uv-test requires a fixed --asset without --cell/--fallback/--materials".into(),
+            );
+        }
+        if result.texture.is_some()
+            && (result.asset.is_none()
+                || result.uvs.is_none()
+                || result.materials.is_none()
+                || result.cell.is_some()
+                || result.fallback.is_some())
+        {
+            return Err("--texture-test requires fixed --asset plus --uv-test and --materials; no cell/fallback".into());
+        }
+        if let Some(path) = &result.texture_table {
+            if result.texture.is_some()
+                || result.asset.is_none()
+                || result.materials.is_none()
+                || result.uvs.is_none()
+                || result.cell.is_some()
+                || result.fallback.is_some()
+            {
+                return Err("--texture-table needs fixed --asset/--materials/--uv-test without single texture/cell/fallback".into());
+            }
+            if result.bundle.is_none() {
+                texture::admit_table(
+                    path,
+                    result.asset.as_deref().unwrap(),
+                    result.materials.as_deref().unwrap(),
+                    result.uvs.as_deref().unwrap(),
+                )?;
+            }
+        }
+        if let Some(level) = result.texture_mip_level {
+            let bytes = texture::load_mips(
+                result
+                    .texture
+                    .as_deref()
+                    .ok_or("Mip level requires mip texture")?,
+            )?;
+            let texture = theia_assets::texture_mips::TextureMipChain::decode(
+                &bytes,
+                None,
+                theia_assets::texture::DEFAULT_BUDGET,
+            )?;
+            if level as usize >= texture.levels.len() {
+                return Err("Fixed mip view is outside the admitted chain".into());
+            }
+            println!(
+                "Complete authored mip chain admitted before Vulkan initialization: {} levels; fixed view {level}",
+                texture.levels.len()
+            );
+        }
+        if result.texture_linear_filter && !result.texture_auto_mips {
+            return Err("--texture-linear-filter requires --texture-auto-mips".into());
+        }
+        if result.texture_tail_budget.is_some() && !result.texture_auto_mips {
+            return Err("--texture-tail-budget requires --texture-auto-mips".into());
+        }
+        if result.texture_refine_budget.is_some() && result.texture_tail_budget.is_none() {
+            return Err("--texture-refine-budget requires an initial --texture-tail-budget".into());
+        }
+        if result.texture_auto_mips {
+            let data = texture::load_mips(
+                result
+                    .texture
+                    .as_deref()
+                    .ok_or("Automatic mip profile requires texture")?,
+            )?;
+            if let Some(budget) = result.texture_tail_budget {
+                let chain = theia_assets::texture_mips::TextureMipChain::decode(
+                    &data,
+                    None,
+                    theia_assets::texture::DEFAULT_BUDGET,
+                )?;
+                let tail = theia_assets::texture_residency::MipTail::fit(&chain, budget)?;
+                if let Some(fine_budget) = result.texture_refine_budget {
+                    let fine = theia_assets::texture_residency::MipTail::fit(&chain, fine_budget)?;
+                    if fine.first_level() >= tail.first_level() {
+                        return Err("Mip refinement must add finer source levels".into());
+                    }
+                    println!(
+                        "Mip refinement admitted before Vulkan: coarse {} -> finer {}; physical coexistence checked separately",
+                        tail.first_level(),
+                        fine.first_level()
+                    );
+                }
+                println!(
+                    "Mip tail admitted before Vulkan: first {}, {} dense texel bytes",
+                    tail.first_level(),
+                    tail.texel_bytes()
+                );
+            }
+            println!(
+                "Complete authored chain admitted before Vulkan initialization; GPU analytic footprint chooses mip"
+            );
+        }
+        if result.texture_budget.is_some()
+            && result.texture.is_none()
+            && result.texture_table.is_none()
+            && result.world_scene.is_none()
+        {
+            return Err("--texture-budget requires --texture-test or --texture-table".into());
+        }
+        if result.materials.is_some()
+            && (result.asset.is_none() || result.cell.is_some() || result.fallback.is_some())
+        {
+            return Err("--materials requires a fixed --asset without --cell/--fallback".into());
+        }
+        if result.resident_budget.is_some() && result.cell.is_none() {
+            return Err("--resident-budget requires --cell".into());
+        }
+        if result.asset.is_none() && (result.fallback.is_some() || result.asset_budget.is_some()) {
+            return Err("--fallback/--asset-budget require --asset".into());
+        }
+        if result.work_items.is_some()
+            && (!matches!(
+                result.render_mode(),
+                RenderMode::Indirect
+                    | RenderMode::Spatial
+                    | RenderMode::Visibility
+                    | RenderMode::Asset
+                    | RenderMode::AssetCamera
+                    | RenderMode::AssetCull
+                    | RenderMode::AssetLod
+                    | RenderMode::AssetResolve
+            ) || result.smoke)
+        {
+            return Err(
+                "--work-items requires indirect, spatial, visibility or asset mode without --smoke-test (which cycles inputs)"
                     .into(),
             );
+        }
+        if let Some(network_address) = result.network_address {
+            if result.network_certificate.is_none()
+                || result.authority_alpha.is_some()
+                || result.authority_demo
+                || result.authority_script
+            {
+                return Err("Network client needs its public certificate and owns input/time; do not combine local authority flags".into());
+            }
+            if !network_address.ip().is_loopback() {
+                return Err("Network client fixture must target loopback".into());
+            }
+        } else if result.network_certificate.is_some()
+            || result.network_faults
+            || result.network_repair_test
+        {
+            return Err("Network certificate/fault/repair options require --network-client".into());
+        }
+        if result.authority_script && !result.authority_demo {
+            return Err("--authority-script requires --authority-demo".into());
+        }
+        if result.authority_demo && result.authority_alpha.is_some() {
+            return Err(
+                "--authority-demo owns its presentation clock; alpha is only for --authority-test"
+                    .into(),
+            );
+        }
+        if result.render_mode() == RenderMode::Authority && result.network_address.is_none() {
+            authority::fixture(result.authority_alpha.unwrap_or(0.5))?;
+        } else if result.authority_alpha.is_some() {
+            return Err("--authority-alpha requires --authority-test".into());
         }
         if result.smoke {
             if result.no_validation || result.frames.is_some() {
@@ -102,6 +1385,223 @@ impl Options {
                 );
             }
             result.frames = Some(120);
+        }
+        if result.world_camera_timings.is_some() {
+            if result
+                .benchmark_width
+                .is_some_and(|v| !(64..=8192).contains(&v))
+                || result
+                    .benchmark_height
+                    .is_some_and(|v| !(64..=8192).contains(&v))
+            {
+                return Err("World benchmark extent must be 64..8192 per axis".into());
+            }
+            if result.world_camera_timings == result.world_camera_report {
+                return Err("World timing and camera reports require different paths".into());
+            }
+            if !result.world_camera || result.world_camera_crowd.is_none() || result.wsi_smoke {
+                return Err(
+                    "World timings require camera-world crowd mode without WSI injection".into(),
+                );
+            }
+            result.benchmark_config().validate()?;
+        } else if result.world_camera_warmup.is_some() || result.world_camera_hud {
+            return Err("Camera warmup/HUD requires --world-camera-timings".into());
+        }
+        if result.world_camera {
+            let frames = *result.frames.get_or_insert(240);
+            let period = result.world_camera_period.unwrap_or(frames);
+            if !(3..=120_000).contains(&frames)
+                || !(3..=120_000).contains(&period)
+                || !(1..=4).contains(&result.world_camera_slots.unwrap_or(2))
+                || result
+                    .world_camera_crowd
+                    .is_some_and(|count| count > crate::benchmark::MAX_PLAYERS)
+                || result.world_covered_retire
+                || result.world_covered_reload
+                || result.world_covered_report.is_some()
+                || result.work_items.is_some()
+                || (result.smoke && !result.wsi_smoke)
+            {
+                return Err("Camera world owns camera/scheduling: frames/period 3..120000, fine slots 1..4; no fixed views/retirement/reload/smoke profile".into());
+            }
+        } else if result.world_camera_crowd.is_some()
+            || result.world_camera_period.is_some()
+            || result.world_camera_slots.is_some()
+            || result.world_camera_report.is_some()
+        {
+            return Err("Camera period/slots/report require --world-camera-test".into());
+        }
+        if (result.world_covered_retire && !result.world_covered)
+            || (result.world_covered_report.is_some() && !result.world_covered_retire)
+        {
+            return Err("Protected retirement requires --world-covered-test; its report requires --world-covered-retire-test".into());
+        }
+        if result.world_scene.is_some()
+            && (result.render_mode() != RenderMode::AssetResolve
+                || result.benchmark
+                || result.asset.is_some()
+                || result.bundle.is_some()
+                || result.cell.is_some()
+                || result.lod.is_some()
+                || result.fallback.is_some()
+                || result.asset_budget.is_some()
+                || result.materials.is_some()
+                || result.uvs.is_some()
+                || result.texture.is_some()
+                || result.texture_table.is_some()
+                || result.camera
+                || result.frustum
+                || result.material
+                || result.world_pair.is_some()
+                || result.world_bundle_pair.is_some()
+                || result.world_upload.is_some()
+                || result.world_descriptor_test
+                || result.network_address.is_some()
+                || result.authority_demo
+                || result.authority_alpha.is_some())
+        {
+            return Err(
+                "Four-chunk world fixture cannot combine other asset/render profiles".into(),
+            );
+        }
+        if result.world_ground_test.is_some()
+            && (result.benchmark
+                || result.asset.is_some()
+                || result.bundle.is_some()
+                || result.world_upload.is_some()
+                || result.world_scene.is_some()
+                || result.cell.is_some()
+                || result.world_pair.is_some()
+                || result.world_descriptor_test
+                || result.network_address.is_some()
+                || result.authority_demo
+                || result.smoke
+                || result.render_mode() != RenderMode::Clear)
+        {
+            return Err("Ground GPU probe cannot combine rendering workloads or recovery".into());
+        }
+        if result.world_descriptor_test
+            && (result.benchmark
+                || result.asset.is_some()
+                || result.bundle.is_some()
+                || result.world_upload.is_some()
+                || result.cell.is_some()
+                || result.world_pair.is_some()
+                || result.network_address.is_some()
+                || result.authority_demo
+                || result.smoke
+                || result.wsi_smoke
+                || result.render_mode() != RenderMode::Clear)
+        {
+            return Err(
+                "Storage descriptor probe cannot combine rendering workloads or recovery".into(),
+            );
+        }
+        if result.world_pair.is_some()
+            && (result.benchmark
+                || (result.bundle.is_some() && result.world_bundle_pair.is_none())
+                || result.world_upload.is_some()
+                || result.cell.is_some()
+                || result.camera
+                || result.frustum
+                || result.lod.is_some()
+                || result.fallback.is_some()
+                || (result.world_bundle_pair.is_none()
+                    && (result.materials.is_some()
+                        || result.uvs.is_some()
+                        || result.texture.is_some()
+                        || result.texture_table.is_some()))
+                || result.stream_bundle.is_some()
+                || result.network_address.is_some()
+                || result.render_mode() != RenderMode::AssetResolve)
+        {
+            return Err("World pair is an isolated resident geometry qualification".into());
+        }
+        if result.world_upload.is_some()
+            && (result.benchmark
+                || result.asset.is_some()
+                || result.bundle.is_some()
+                || result.cell.is_some()
+                || result.network_address.is_some()
+                || result.authority_demo
+                || result.smoke
+                || result.wsi_smoke
+                || result.render_mode() != RenderMode::Clear)
+        {
+            return Err(
+                "World upload qualification cannot combine rendering workloads or recovery probes"
+                    .into(),
+            );
+        }
+        if result.benchmark {
+            if result
+                .benchmark_width
+                .is_some_and(|v| !(64..=8192).contains(&v))
+                || result
+                    .benchmark_height
+                    .is_some_and(|v| !(64..=8192).contains(&v))
+            {
+                return Err("Benchmark extent must be 64..8192 per axis".into());
+            }
+            if (!result.benchmark_cooked
+                && (result.mode.is_some()
+                    || result.asset.is_some()
+                    || result.bundle.is_some()
+                    || result.material))
+                || result.cell.is_some()
+                || result.camera
+                || result.frustum
+                || result.work_items.is_some()
+                || result.smoke
+                || result.authority_demo
+                || result.authority_script
+                || result.authority_alpha.is_some()
+                || result.network_address.is_some()
+            {
+                return Err("Benchmark owns its scene and timeline; do not combine other lab modes or smoke injection".into());
+            }
+            if result.benchmark_cooked
+                && (result.bundle.is_none()
+                    || result.texture_table.is_none()
+                    || (!result.benchmark_mixed && result.benchmark_players.is_some())
+                    || result.lod.is_some())
+            {
+                return Err("Cooked benchmark requires an indexed --bundle; procedural player counts and geometry LOD modes are separate".into());
+            }
+            if result.benchmark_mixed && result.stream_bundle.is_some() {
+                return Err("Mixed benchmark currently uses one resident cooked bundle".into());
+            }
+            let config = result.benchmark_config();
+            config.validate()?;
+            result.frames = Some(config.frames);
+            if !result.benchmark_cooked {
+                result.mode = Some(RenderMode::Benchmark);
+            }
+        } else if result.benchmark_no_overlay
+            || (result.world_camera_timings.is_none()
+                && (result.benchmark_width.is_some() || result.benchmark_height.is_some()))
+            || result.benchmark_players.is_some()
+            || result.benchmark_warmup.is_some()
+            || result.benchmark_seconds.is_some()
+            || result.benchmark_report.is_some()
+        {
+            return Err("Benchmark options require --benchmark".into());
+        }
+        if result.benchmark_present_mode.is_some()
+            && !result.benchmark
+            && result.world_camera_timings.is_none()
+        {
+            return Err("--benchmark-present-mode requires a timed benchmark".into());
+        }
+        if result
+            .benchmark_target_hz
+            .is_some_and(|hz| !(1..=240).contains(&hz))
+            || result.benchmark_target_hz.is_some()
+                && !result.benchmark
+                && result.world_camera_timings.is_none()
+        {
+            return Err("--benchmark-target-hz requires a timed benchmark and 1..240 Hz".into());
         }
         Ok(result)
     }
@@ -115,6 +1615,10 @@ struct App {
     restore: Option<Instant>,
     failure: Option<String>,
     occluded: bool,
+    authority_demo: Option<authority_demo::Demo>,
+    authority_started: Instant,
+    network: Option<network::Viewer>,
+    network_title: Option<String>,
 }
 impl App {
     fn fail(&mut self, event_loop: &ActiveEventLoop, error: impl ToString) {
@@ -135,12 +1639,54 @@ impl ApplicationHandler for App {
             let window = Arc::new(
                 event_loop.create_window(
                     Window::default_attributes()
-                        .with_title("Theia Render Lab — M0-D mesh triangle")
-                        .with_inner_size(PhysicalSize::new(960, 540)),
+                        .with_title(if self.options.network_address.is_some() {
+                            "Theia network viewer — Connecting"
+                        } else if self.options.world_camera_timings.is_some() {
+                            "Theia — streamed MMO visual benchmark"
+                        } else if self.options.world_camera {
+                            "Theia — camera-driven fine world residency"
+                        } else if self.options.world_covered {
+                            "Theia — protected coarse world and resident fine chunks"
+                        } else if self.options.world_scene.is_some() {
+                            "Theia — four cooked world chunks"
+                        } else if self.options.benchmark_mixed {
+                            "Theia — cooked village and visual players"
+                        } else if self.options.benchmark_cooked {
+                            "Theia — cooked bundle benchmark"
+                        } else if self.options.benchmark {
+                            "Theia — MMO scene benchmark (visual proxies)"
+                        } else if self.options.authority_demo {
+                            "Theia — local authority demo (WASD/arrows, Space attack)"
+                        } else if self.options.render_mode() == RenderMode::Authority {
+                            "Theia Render Lab — authoritative snapshot fixture"
+                        } else {
+                            "Theia Render Lab — M0-D mesh triangle"
+                        })
+                        .with_inner_size(
+                            if self.options.benchmark || self.options.world_camera_timings.is_some()
+                            {
+                                PhysicalSize::new(
+                                    self.options
+                                        .benchmark_width
+                                        .unwrap_or(if self.options.benchmark { 1280 } else { 960 }),
+                                    self.options
+                                        .benchmark_height
+                                        .unwrap_or(if self.options.benchmark { 720 } else { 540 }),
+                                )
+                            } else {
+                                PhysicalSize::new(960, 540)
+                            },
+                        ),
                 )?,
             );
-            let renderer =
+            let mut renderer =
                 gpu::Renderer::new(window.clone(), &self.options, self.validation.clone())?;
+            if let Some(demo) = &self.authority_demo {
+                renderer.authority_push(demo.push()?)?;
+            }
+            if let Some(network) = &self.network {
+                renderer.authority_push(network.push()?.0)?;
+            }
             Ok((window, renderer))
         })();
         match result {
@@ -164,6 +1710,46 @@ impl ApplicationHandler for App {
                 if event.logical_key == Key::Named(NamedKey::Escape) =>
             {
                 event_loop.exit()
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                let pressed = event.state == ElementState::Pressed;
+                let binding = match event.physical_key {
+                    PhysicalKey::Code(KeyCode::KeyA) => Some(0),
+                    PhysicalKey::Code(KeyCode::KeyD) => Some(1),
+                    PhysicalKey::Code(KeyCode::KeyW) => Some(2),
+                    PhysicalKey::Code(KeyCode::KeyS) => Some(3),
+                    PhysicalKey::Code(KeyCode::ArrowLeft) => Some(4),
+                    PhysicalKey::Code(KeyCode::ArrowRight) => Some(5),
+                    PhysicalKey::Code(KeyCode::ArrowUp) => Some(6),
+                    PhysicalKey::Code(KeyCode::ArrowDown) => Some(7),
+                    _ => None,
+                };
+                if let Some(binding) = binding {
+                    if let Some(demo) = &mut self.authority_demo {
+                        demo.direction(binding, pressed);
+                    }
+                    if let Some(network) = &self.network {
+                        network.direction(binding, pressed);
+                    }
+                } else if event.physical_key == PhysicalKey::Code(KeyCode::Space)
+                    && pressed
+                    && !event.repeat
+                {
+                    if let Some(demo) = &mut self.authority_demo {
+                        demo.attack();
+                    }
+                    if let Some(network) = &self.network {
+                        network.attack();
+                    }
+                }
+            }
+            WindowEvent::Focused(false) => {
+                if let Some(demo) = &mut self.authority_demo {
+                    demo.release_input();
+                }
+                if let Some(network) = &self.network {
+                    network.release_input();
+                }
             }
             WindowEvent::Resized(size) => {
                 println!("Window resized: {}x{}", size.width, size.height);
@@ -196,7 +1782,7 @@ impl ApplicationHandler for App {
                             let _ = window.request_inner_size(PhysicalSize::new(1280, 720));
                         }
                         60 => {
-                            // Exercise zero-size handling explicitly: X11 need not report 0x0 on minimize.
+                            // Exercise zero-size handling explicitly; compositor minimize need not report 0x0.
                             match self
                                 .renderer
                                 .as_mut()
@@ -209,9 +1795,28 @@ impl ApplicationHandler for App {
                                     return;
                                 }
                             }
-                            window.set_minimized(true);
-                            self.restore = Some(Instant::now() + Duration::from_millis(300));
-                            println!("Smoke: requested minimize");
+                            match window.display_handle() {
+                                Ok(handle)
+                                    if matches!(handle.as_raw(), RawDisplayHandle::Wayland(_)) =>
+                                {
+                                    // Winit/Wayland cannot unminimize programmatically. Do not
+                                    // strand an unattended test in a hidden compositor surface.
+                                    println!(
+                                        "Smoke: Wayland minimize/restore skipped (programmatic restore unsupported); requesting resize"
+                                    );
+                                    let _ = window.request_inner_size(PhysicalSize::new(800, 600));
+                                }
+                                Ok(_) => {
+                                    window.set_minimized(true);
+                                    self.restore =
+                                        Some(Instant::now() + Duration::from_millis(300));
+                                    println!("Smoke: requested minimize");
+                                }
+                                Err(error) => {
+                                    self.fail(event_loop, error);
+                                    return;
+                                }
+                            }
                         }
                         _ => {}
                     }
@@ -221,6 +1826,22 @@ impl ApplicationHandler for App {
                     .frames
                     .is_some_and(|limit| self.frames >= limit)
                 {
+                    if let Err(error) = self.renderer.as_mut().unwrap().qualification_complete() {
+                        self.fail(event_loop, error);
+                        return;
+                    }
+                    if let Some(demo) = &self.authority_demo
+                        && let Err(error) = demo.verify()
+                    {
+                        self.fail(event_loop, error);
+                        return;
+                    }
+                    if let Some(network) = &self.network
+                        && let Err(error) = network.verify()
+                    {
+                        self.fail(event_loop, error);
+                        return;
+                    }
                     println!("Presented {} frames", self.frames);
                     event_loop.exit();
                 }
@@ -229,9 +1850,56 @@ impl ApplicationHandler for App {
         }
     }
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(demo) = &mut self.authority_demo {
+            let result = demo
+                .advance(self.authority_started.elapsed())
+                .and_then(|()| demo.push());
+            match result {
+                Ok(bytes) => {
+                    if let Some(renderer) = &mut self.renderer
+                        && let Err(error) = renderer.authority_push(bytes)
+                    {
+                        self.fail(event_loop, error);
+                        return;
+                    }
+                }
+                Err(error) => {
+                    self.fail(event_loop, error);
+                    return;
+                }
+            }
+        }
+        if let Some(network) = &self.network {
+            match network.push() {
+                Ok((bytes, title)) => {
+                    if let Some(renderer) = &mut self.renderer
+                        && let Err(error) = renderer.authority_push(bytes)
+                    {
+                        self.fail(event_loop, error);
+                        return;
+                    }
+                    if self.network_title.as_ref() != Some(&title) {
+                        if let Some(window) = &self.window {
+                            window.set_title(&format!("Theia network viewer — {title}"));
+                        }
+                        self.network_title = Some(title);
+                    }
+                }
+                Err(error) => {
+                    self.fail(event_loop, error);
+                    return;
+                }
+            }
+        }
+        let authority_deadline = self
+            .authority_demo
+            .as_ref()
+            .and_then(|demo| self.authority_started.checked_add(demo.next_tick()));
         if let Some(deadline) = self.restore {
             if Instant::now() < deadline {
-                event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
+                event_loop.set_control_flow(ControlFlow::WaitUntil(
+                    authority_deadline.map_or(deadline, |tick| tick.min(deadline)),
+                ));
                 return;
             }
             self.restore = None;
@@ -245,7 +1913,8 @@ impl ApplicationHandler for App {
                 renderer.recreate = true;
             }
         }
-        event_loop.set_control_flow(ControlFlow::Wait);
+        event_loop
+            .set_control_flow(authority_deadline.map_or(ControlFlow::Wait, ControlFlow::WaitUntil));
         if !self.occluded
             && let Some(window) = &self.window
         {
@@ -262,6 +1931,21 @@ impl ApplicationHandler for App {
 fn main() -> Result<()> {
     let options = Options::parse()?;
     let validation = Arc::new(gpu::Validation::default());
+    let authority_demo = options
+        .authority_demo
+        .then(|| authority_demo::Demo::new(options.authority_script))
+        .transpose()?;
+    let network = options
+        .network_address
+        .map(|address| {
+            network::Viewer::new(
+                address,
+                options.network_certificate.as_deref().unwrap(),
+                options.network_faults,
+                options.network_repair_test,
+            )
+        })
+        .transpose()?;
     let mut app = App {
         options,
         validation: validation.clone(),
@@ -271,6 +1955,10 @@ fn main() -> Result<()> {
         restore: None,
         failure: None,
         occluded: false,
+        authority_demo,
+        authority_started: Instant::now(),
+        network,
+        network_title: None,
     };
     let result = EventLoop::new()?.run_app(&mut app);
     app.shutdown();

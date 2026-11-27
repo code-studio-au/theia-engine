@@ -1,3 +1,4 @@
+use crate::wsi::{PresentOutcome, Probe, RecoveryProbes};
 use crate::{Options, RenderMode, Result, indirect::IndirectWork, pipeline::Pipeline};
 use ash::{Entry, vk};
 use std::{
@@ -10,7 +11,7 @@ use std::{
 };
 use winit::{
     dpi::PhysicalSize,
-    raw_window_handle::{HasDisplayHandle, HasWindowHandle},
+    raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle},
     window::Window,
 };
 const LAYER: &CStr = c"VK_LAYER_KHRONOS_validation";
@@ -98,6 +99,7 @@ struct Context {
     complete: vk::Fence,
     window: Arc<Window>,
     validation: Arc<Validation>,
+    present_mode: vk::PresentModeKHR,
 }
 impl Context {
     fn new(window: Arc<Window>, options: &Options, validation: Arc<Validation>) -> Result<Self> {
@@ -123,6 +125,9 @@ impl Context {
             complete: vk::Fence::null(),
             window,
             validation,
+            present_mode: options
+                .benchmark_present_mode
+                .unwrap_or(vk::PresentModeKHR::FIFO),
         };
         ctx.initialize(options)?;
         Ok(ctx)
@@ -218,14 +223,46 @@ impl Context {
                 self.window.window_handle()?.as_raw(),
                 None,
             )?;
+            let backend = match self.window.display_handle()?.as_raw() {
+                RawDisplayHandle::Wayland(_) => "Wayland",
+                RawDisplayHandle::Xlib(_) => "Xlib",
+                RawDisplayHandle::Xcb(_) => "Xcb",
+                RawDisplayHandle::Windows(_) => "Windows",
+                _ => "Other",
+            };
             println!(
-                "Native surface created; loader {}.{}.{}",
+                "Native surface created ({backend}); loader {}.{}.{}",
                 vk::api_version_major(version),
                 vk::api_version_minor(version),
                 vk::api_version_patch(version)
             );
         }
-        self.select_device(options.gpu.as_deref())?;
+        self.select_device(
+            options.gpu.as_deref(),
+            options.render_mode() == RenderMode::Spatial,
+            matches!(
+                options.render_mode(),
+                RenderMode::Visibility | RenderMode::AssetResolve | RenderMode::Benchmark
+            ),
+            matches!(
+                options.render_mode(),
+                RenderMode::Asset
+                    | RenderMode::AssetCamera
+                    | RenderMode::AssetCull
+                    | RenderMode::AssetLod
+                    | RenderMode::AssetResolve
+                    | RenderMode::Benchmark
+            ),
+            matches!(
+                options.render_mode(),
+                RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
+            ),
+            (
+                options.texture_auto_mips,
+                options.texture_linear_filter,
+                options.storage_array_requirement(),
+            ),
+        )?;
         // SAFETY: Features were queried on the selected device; all queue indices support the intended
         // operations. Create-info backing storage remains live and handles immediately gain RAII ownership.
         unsafe {
@@ -255,7 +292,10 @@ impl Context {
                 .buffer_device_address(true)
                 .runtime_descriptor_array(true)
                 .descriptor_binding_partially_bound(true)
-                .shader_sampled_image_array_non_uniform_indexing(true);
+                .shader_sampled_image_array_non_uniform_indexing(true)
+                .shader_storage_buffer_array_non_uniform_indexing(
+                    options.storage_array_requirement() != 0,
+                );
             let mut v13 = vk::PhysicalDeviceVulkan13Features::default()
                 .dynamic_rendering(true)
                 .synchronization2(true);
@@ -264,10 +304,16 @@ impl Context {
                 .mesh_shader(true);
             let mut maintenance = vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
                 .swapchain_maintenance1(true);
+            let core_features = vk::PhysicalDeviceFeatures::default()
+                .fragment_stores_and_atomics(options.texture_auto_mips)
+                .shader_storage_buffer_array_dynamic_indexing(
+                    options.storage_array_requirement() != 0,
+                );
             self.device = Some(
                 instance.create_device(
                     self.physical,
                     &vk::DeviceCreateInfo::default()
+                        .enabled_features(&core_features)
                         .queue_create_infos(&queues)
                         .enabled_extension_names(&extensions)
                         .push_next(&mut v12)
@@ -301,7 +347,17 @@ impl Context {
         }
         Ok(())
     }
-    fn select_device(&mut self, requested: Option<&str>) -> Result<()> {
+    fn select_device(
+        &mut self,
+        requested: Option<&str>,
+        spatial: bool,
+        visibility: bool,
+        asset: bool,
+        cull: bool,
+        optional_profiles: (bool, bool, u32),
+    ) -> Result<()> {
+        let (footprint, linear_filter, storage_requirement) = optional_profiles;
+        let storage_arrays = storage_requirement != 0;
         let instance = self.instance.as_ref().unwrap();
         let surface = self.surface_loader.as_ref().unwrap();
         let mut candidates = Vec::new();
@@ -329,13 +385,63 @@ impl Context {
                     .push_next(&mut mesh)
                     .push_next(&mut maintenance);
                 instance.get_physical_device_features2(physical, &mut features);
+                let storage_dynamic = features
+                    .features
+                    .shader_storage_buffer_array_dynamic_indexing
+                    == vk::TRUE;
+                let fragment_stores = features.features.fragment_stores_and_atomics == vk::TRUE;
                 let extensions = instance.enumerate_device_extension_properties(physical)?;
+                let visibility_formats = !visibility
+                    || [
+                        (
+                            vk::Format::R32G32_UINT,
+                            vk::FormatFeatureFlags::COLOR_ATTACHMENT
+                                | vk::FormatFeatureFlags::SAMPLED_IMAGE,
+                        ),
+                        (
+                            vk::Format::R8G8B8A8_UNORM,
+                            vk::FormatFeatureFlags::SAMPLED_IMAGE
+                                | vk::FormatFeatureFlags::TRANSFER_DST,
+                        ),
+                        (
+                            vk::Format::D32_SFLOAT,
+                            vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT
+                                | vk::FormatFeatureFlags::SAMPLED_IMAGE,
+                        ),
+                    ]
+                    .iter()
+                    .all(|(format, required)| {
+                        instance
+                            .get_physical_device_format_properties(physical, *format)
+                            .optimal_tiling_features
+                            .contains(*required)
+                    });
                 println!(
                     "GPU candidate: {name}; driver {} / {}",
                     CStr::from_ptr(driver.driver_name.as_ptr()).to_string_lossy(),
                     CStr::from_ptr(driver.driver_info.as_ptr()).to_string_lossy()
                 );
                 let checks = [
+                    (
+                        "optional sRGB linear sampling",
+                        !linear_filter
+                            || instance
+                                .get_physical_device_format_properties(
+                                    physical,
+                                    vk::Format::R8G8B8A8_SRGB,
+                                )
+                                .optimal_tiling_features
+                                .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR),
+                    ),
+                    (
+                        "optional footprint probe profile",
+                        !footprint
+                            || (fragment_stores
+                                && properties.limits.max_per_stage_descriptor_storage_buffers >= 4
+                                && properties.limits.max_descriptor_set_storage_buffers >= 4
+                                && properties.limits.max_storage_buffer_range >= 3888),
+                    ),
+                    ("visibility identity/depth formats", visibility_formats),
                     ("Vulkan 1.3", properties.api_version >= vk::API_VERSION_1_3),
                     (
                         "VK_KHR_swapchain",
@@ -347,11 +453,22 @@ impl Context {
                     ),
                     ("meshShader", mesh.mesh_shader == vk::TRUE),
                     (
-                        "triangle mesh limits",
-                        limits.max_mesh_work_group_invocations >= 32
-                            && limits.max_mesh_work_group_size[0] >= 32
-                            && limits.max_mesh_output_vertices >= 3
-                            && limits.max_mesh_output_primitives >= 1,
+                        "mesh output/invocation limits",
+                        limits.max_mesh_work_group_invocations >= if asset { 64 } else { 32 }
+                            && limits.max_mesh_work_group_size[0] >= if asset { 64 } else { 32 }
+                            && limits.max_mesh_output_vertices
+                                >= if visibility && asset {
+                                    192
+                                } else if asset {
+                                    64
+                                } else {
+                                    3
+                                }
+                            && limits.max_mesh_output_primitives >= if asset { 64 } else { 1 }
+                            && (!asset
+                                || (limits.max_mesh_output_memory_size
+                                    >= if visibility && asset { 8192 } else { 4096 }
+                                    && limits.max_mesh_output_components >= 7)),
                     ),
                     ("taskShader", mesh.task_shader == vk::TRUE),
                     (
@@ -361,10 +478,43 @@ impl Context {
                             && limits.max_task_payload_size >= 20
                             && limits.max_task_payload_and_shared_memory_size >= 20
                             && limits.max_mesh_payload_and_shared_memory_size >= 20
-                            && limits.max_mesh_work_group_count[0] >= 2
-                            && limits.max_mesh_work_group_total_count >= 2,
+                            && limits.max_mesh_work_group_count[0]
+                                >= if spatial || asset { 32 } else { 2 }
+                            && limits.max_mesh_work_group_total_count
+                                >= if spatial || asset { 32 } else { 2 },
+                    ),
+                    (
+                        "spatial compute limits",
+                        !spatial
+                            || (properties.limits.max_compute_work_group_invocations >= 64
+                                && properties.limits.max_compute_work_group_size[0] >= 64
+                                && properties.limits.max_compute_shared_memory_size >= 524
+                                && properties.limits.max_storage_buffer_range >= 9728),
+                    ),
+                    (
+                        "optional storage-array profile requirements",
+                        !storage_arrays
+                            || (storage_dynamic
+                                && v12.shader_storage_buffer_array_non_uniform_indexing
+                                    == vk::TRUE
+                                && properties.limits.max_per_stage_descriptor_storage_buffers
+                                    >= storage_requirement
+                                && properties.limits.max_descriptor_set_storage_buffers
+                                    >= storage_requirement
+                                && properties.limits.max_storage_buffer_range >= 256
+                                && properties.limits.max_compute_work_group_invocations >= 64
+                                && properties.limits.max_compute_work_group_size[0] >= 64),
                     ),
                     ("dynamicRendering", v13.dynamic_rendering == vk::TRUE),
+                    (
+                        "meshlet cull compute limits",
+                        !cull
+                            || (properties.limits.max_compute_work_group_invocations >= 32
+                                && properties.limits.max_compute_work_group_size[0] >= 32
+                                && properties.limits.max_compute_shared_memory_size >= 8
+                                && properties.limits.max_storage_buffer_range >= 256
+                                && properties.limits.max_push_constants_size >= 64),
+                    ),
                     ("synchronization2", v13.synchronization2 == vk::TRUE),
                     ("timelineSemaphore", v12.timeline_semaphore == vk::TRUE),
                     ("drawIndirectCount", v12.draw_indirect_count == vk::TRUE),
@@ -463,6 +613,14 @@ impl Context {
         self.physical = physical;
         self.graphics_family = graphics;
         self.present_family = present;
+        if linear_filter {
+            // SAFETY: The selected physical device belongs to this live instance.
+            let limits = unsafe { instance.get_physical_device_properties(physical) }.limits;
+            println!(
+                "Texture filter precision: {} fraction bits",
+                limits.sub_texel_precision_bits
+            );
+        }
         println!(
             "Selected GPU: {name}; graphics/compute family {graphics}, present family {present}; presentation-fence retirement enabled"
         );
@@ -518,6 +676,8 @@ struct Swapchain {
     pending: Vec<bool>,
     extent: vk::Extent2D,
     pipeline: Option<Pipeline>,
+    visibility: Option<crate::visibility::Target>,
+    depth: Option<crate::visibility::Image>,
 }
 fn choose_extent(
     capabilities: &vk::SurfaceCapabilitiesKHR,
@@ -550,6 +710,7 @@ impl Swapchain {
         shader_dir: Option<&std::path::Path>,
         mode: RenderMode,
         descriptor_layout: Option<vk::DescriptorSetLayout>,
+        resolve_buffers: crate::visibility::ResolveBuffers,
     ) -> Result<Option<Self>> {
         let device = ctx.device.as_ref().unwrap();
         let surface = ctx.surface_loader.as_ref().unwrap();
@@ -566,6 +727,15 @@ impl Swapchain {
                 .contains(vk::ImageUsageFlags::COLOR_ATTACHMENT)
             {
                 return Err("Surface does not support color attachments".into());
+            }
+            let present_modes =
+                surface.get_physical_device_surface_present_modes(ctx.physical, ctx.surface)?;
+            if !present_modes.contains(&ctx.present_mode) {
+                return Err(format!(
+                    "Requested present mode {:?} is unsupported; available: {:?}; no fallback",
+                    ctx.present_mode, present_modes
+                )
+                .into());
             }
             let formats = surface.get_physical_device_surface_formats(ctx.physical, ctx.surface)?;
             let mut format = *formats
@@ -603,7 +773,7 @@ impl Swapchain {
                 .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
                 .pre_transform(capabilities.current_transform)
                 .composite_alpha(alpha)
-                .present_mode(vk::PresentModeKHR::FIFO)
+                .present_mode(ctx.present_mode)
                 .clipped(true)
                 .old_swapchain(old);
             if ctx.graphics_family == ctx.present_family {
@@ -626,15 +796,62 @@ impl Swapchain {
                 pending: Vec::new(),
                 extent,
                 pipeline: None,
+                visibility: None,
+                depth: None,
             };
             if let Some(shader_dir) = shader_dir {
-                chain.pipeline = Some(Pipeline::new(
-                    device,
-                    format.format,
-                    shader_dir,
+                if matches!(
                     mode,
-                    descriptor_layout,
-                )?);
+                    RenderMode::AssetCamera | RenderMode::AssetCull | RenderMode::AssetLod
+                ) {
+                    let instance = ctx.instance.as_ref().unwrap();
+                    if !instance
+                        .get_physical_device_format_properties(ctx.physical, vk::Format::D32_SFLOAT)
+                        .optimal_tiling_features
+                        .contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
+                    {
+                        return Err("Camera mode requires D32 depth attachment support".into());
+                    }
+                    let memory = instance.get_physical_device_memory_properties(ctx.physical);
+                    chain.depth = Some(crate::visibility::Image::new(
+                        device,
+                        &memory,
+                        extent,
+                        vk::Format::D32_SFLOAT,
+                        vk::ImageAspectFlags::DEPTH,
+                        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+                    )?);
+                }
+                if matches!(
+                    mode,
+                    RenderMode::Visibility | RenderMode::AssetResolve | RenderMode::Benchmark
+                ) {
+                    let memory = ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_memory_properties(ctx.physical);
+                    chain.visibility = Some(crate::visibility::Target::new(
+                        device,
+                        &memory,
+                        extent,
+                        format.format,
+                        shader_dir,
+                        (
+                            descriptor_layout.ok_or("Visibility mode needs GPU work layout")?,
+                            resolve_buffers,
+                        ),
+                        mode == RenderMode::AssetResolve,
+                    )?);
+                } else {
+                    chain.pipeline = Some(Pipeline::new(
+                        device,
+                        format.format,
+                        shader_dir,
+                        mode,
+                        descriptor_layout,
+                    )?);
+                }
             }
             chain.images = chain.loader.get_swapchain_images(handle)?;
             for &image in &chain.images {
@@ -657,10 +874,11 @@ impl Swapchain {
                 chain.pending.push(false);
             }
             println!(
-                "Swapchain: {}x{}, {:?}, FIFO, {} images",
+                "Swapchain: {}x{}, {:?}, {:?}, {} images",
                 extent.width,
                 extent.height,
                 format.format,
+                ctx.present_mode,
                 chain.images.len()
             );
             Ok(Some(chain))
@@ -711,6 +929,12 @@ impl Drop for Swapchain {
         }
     }
 }
+fn descriptor(buffer: &crate::asset::Buffer) -> vk::DescriptorBufferInfo {
+    vk::DescriptorBufferInfo::default()
+        .buffer(buffer.handle)
+        .offset(buffer.offset)
+        .range(buffer.bytes)
+}
 fn color_range() -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange::default()
         .aspect_mask(vk::ImageAspectFlags::COLOR)
@@ -721,7 +945,28 @@ pub struct Renderer {
     // Rust drops fields in declaration order after Drop::drop. Keep graphics children
     // before work resources, and their device-owning context last as a lifetime backstop.
     chain: Option<Swapchain>,
+    stream: Option<crate::streaming::Stream>,
+    bundle_stream: Option<crate::bundle_streaming::Stream>,
+    texture_refinement: Option<crate::texture_refinement::Refinement>,
+    benchmark: Option<crate::benchmark::Recorder>,
     work: Option<IndirectWork>,
+    proxy_work: Option<IndirectWork>,
+    ground_table: Option<crate::asset::Buffer>,
+    world_crowd: Option<u32>,
+    world_work: Option<IndirectWork>,
+    world_resources: Option<crate::world_upload::PresentationSet>,
+    scene: Option<crate::world_scene::Scene>,
+    lod: Option<crate::indirect::Lod>,
+    materials: Option<crate::asset::Buffer>,
+    uvs: Option<crate::asset::Buffer>,
+    texture: Option<crate::texture::ResidentTexture>,
+    textures: Vec<crate::texture::ResidentTexture>,
+    texture_table: Option<crate::asset::Buffer>,
+    footprint: Option<crate::asset::Buffer>,
+    texture_tail: Option<[u32; 4]>,
+    world_cpu: Option<theia_assets::bundle_residency::WorldResidency>,
+    world_stream: Option<crate::world_streaming::Stream>,
+    authority: Option<[u8; 64]>,
     pub recreate: bool,
     generations: u64,
     shader_dir: Option<std::path::PathBuf>,
@@ -730,6 +975,7 @@ pub struct Renderer {
     cycle_work: bool,
     presented: u64,
     last_input: Option<u32>,
+    probes: RecoveryProbes,
     ctx: Context,
 }
 impl Renderer {
@@ -739,24 +985,495 @@ impl Renderer {
         validation: Arc<Validation>,
     ) -> Result<Self> {
         let ctx = Context::new(window, options, validation)?;
+        if let Some(path) = &options.world_upload {
+            // SAFETY: Context owns the selected live physical device and instance.
+            let (memory, limits, image_limits) = unsafe {
+                let instance = ctx.instance.as_ref().unwrap();
+                (
+                    instance.get_physical_device_memory_properties(ctx.physical),
+                    instance.get_physical_device_properties(ctx.physical).limits,
+                    instance.get_physical_device_image_format_properties(
+                        ctx.physical,
+                        vk::Format::R8G8B8A8_SRGB,
+                        vk::ImageType::TYPE_2D,
+                        vk::ImageTiling::OPTIMAL,
+                        vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                        vk::ImageCreateFlags::empty(),
+                    )?,
+                )
+            };
+            crate::world_upload::qualify(
+                path,
+                crate::bundle_streaming::Gpu {
+                    device: ctx.device.as_ref().unwrap(),
+                    memory: &memory,
+                    family: ctx.graphics_family,
+                    queue: ctx.graphics,
+                    limits,
+                    image_limits,
+                },
+            )?;
+        }
+
+        if options.world_descriptor_test {
+            // SAFETY: Context retains the selected physical device and instance.
+            let (memory, limits) = unsafe {
+                let instance = ctx.instance.as_ref().unwrap();
+                (
+                    instance.get_physical_device_memory_properties(ctx.physical),
+                    instance.get_physical_device_properties(ctx.physical).limits,
+                )
+            };
+            let shaders = options.shader_dir.clone().unwrap_or_else(|| {
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/shaders")
+            });
+            crate::world_descriptors::qualify(
+                ctx.device.as_ref().unwrap(),
+                &memory,
+                ctx.graphics_family,
+                ctx.graphics,
+                &shaders,
+                limits,
+            )?;
+        }
+
+        if let Some((scene, points, report)) = &options.world_ground_test {
+            // SAFETY: Context retains the selected physical device and instance.
+            let (memory, limits) = unsafe {
+                let instance = ctx.instance.as_ref().unwrap();
+                (
+                    instance.get_physical_device_memory_properties(ctx.physical),
+                    instance.get_physical_device_properties(ctx.physical).limits,
+                )
+            };
+            let shaders = options.shader_dir.clone().unwrap_or_else(|| {
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/shaders")
+            });
+            crate::world_ground_gpu::qualify(
+                ctx.device.as_ref().unwrap(),
+                &memory,
+                ctx.graphics_family,
+                ctx.graphics,
+                &shaders,
+                (scene, points, report),
+                limits,
+            )?;
+        }
+
         let mut renderer = Self {
+            authority: if options.render_mode() == RenderMode::Authority {
+                Some(
+                    if options.authority_demo || options.network_address.is_some() {
+                        [0; 64]
+                    } else {
+                        crate::authority::fixture(options.authority_alpha.unwrap_or(0.5))?.bytes
+                    },
+                )
+            } else {
+                None
+            },
             ctx,
             chain: None,
+            stream: None,
+            bundle_stream: None,
+            texture_refinement: None,
+            benchmark: None,
             recreate: true,
             generations: 0,
             mode: options.render_mode(),
             work: None,
+            proxy_work: None,
+            ground_table: None,
+            world_crowd: options.world_camera_crowd,
+            world_work: None,
+            world_resources: None,
+            scene: None,
+            world_cpu: None,
+            world_stream: None,
+            lod: None,
+            materials: None,
+            uvs: None,
+            texture: None,
+            textures: Vec::new(),
+            texture_table: None,
+            footprint: None,
+            texture_tail: None,
             work_items: options.work_items.unwrap_or(2),
-            cycle_work: options.smoke,
+            cycle_work: options.smoke && !options.world_camera,
             presented: 0,
             last_input: None,
+            probes: RecoveryProbes::new(options.wsi_smoke),
             shader_dir: (options.render_mode() != RenderMode::Clear).then(|| {
                 options.shader_dir.clone().unwrap_or_else(|| {
                     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/shaders")
                 })
             }),
         };
-        if renderer.mode == RenderMode::Indirect {
+        if options.benchmark || options.world_camera_timings.is_some() {
+            // SAFETY: Live selected physical device; properties and queue family are immutable.
+            let (properties, mesh_limits, bits) = unsafe {
+                let instance = renderer.ctx.instance.as_ref().unwrap();
+                let mut mesh_limits = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
+                let mut properties =
+                    vk::PhysicalDeviceProperties2::default().push_next(&mut mesh_limits);
+                instance.get_physical_device_properties2(renderer.ctx.physical, &mut properties);
+                let queues =
+                    instance.get_physical_device_queue_family_properties(renderer.ctx.physical);
+                (
+                    properties.properties,
+                    mesh_limits,
+                    queues[renderer.ctx.graphics_family as usize].timestamp_valid_bits,
+                )
+            };
+            let count = options.benchmark_config().players + crate::benchmark::STATIC_OBJECTS;
+            if (renderer.mode == RenderMode::Benchmark || options.benchmark_mixed)
+                && ((properties.limits.max_storage_buffer_range as u64)
+                    < crate::benchmark::WORK_BYTES
+                    || properties.limits.max_push_constants_size < 96
+                    || mesh_limits.max_task_work_group_count[0] < count
+                    || mesh_limits.max_task_work_group_total_count < count
+                    || properties.limits.max_compute_work_group_count[0] < count.div_ceil(64)
+                    || mesh_limits.max_mesh_output_vertices < 48
+                    || mesh_limits.max_mesh_output_primitives < 16)
+            {
+                return Err(
+                    "Selected device cannot support bounded benchmark work/mesh limits".into(),
+                );
+            }
+            if options.benchmark_mixed
+                && (properties.limits.max_per_stage_descriptor_storage_buffers < 5
+                    || properties.limits.max_descriptor_set_storage_buffers < 5)
+            {
+                return Err("Mixed benchmark requires five fragment storage buffers".into());
+            }
+            let hud_storage = 5 + u32::from(options.benchmark_mixed);
+            if options.benchmark_cooked
+                && options.benchmark_config().overlay
+                && (properties.limits.max_push_constants_size < 112
+                    || properties.limits.max_per_stage_descriptor_storage_buffers < hud_storage
+                    || properties.limits.max_descriptor_set_storage_buffers < hud_storage)
+            {
+                return Err("Cooked debug HUD exceeds push/storage limits for this workload; use --benchmark-no-overlay on this device".into());
+            }
+            // SAFETY: Vulkan's fixed device name is null terminated.
+            let name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) }
+                .to_string_lossy()
+                .into_owned();
+            let mut metadata = serde_json::json!({"device":name,"vendor_id":properties.vendor_id,"device_id":properties.device_id,"driver_version":properties.driver_version,"api_version":properties.api_version,"timestamp_period_ns":properties.limits.timestamp_period,"timestamp_valid_bits":bits,"validation":!options.no_validation,"debug_assertions":cfg!(debug_assertions),"work_requested_bytes":crate::benchmark::WORK_BYTES,"shader_dir":renderer.shader_dir});
+            metadata["present_mode"] =
+                serde_json::json!(format!("{:?}", renderer.ctx.present_mode).to_lowercase());
+            metadata["present_mode_evidence"] = serde_json::json!(
+                "surface support queried and exact mode passed to every Vulkan swapchain creation; unsupported requests fail"
+            );
+            metadata["scene_kind"] = serde_json::json!(if options.world_camera_timings.is_some() {
+                "streamed-world"
+            } else if options.benchmark_mixed {
+                "mixed-world"
+            } else if options.benchmark_cooked {
+                "cooked-bundle"
+            } else {
+                "procedural"
+            });
+            if options.benchmark_cooked {
+                metadata["work_requested_bytes"] = serde_json::Value::Null;
+                metadata["initial_bundle"] = serde_json::json!(options.bundle);
+                metadata["replacement_bundle"] = serde_json::json!(options.stream_bundle);
+                metadata["streaming"] = serde_json::json!(options.stream_bundle.is_some());
+                metadata["bundle_cpu_budget"] =
+                    serde_json::json!(options.bundle_byte_budget.unwrap_or(64 * 1024 * 1024));
+                metadata["bundle_gpu_budget"] =
+                    serde_json::json!(options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024));
+                metadata["texture_image_budget"] = serde_json::json!(
+                    options
+                        .texture_budget
+                        .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64)
+                );
+                metadata["tracked_allocation_scope"] = serde_json::json!(
+                    "work and render targets; active/pending cooked buffers/images are charged separately by bundle budgets and excluded from this frame metric"
+                );
+            }
+            if options.benchmark_mixed {
+                metadata["proxy_work_requested_bytes"] =
+                    serde_json::json!(crate::benchmark::WORK_BYTES);
+                metadata["proxy_ground_model"] = serde_json::json!(
+                    "fixed 16-metre triangular grid, bounded whole-world fixture"
+                );
+                metadata["visibility_identity"] = serde_json::json!(
+                    "frame-local bit31 marks visual proxies; lower31 stores dense id+1; zero background"
+                );
+            }
+            if options.world_camera_timings.is_some() {
+                metadata["hud_fragment_storage_buffers"] =
+                    serde_json::json!(if options.world_camera_hud { 21 } else { 16 });
+                metadata["hud_scope"]="current GPU meshlet/proxy counts; completed timing samples; asset MiB includes current/pending/table, draw MiB is work/offscreen targets".into();
+                metadata["camera_route_frames"] = serde_json::json!(
+                    options
+                        .world_camera_period
+                        .unwrap_or(options.frames.unwrap_or(240))
+                );
+                metadata["streaming"] = true.into();
+                metadata["world_scene"] = serde_json::json!(options.world_scene);
+                metadata["warmup_scope"]="exclude timing samples from summaries; camera/demand/proxy clock starts at frame zero".into();
+                metadata["logical_duration_scope"] =
+                    "60 seconds per route; repeated periods reset camera/proxy time".into();
+                metadata["gpu_timestamp_scope"]="frame compute/visibility/resolve only; excludes upload submissions and graphics-generation retirement before recording".into();
+                metadata["cpu_timing_scope"]="draw wall includes polling, synchronous upload submission/waits and generation rebuilds; background worker CPU time is not measured".into();
+                metadata["tracked_allocation_scope"]="work arenas and owned offscreen targets; excludes graph/query table, staging, swapchain and driver allocations".into();
+                metadata["work_requested_bytes"] =
+                    serde_json::json!(4 * 256 + crate::benchmark::WORK_BYTES);
+                metadata["bundle_cpu_budget"] =
+                    serde_json::json!(options.bundle_byte_budget.unwrap_or(64 * 1024 * 1024));
+                metadata["aggregate_gpu_budget"] =
+                    serde_json::json!(options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024));
+                metadata["image_gpu_budget"] =
+                    serde_json::json!(options.texture_budget.unwrap_or(4 * 1024 * 1024));
+            }
+            renderer.benchmark = Some(crate::benchmark::Recorder::new(
+                renderer.ctx.device.as_ref().unwrap(),
+                options.benchmark_config(),
+                properties.limits.timestamp_period,
+                bits,
+                metadata,
+                options.benchmark_target_hz,
+            )?);
+        }
+        if renderer.mode == RenderMode::Authority {
+            let mut mesh = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
+            let mut props = vk::PhysicalDeviceProperties2::default().push_next(&mut mesh);
+            // SAFETY: Physical device/instance are retained by the context; writable chain is live.
+            unsafe {
+                renderer
+                    .ctx
+                    .instance
+                    .as_ref()
+                    .unwrap()
+                    .get_physical_device_properties2(renderer.ctx.physical, &mut props);
+            }
+            if props.properties.limits.max_push_constants_size < 64
+                || mesh.max_mesh_output_vertices < 4
+                || mesh.max_mesh_output_primitives < 2
+                || mesh.max_mesh_work_group_count[0] < 3
+                || mesh.max_mesh_work_group_total_count < 3
+                || mesh.max_mesh_output_memory_size < 4 * 28 + 2 * 12
+                || mesh.max_mesh_output_components < 7
+            {
+                return Err("Device cannot support bounded authority mesh/push profile".into());
+            }
+        }
+        if let Some(path) = &options.world_scene {
+            // SAFETY: Context retains the selected physical device and instance.
+            let (memory, limits, image_limits) = unsafe {
+                let instance = renderer.ctx.instance.as_ref().unwrap();
+                (
+                    instance.get_physical_device_memory_properties(renderer.ctx.physical),
+                    instance
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits,
+                    instance.get_physical_device_image_format_properties(
+                        renderer.ctx.physical,
+                        vk::Format::R8G8B8A8_SRGB,
+                        vk::ImageType::TYPE_2D,
+                        vk::ImageTiling::OPTIMAL,
+                        vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                        vk::ImageCreateFlags::empty(),
+                    )?,
+                )
+            };
+            let mut world_gpu_budget = options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024);
+            if let Some(players) = options.world_camera_crowd {
+                // SAFETY: Context owns the selected physical device for this query.
+                let mut mesh = vk::PhysicalDeviceMeshShaderPropertiesEXT::default();
+                let mut properties = vk::PhysicalDeviceProperties2::default().push_next(&mut mesh);
+                unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties2(renderer.ctx.physical, &mut properties);
+                }
+                if (limits.max_storage_buffer_range as u64) < crate::benchmark::WORK_BYTES
+                    || limits.max_push_constants_size < 96
+                    || mesh.max_task_work_group_count[0] < players
+                    || mesh.max_task_work_group_total_count < players
+                    || mesh.max_mesh_output_vertices < 48
+                    || mesh.max_mesh_output_primitives < 16
+                {
+                    return Err("Camera crowd exceeds benchmark work/mesh limits".into());
+                }
+                let bytes = crate::world_ground::table(path)?;
+                renderer.ground_table = Some(crate::asset::Buffer::upload(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    &bytes,
+                    renderer.ctx.graphics_family,
+                    renderer.ctx.graphics,
+                    world_gpu_budget,
+                    None,
+                )?);
+                let table = renderer.ground_table.as_ref().unwrap();
+                world_gpu_budget = world_gpu_budget
+                    .checked_sub(table.allocated_bytes)
+                    .ok_or("Camera crowd ground table exceeds physical cap")?;
+                renderer.proxy_work = Some(IndirectWork::world_proxies(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    renderer.shader_dir.as_deref().unwrap(),
+                    descriptor(table),
+                )?);
+                println!(
+                    "Camera crowd persistent ground allocation: {}",
+                    serde_json::json!({"players":players,"encoded_bytes":bytes.len(),"physical_bytes":table.allocated_bytes,"world_graph_gpu_budget":world_gpu_budget,"aggregate_gpu_budget":options.bundle_gpu_budget.unwrap_or(32*1024*1024),"work_bytes_excluded":crate::benchmark::WORK_BYTES})
+                );
+            }
+            if options.world_camera_hud
+                && (limits.max_push_constants_size < 128
+                    || limits.max_per_stage_resources < crate::world_scene::MAX_IMAGES as u32 + 27)
+            {
+                return Err("Streamed HUD exceeds 128-byte push/resource limits".into());
+            }
+            renderer.scene = Some(crate::world_scene::Scene::load(
+                path,
+                crate::bundle_streaming::Gpu {
+                    device: renderer.ctx.device.as_ref().unwrap(),
+                    memory: &memory,
+                    family: renderer.ctx.graphics_family,
+                    queue: renderer.ctx.graphics,
+                    limits,
+                    image_limits,
+                },
+                renderer.shader_dir.as_deref().unwrap(),
+                (
+                    options.bundle_byte_budget.unwrap_or(64 * 1024 * 1024),
+                    world_gpu_budget,
+                    options.texture_budget.unwrap_or(4 * 1024 * 1024),
+                ),
+                options.world_covered,
+                options.world_camera,
+            )?);
+            if options.world_covered_retire {
+                renderer
+                    .scene
+                    .as_mut()
+                    .unwrap()
+                    .enable_retirement(options.world_covered_report.clone())?;
+            }
+            if options.world_covered_reload {
+                renderer.scene.as_mut().unwrap().enable_reload(
+                    [
+                        world_gpu_budget,
+                        options.texture_budget.unwrap_or(4 * 1024 * 1024),
+                    ],
+                    crate::bundle_streaming::Gpu {
+                        device: renderer.ctx.device.as_ref().unwrap(),
+                        memory: &memory,
+                        family: renderer.ctx.graphics_family,
+                        queue: renderer.ctx.graphics,
+                        limits,
+                        image_limits,
+                    },
+                )?;
+            }
+            if options.world_camera {
+                renderer.scene.as_mut().unwrap().enable_camera(
+                    (
+                        options
+                            .world_camera_period
+                            .unwrap_or(options.frames.unwrap_or(240)),
+                        options.world_camera_slots.unwrap_or(2),
+                        options.world_camera_report.clone(),
+                    ),
+                    [
+                        world_gpu_budget,
+                        options.texture_budget.unwrap_or(4 * 1024 * 1024),
+                    ],
+                    crate::bundle_streaming::Gpu {
+                        device: renderer.ctx.device.as_ref().unwrap(),
+                        memory: &memory,
+                        family: renderer.ctx.graphics_family,
+                        queue: renderer.ctx.graphics,
+                        limits,
+                        image_limits,
+                    },
+                    renderer
+                        .ground_table
+                        .as_ref()
+                        .map_or(0, |v| v.allocated_bytes),
+                )?;
+            }
+        } else if let Some(second) = &options.world_bundle_pair {
+            // SAFETY: Context retains this selected physical device and instance.
+            let (memory, limits, image_limits) = unsafe {
+                let instance = renderer.ctx.instance.as_ref().unwrap();
+                (
+                    instance.get_physical_device_memory_properties(renderer.ctx.physical),
+                    instance
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits,
+                    instance.get_physical_device_image_format_properties(
+                        renderer.ctx.physical,
+                        vk::Format::R8G8B8A8_SRGB,
+                        vk::ImageType::TYPE_2D,
+                        vk::ImageTiling::OPTIMAL,
+                        vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                        vk::ImageCreateFlags::empty(),
+                    )?,
+                )
+            };
+            let pair = crate::world_upload::resident_pair(
+                [options.bundle.as_deref().unwrap(), second],
+                crate::bundle_streaming::Gpu {
+                    device: renderer.ctx.device.as_ref().unwrap(),
+                    memory: &memory,
+                    family: renderer.ctx.graphics_family,
+                    queue: renderer.ctx.graphics,
+                    limits,
+                    image_limits,
+                },
+                renderer.shader_dir.as_deref().unwrap(),
+                options.bundle_byte_budget.unwrap_or(64 * 1024 * 1024),
+                options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
+                options.texture_budget.unwrap_or(4 * 1024 * 1024),
+            )?;
+            let [primary, secondary] = pair.work;
+            let [first, secondary_resources] = pair.resources;
+            renderer.work = Some(primary);
+            renderer.world_work = Some(secondary);
+            renderer.materials = Some(first.materials);
+            renderer.uvs = Some(first.uvs);
+            renderer.texture_table = Some(first.table);
+            renderer.textures = first.images;
+            renderer.world_resources = Some(secondary_resources);
+            renderer.world_cpu = Some(pair.cpu);
+            if let Some(replacement) = &options.world_stream_bundle {
+                renderer.world_stream = Some(crate::world_streaming::Stream::new(
+                    renderer.world_cpu.take().unwrap(),
+                    [second.clone(), replacement.clone()],
+                    renderer.textures.len() as u32,
+                    [
+                        options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
+                        options.texture_budget.unwrap_or(4 * 1024 * 1024),
+                    ],
+                    options.world_stream_report.clone(),
+                )?);
+            }
+
+            println!(
+                "Resident pair renderer allocation ledger: {}",
+                renderer.bundle_resource_bytes()
+            );
+        } else if matches!(
+            renderer.mode,
+            RenderMode::Indirect
+                | RenderMode::Spatial
+                | RenderMode::Visibility
+                | RenderMode::Asset
+                | RenderMode::AssetCamera
+                | RenderMode::AssetCull
+                | RenderMode::AssetLod
+                | RenderMode::AssetResolve
+                | RenderMode::Benchmark
+        ) {
             // SAFETY: The selected physical device belongs to the retained live instance.
             let memory = unsafe {
                 renderer
@@ -766,14 +1483,797 @@ impl Renderer {
                     .unwrap()
                     .get_physical_device_memory_properties(renderer.ctx.physical)
             };
+            let lod_pair = options
+                .lod
+                .as_ref()
+                .map(|(fine, coarse)| crate::lod_reference::load(fine, coarse))
+                .transpose()?;
+            if let Some(pair) = &lod_pair {
+                renderer.lod = Some(crate::indirect::Lod {
+                    bounds: pair.bounds,
+                    error: pair.error,
+                    pixels: options.lod_pixels.unwrap_or(6.),
+                    extent: [0; 2],
+                    entry_fraction: if options.lod_hysteresis_test {
+                        0.2
+                    } else {
+                        options.lod_hysteresis.unwrap_or(0.)
+                    },
+                    reset: true,
+                    test_trajectory: options.lod_hysteresis_test,
+                });
+            }
+            let cell_asset = if let Some(path) = &options.cell {
+                let (stream, bytes) = crate::streaming::Stream::new(
+                    path,
+                    options.resident_budget.unwrap_or(16 * 1024 * 1024),
+                )?;
+                renderer.stream = Some(stream);
+                Some(bytes)
+            } else {
+                None
+            };
+            let asset = if let Some(pair) = &lod_pair {
+                Some(pair.fine.clone())
+            } else {
+                options
+                    .asset
+                    .as_deref()
+                    .map(|path| {
+                        crate::asset::select(
+                            path,
+                            options.fallback.as_deref(),
+                            options.asset_budget.unwrap_or(theia_assets::DEFAULT_BUDGET),
+                        )
+                    })
+                    .transpose()?
+                    .or(cell_asset)
+            };
+            if let Some(bytes) = &asset {
+                // SAFETY: Selected physical device belongs to the retained live instance.
+                let limits = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits
+                };
+                if let Some(pair) = &lod_pair
+                    && (pair.coarse.len() > limits.max_storage_buffer_range as usize
+                        || limits.max_push_constants_size < 112
+                        || limits.max_per_stage_descriptor_storage_buffers < 3
+                        || limits.max_descriptor_set_storage_buffers < 3)
+                {
+                    return Err("GPU LOD requires 112 compute push bytes and three storage descriptors within device ranges".into());
+                }
+                if bytes.len() > limits.max_storage_buffer_range as usize {
+                    return Err("Cooked asset exceeds selected GPU storage-buffer range".into());
+                }
+                if matches!(
+                    renderer.mode,
+                    RenderMode::AssetCamera
+                        | RenderMode::AssetCull
+                        | RenderMode::AssetLod
+                        | RenderMode::AssetResolve
+                ) && limits.max_push_constants_size < 64
+                {
+                    return Err("Camera mode requires 64 mesh-stage push constant bytes".into());
+                }
+            }
+            if let Some(stream) = &mut renderer.stream {
+                // SAFETY: Live instance and selected physical device; descriptor offsets use its queried limit.
+                let alignment = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits
+                        .min_storage_buffer_offset_alignment
+                };
+                stream.initialize_arena(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    alignment,
+                )?;
+            }
+            if let Some(path) = &options.world_pair {
+                let bytes = crate::asset::load(path)?;
+                // SAFETY: Context retains this selected physical device.
+                let limits = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits
+                };
+                if bytes.len() > limits.max_storage_buffer_range as usize
+                    || limits.max_per_stage_descriptor_storage_buffers < 2
+                    || limits.max_descriptor_set_storage_buffers < 2
+                {
+                    return Err("World pair geometry exceeds storage limits".into());
+                }
+                renderer.world_work = Some(IndirectWork::new(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    renderer.shader_dir.as_deref().unwrap(),
+                    RenderMode::AssetResolve,
+                    Some((&bytes, None)),
+                    (
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        options.asset_budget.unwrap_or(theia_assets::DEFAULT_BUDGET) as u64,
+                    ),
+                    None,
+                )?);
+            }
+            if let Some(path) = &options.materials {
+                let bytes = asset
+                    .as_ref()
+                    .ok_or("Authored materials need fixed geometry")?;
+                let mesh = theia_assets::Mesh::decode(bytes, None, theia_assets::DEFAULT_BUDGET)?;
+                let material = crate::asset::load_material(path, &mesh)?;
+                // SAFETY: Selected physical device belongs to the retained live instance.
+                let limit = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits
+                        .max_storage_buffer_range
+                };
+                if material.len() > limit as usize {
+                    return Err("Material exceeds device storage range".into());
+                }
+                renderer.materials = Some(crate::asset::Buffer::upload(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    &material,
+                    renderer.ctx.graphics_family,
+                    renderer.ctx.graphics,
+                    theia_assets::material::DEFAULT_BUDGET as u64,
+                    None,
+                )?);
+            }
+            if let Some(path) = &options.uvs {
+                let bytes = asset.as_ref().ok_or("Authored UVs need fixed geometry")?;
+                let mesh = theia_assets::Mesh::decode(bytes, None, theia_assets::DEFAULT_BUDGET)?;
+                let uvs = crate::asset::load_uv(path, &mesh)?;
+                // SAFETY: Selected physical device belongs to the retained live instance.
+                let limit = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties(renderer.ctx.physical)
+                        .limits
+                        .max_storage_buffer_range
+                };
+                if uvs.len() > limit as usize {
+                    return Err("UV page exceeds device storage range".into());
+                }
+                renderer.uvs = Some(crate::asset::Buffer::upload(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    &uvs,
+                    renderer.ctx.graphics_family,
+                    renderer.ctx.graphics,
+                    theia_assets::uv::DEFAULT_BUDGET as u64,
+                    None,
+                )?);
+            }
+            if let Some(path) = &options.texture {
+                let bytes = if options.texture_mip_level.is_some() || options.texture_auto_mips {
+                    crate::texture::load_mips(path)?
+                } else {
+                    crate::texture::load(path)?
+                };
+                let mips = (options.texture_mip_level.is_some() || options.texture_auto_mips)
+                    .then(|| {
+                        theia_assets::texture_mips::TextureMipChain::decode(
+                            &bytes,
+                            None,
+                            theia_assets::texture::DEFAULT_BUDGET,
+                        )
+                    })
+                    .transpose()?;
+                let texture = if mips.is_none() {
+                    Some(theia_assets::texture::Texture::decode(
+                        &bytes,
+                        None,
+                        theia_assets::texture::DEFAULT_BUDGET,
+                    )?)
+                } else {
+                    None
+                };
+                let (width, height, count) = if let Some(chain) = &mips {
+                    (chain.width, chain.height, chain.levels.len() as u32)
+                } else {
+                    let tex = texture.as_ref().unwrap();
+                    (tex.width, tex.height, 1)
+                };
+                // SAFETY: Selected physical device and instance are retained and live.
+                let properties = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_image_format_properties(
+                            renderer.ctx.physical,
+                            vk::Format::R8G8B8A8_SRGB,
+                            vk::ImageType::TYPE_2D,
+                            vk::ImageTiling::OPTIMAL,
+                            vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                            vk::ImageCreateFlags::empty(),
+                        )?
+                };
+                if width > properties.max_extent.width
+                    || height > properties.max_extent.height
+                    || count > properties.max_mip_levels
+                {
+                    return Err("Resident texture exceeds device image limits".into());
+                }
+                let budget = options
+                    .texture_budget
+                    .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64);
+                renderer.texture = Some(if let Some(raw_budget) = options.texture_tail_budget {
+                    let tail = theia_assets::texture_residency::MipTail::fit(
+                        mips.as_ref().unwrap(),
+                        raw_budget,
+                    )?;
+                    let source = tail.source_extent();
+                    renderer.texture_tail = Some([
+                        source[0],
+                        source[1],
+                        tail.first_level(),
+                        tail.source_level_count(),
+                    ]);
+                    crate::texture::ResidentTexture::upload_tail(
+                        renderer.ctx.device.as_ref().unwrap(),
+                        &memory,
+                        &tail,
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        budget,
+                        options.texture_linear_filter,
+                    )?
+                } else if options.texture_auto_mips {
+                    crate::texture::ResidentTexture::upload_auto_mips(
+                        renderer.ctx.device.as_ref().unwrap(),
+                        &memory,
+                        mips.as_ref().unwrap(),
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        budget,
+                        options.texture_linear_filter,
+                    )?
+                } else if let Some(chain) = &mips {
+                    crate::texture::ResidentTexture::upload_mips(
+                        renderer.ctx.device.as_ref().unwrap(),
+                        &memory,
+                        chain,
+                        options.texture_mip_level.unwrap(),
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        budget,
+                    )?
+                } else {
+                    crate::texture::ResidentTexture::upload(
+                        renderer.ctx.device.as_ref().unwrap(),
+                        &memory,
+                        texture.as_ref().unwrap(),
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        budget,
+                    )?
+                });
+            }
+            if options.texture_auto_mips {
+                let buffer = crate::asset::Buffer::allocate(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    3888,
+                    vk::BufferUsageFlags::STORAGE_BUFFER,
+                    vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                    1024 * 1024,
+                )?;
+                println!(
+                    "GPU footprint probe: 81 records, 3888 requested bytes, {} physical bytes; no runtime readback",
+                    buffer.allocated_bytes
+                );
+                renderer.footprint = Some(buffer);
+            }
+            if let Some(path) = &options.texture_table {
+                let mesh = theia_assets::Mesh::decode(
+                    asset.as_ref().ok_or("Texture table needs fixed geometry")?,
+                    None,
+                    theia_assets::DEFAULT_BUDGET,
+                )?;
+                let bytes =
+                    crate::asset::load_material(options.materials.as_deref().unwrap(), &mesh)?;
+                let materials = theia_assets::material::MaterialPage::decode(
+                    &bytes,
+                    None,
+                    &mesh,
+                    theia_assets::material::DEFAULT_BUDGET,
+                )?;
+                let set = crate::texture::load_set(path, &materials)?;
+                // SAFETY: Physical device and instance are retained and live.
+                let properties = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_properties(renderer.ctx.physical)
+                };
+                let count = set.images.len() as u32;
+                if count + 4 > properties.limits.max_per_stage_descriptor_sampled_images
+                    || count + 4 > properties.limits.max_descriptor_set_sampled_images
+                    || set.table.len() > properties.limits.max_storage_buffer_range as usize
+                {
+                    return Err("Texture table exceeds device descriptor/storage limits".into());
+                }
+                // SAFETY: Same retained physical device; query the exact upload/sample profile.
+                let image_limits = unsafe {
+                    renderer
+                        .ctx
+                        .instance
+                        .as_ref()
+                        .unwrap()
+                        .get_physical_device_image_format_properties(
+                            renderer.ctx.physical,
+                            vk::Format::R8G8B8A8_SRGB,
+                            vk::ImageType::TYPE_2D,
+                            vk::ImageTiling::OPTIMAL,
+                            vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                            vk::ImageCreateFlags::empty(),
+                        )?
+                };
+                let budget = options
+                    .texture_budget
+                    .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64);
+                let mut remaining = budget;
+                let mut pending = Vec::new();
+                for bytes in &set.images {
+                    let image = theia_assets::texture::Texture::decode(
+                        bytes,
+                        None,
+                        theia_assets::texture::DEFAULT_BUDGET,
+                    )?;
+                    if image.width > image_limits.max_extent.width
+                        || image.height > image_limits.max_extent.height
+                    {
+                        return Err("Resident texture exceeds device image limits".into());
+                    }
+                    let upload = crate::texture::Upload::begin(
+                        renderer.ctx.device.as_ref().unwrap(),
+                        &memory,
+                        &image,
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        remaining,
+                    )?;
+                    remaining = remaining
+                        .checked_sub(upload.resident_bytes())
+                        .ok_or("Texture image aggregate budget exhausted")?;
+                    pending.push(upload);
+                }
+                let ready = pending
+                    .iter()
+                    .map(|upload| upload.ready())
+                    .collect::<Result<Vec<_>>>()?;
+                println!(
+                    "Complete texture set submitted before completion waits: {} uploads, {} staging allocation bytes, {} already signalled dedicated fences; {} physical image bytes within {budget}",
+                    pending.len(),
+                    pending.iter().map(|v| v.staging_bytes()).sum::<u64>(),
+                    ready.iter().filter(|&&v| v).count(),
+                    budget - remaining
+                );
+                for upload in pending {
+                    renderer.textures.push(upload.finish()?);
+                }
+                renderer.texture_table = Some(crate::asset::Buffer::upload(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    &set.table,
+                    renderer.ctx.graphics_family,
+                    renderer.ctx.graphics,
+                    theia_assets::texture_table::DEFAULT_BUDGET as u64,
+                    None,
+                )?);
+                println!(
+                    "Resident texture table ready: {count} hash-sorted images, {} aggregate physical image bytes within {budget}; immutable GPU material selection",
+                    budget - remaining
+                );
+            }
             renderer.work = Some(IndirectWork::new(
                 renderer.ctx.device.as_ref().unwrap(),
                 &memory,
                 renderer.shader_dir.as_ref().unwrap(),
+                renderer.mode,
+                asset.as_deref().map(|bytes| {
+                    (
+                        bytes,
+                        renderer
+                            .stream
+                            .as_ref()
+                            .and_then(|stream| stream.arena.as_ref()),
+                    )
+                }),
+                (
+                    renderer.ctx.graphics_family,
+                    renderer.ctx.graphics,
+                    if renderer.lod.is_some() {
+                        options.lod_budget.unwrap_or(4 * 1024 * 1024)
+                    } else if renderer.stream.is_some() {
+                        options.resident_budget.unwrap_or(16 * 1024 * 1024)
+                    } else {
+                        u64::MAX
+                    },
+                ),
+                lod_pair.as_ref().map(|v| v.coarse.as_slice()),
             )?);
+            if options.benchmark_mixed {
+                renderer.proxy_work = Some(IndirectWork::new(
+                    renderer.ctx.device.as_ref().unwrap(),
+                    &memory,
+                    renderer.shader_dir.as_ref().unwrap(),
+                    RenderMode::Benchmark,
+                    None,
+                    (
+                        renderer.ctx.graphics_family,
+                        renderer.ctx.graphics,
+                        u64::MAX,
+                    ),
+                    None,
+                )?);
+            }
+        }
+        if let Some(path) = &options.stream_bundle {
+            let stream = crate::bundle_streaming::Stream::new(
+                [options.bundle.as_ref().unwrap().clone(), path.clone()],
+                options.bundle_byte_budget.unwrap_or(64 * 1024 * 1024),
+                options.bundle_gpu_budget.unwrap_or(32 * 1024 * 1024),
+                options
+                    .texture_budget
+                    .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64),
+            )?;
+            if renderer.bundle_resource_bytes() > stream.budget() {
+                return Err(
+                    "Initial complete bundle exceeds aggregate physical resource budget".into(),
+                );
+            }
+            renderer.bundle_stream = Some(stream);
         }
         renderer.rebuild(renderer.ctx.window.inner_size())?;
+        if let Some(target_budget) = options.texture_refine_budget {
+            let path = options.texture.as_ref().unwrap();
+            let bytes = crate::texture::load_mips(path)?;
+            renderer.texture_refinement = Some(crate::texture_refinement::Refinement::new(
+                path.clone(),
+                theia_assets::content_id(&bytes),
+                renderer.texture_tail.unwrap()[2],
+                target_budget,
+                options
+                    .texture_budget
+                    .unwrap_or(theia_assets::texture::DEFAULT_BUDGET as u64),
+                options.texture_linear_filter,
+            ));
+            println!(
+                "Mip refinement scheduler ready: original source verified; finer dense budget {target_budget}"
+            );
+        }
         Ok(renderer)
+    }
+    fn work_allocation_bytes(&self) -> u64 {
+        self.work.as_ref().map_or(0, |w| w.allocated_bytes)
+            + self.proxy_work.as_ref().map_or(0, |w| w.allocated_bytes)
+            + self
+                .scene
+                .as_ref()
+                .map_or(0, |s| s.work.iter().map(|w| w.allocated_bytes).sum::<u64>())
+    }
+    fn bundle_resource_bytes(&self) -> u64 {
+        self.ground_table.as_ref().map_or(0, |v| v.allocated_bytes)
+            + self.work.as_ref().map_or(0, IndirectWork::resident_bytes)
+            + self
+                .scene
+                .as_ref()
+                .map_or(0, crate::world_scene::Scene::physical_bytes)
+            + self
+                .world_work
+                .as_ref()
+                .map_or(0, IndirectWork::resident_bytes)
+            + self
+                .world_resources
+                .as_ref()
+                .map_or(0, crate::world_upload::PresentationSet::bytes)
+            + self.materials.as_ref().map_or(0, |v| v.allocated_bytes)
+            + self.uvs.as_ref().map_or(0, |v| v.allocated_bytes)
+            + self.texture_table.as_ref().map_or(0, |v| v.allocated_bytes)
+            + self
+                .textures
+                .iter()
+                .map(|v| v.image.allocated_bytes)
+                .sum::<u64>()
+    }
+    fn tick_bundle(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let active_bytes = self.bundle_resource_bytes();
+        let active_image_bytes = self.textures.iter().map(|v| v.image.allocated_bytes).sum();
+        let Some(stream) = &mut self.bundle_stream else {
+            return Ok(());
+        };
+        // SAFETY: Context retains the selected physical device and its instance.
+        let (memory, limits, image_limits) = unsafe {
+            let instance = self.ctx.instance.as_ref().unwrap();
+            (
+                instance.get_physical_device_memory_properties(self.ctx.physical),
+                instance
+                    .get_physical_device_properties(self.ctx.physical)
+                    .limits,
+                instance.get_physical_device_image_format_properties(
+                    self.ctx.physical,
+                    vk::Format::R8G8B8A8_SRGB,
+                    vk::ImageType::TYPE_2D,
+                    vk::ImageTiling::OPTIMAL,
+                    vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                    vk::ImageCreateFlags::empty(),
+                )?,
+            )
+        };
+        let ready = stream.tick(
+            self.presented,
+            active_bytes,
+            active_image_bytes,
+            crate::bundle_streaming::Gpu {
+                device: self.ctx.device.as_ref().unwrap(),
+                memory: &memory,
+                family: self.ctx.graphics_family,
+                queue: self.ctx.graphics,
+                limits,
+                image_limits,
+            },
+        )?;
+        if let Some(ready) = ready {
+            // The sole frame fence is retired. Retire presentation and destroy graphics
+            // descriptors/pipelines before dropping their old resource owners. This
+            // qualification rebuilds a full generation, including descriptor-count changes.
+            if let Some(chain) = &mut self.chain {
+                chain.retire()?;
+            }
+            drop(self.chain.take());
+            let ([geometry, materials, uvs, table], images, publication) = ready.into_parts();
+            drop(self.work.as_mut().unwrap().replace_asset(geometry));
+            self.materials = Some(materials);
+            self.uvs = Some(uvs);
+            self.texture_table = Some(table);
+            self.textures = images;
+            self.recreate = true;
+            self.rebuild(size)?;
+            if self.recreate {
+                return Err("Bundle publication target generation unavailable".into());
+            }
+            self.bundle_stream
+                .as_mut()
+                .unwrap()
+                .published(publication, self.presented)?;
+        }
+        Ok(())
+    }
+    fn tick_covered_retirement(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let Some(slot) = self
+            .scene
+            .as_ref()
+            .and_then(|scene| scene.next_retirement(self.presented))
+        else {
+            return Ok(());
+        };
+        if let Some(chain) = &mut self.chain {
+            chain.retire()?;
+        }
+        drop(self.chain.take());
+        let eviction = self.scene.as_mut().unwrap().prepare_retirement(slot)?;
+        self.recreate = true;
+        self.rebuild(size)?;
+        if self.recreate {
+            return Err("Protected retirement target generation unavailable".into());
+        }
+        self.scene
+            .as_mut()
+            .unwrap()
+            .retirement_published(eviction, self.presented)?;
+        Ok(())
+    }
+    fn tick_covered_reload(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let Some(scene) = &mut self.scene else {
+            return Ok(());
+        };
+        let Some(ready) = scene.tick_reload(self.presented)? else {
+            return Ok(());
+        };
+        if let Some(chain) = &mut self.chain {
+            chain.retire()?;
+        }
+        drop(self.chain.take());
+        let staged = self.scene.as_mut().unwrap().prepare_refinement(ready)?;
+        self.recreate = true;
+        self.rebuild(size)?;
+        if self.recreate {
+            return Err("Fine reload graphics generation unavailable".into());
+        }
+        self.scene
+            .as_mut()
+            .unwrap()
+            .refinement_published(staged, self.presented)
+    }
+    fn tick_world_camera(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let Some(scene) = &mut self.scene else {
+            return Ok(());
+        };
+        let Some(change) = scene.tick_camera(self.presented)? else {
+            return Ok(());
+        };
+        if let Some(chain) = &mut self.chain {
+            chain.retire()?;
+        }
+        drop(self.chain.take());
+        match change {
+            crate::world_camera::Change::Evict(slot) => {
+                let eviction = self.scene.as_mut().unwrap().prepare_retirement(slot)?;
+                self.recreate = true;
+                self.rebuild(size)?;
+                if self.recreate {
+                    return Err("Camera coarse generation unavailable".into());
+                }
+                self.scene
+                    .as_mut()
+                    .unwrap()
+                    .retirement_published(eviction, self.presented)?;
+            }
+            crate::world_camera::Change::Refine(ready) => {
+                let publication = self.scene.as_mut().unwrap().prepare_refinement(*ready)?;
+                self.recreate = true;
+                self.rebuild(size)?;
+                if self.recreate {
+                    return Err("Camera fine generation unavailable".into());
+                }
+                self.scene
+                    .as_mut()
+                    .unwrap()
+                    .refinement_published(publication, self.presented)?;
+            }
+        }
+        Ok(())
+    }
+    fn tick_world_bundle(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let active = [
+            self.bundle_resource_bytes(),
+            self.textures
+                .iter()
+                .map(|v| v.image.allocated_bytes)
+                .chain(
+                    self.world_resources
+                        .iter()
+                        .flat_map(|r| r.images.iter().map(|v| v.image.allocated_bytes)),
+                )
+                .sum(),
+        ];
+        let Some(stream) = &mut self.world_stream else {
+            return Ok(());
+        };
+        // SAFETY: Context retains the selected physical device and its instance.
+        let (memory, limits, image_limits) = unsafe {
+            let instance = self.ctx.instance.as_ref().unwrap();
+            (
+                instance.get_physical_device_memory_properties(self.ctx.physical),
+                instance
+                    .get_physical_device_properties(self.ctx.physical)
+                    .limits,
+                instance.get_physical_device_image_format_properties(
+                    self.ctx.physical,
+                    vk::Format::R8G8B8A8_SRGB,
+                    vk::ImageType::TYPE_2D,
+                    vk::ImageTiling::OPTIMAL,
+                    vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST,
+                    vk::ImageCreateFlags::empty(),
+                )?,
+            )
+        };
+        let ready = stream.tick(
+            self.presented,
+            active,
+            crate::bundle_streaming::Gpu {
+                device: self.ctx.device.as_ref().unwrap(),
+                memory: &memory,
+                family: self.ctx.graphics_family,
+                queue: self.ctx.graphics,
+                limits,
+                image_limits,
+            },
+        )?;
+        if let Some(ready) = ready {
+            // The sole frame fence is retired. Conservatively retire presentation
+            // and the entire descriptor generation before releasing chunk 1 owners.
+            if let Some(chain) = &mut self.chain {
+                chain.retire()?;
+            }
+            drop(self.chain.take());
+            let (set, publication) = ready.into_parts();
+            let [geometry, materials, uvs, table] = set.buffers;
+            drop(self.world_work.as_mut().unwrap().replace_asset(geometry));
+            self.world_resources = Some(crate::world_upload::PresentationSet {
+                materials,
+                uvs,
+                table,
+                images: set.images,
+            });
+            self.recreate = true;
+            self.rebuild(size)?;
+            if self.recreate {
+                return Err("World chunk publication generation unavailable".into());
+            }
+            self.world_stream
+                .as_mut()
+                .unwrap()
+                .published(publication, self.presented)?;
+        }
+        Ok(())
+    }
+    fn tick_texture_refinement(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let Some(refinement) = &mut self.texture_refinement else {
+            return Ok(());
+        };
+        if refinement.finished() {
+            return Ok(());
+        }
+        // SAFETY: The selected physical device belongs to the live context.
+        let memory = unsafe {
+            self.ctx
+                .instance
+                .as_ref()
+                .unwrap()
+                .get_physical_device_memory_properties(self.ctx.physical)
+        };
+        let ready = refinement.tick(
+            self.presented,
+            self.texture.as_ref().unwrap().image.allocated_bytes,
+            crate::texture_refinement::Gpu {
+                device: self.ctx.device.as_ref().unwrap(),
+                memory: &memory,
+                family: self.ctx.graphics_family,
+                queue: self.ctx.graphics,
+            },
+        )?;
+        if let Some(ready) = ready {
+            // The frame fence was retired by draw. Conservatively retire the old
+            // presentation/graphics generation before releasing descriptor owners.
+            if let Some(chain) = &mut self.chain {
+                chain.retire()?;
+            }
+            drop(self.chain.take());
+            self.texture = Some(ready.texture);
+            self.texture_tail = Some(ready.metadata);
+            self.recreate = true;
+            self.rebuild(size)?;
+            if self.recreate {
+                return Err("Mip refinement publication generation unavailable".into());
+            }
+            self.texture_refinement
+                .as_mut()
+                .unwrap()
+                .published(ready.metadata[2], self.presented);
+        }
+        Ok(())
     }
     fn rebuild(&mut self, size: PhysicalSize<u32>) -> Result<()> {
         if size.width == 0 || size.height == 0 {
@@ -792,7 +2292,81 @@ impl Renderer {
             size,
             self.shader_dir.as_deref(),
             self.mode,
-            self.work.as_ref().map(|work| work.descriptor_layout),
+            self.work
+                .as_ref()
+                .map(|work| work.descriptor_layout)
+                .or_else(|| self.scene.as_ref().map(|s| s.work[0].descriptor_layout)),
+            crate::visibility::ResolveBuffers {
+                world_hud: self.scene.is_some()
+                    && self.benchmark.as_ref().is_some_and(|b| b.config.overlay),
+                scene: self
+                    .scene
+                    .as_ref()
+                    .map(crate::world_scene::Scene::descriptors),
+                world_textures: self.world_resources.as_ref().map(|r| {
+                    crate::visibility::WorldTextures {
+                        materials: descriptor(&r.materials),
+                        uvs: descriptor(&r.uvs),
+                        table: descriptor(&r.table),
+                        images: std::array::from_fn(|i| {
+                            r.images
+                                .get(i)
+                                .map_or(vk::DescriptorImageInfo::default(), |v| v.descriptor())
+                        }),
+                        count: r.images.len() as u32,
+                    }
+                }),
+                world_geometry: self
+                    .world_work
+                    .as_ref()
+                    .map(|w| (w.descriptor_layout, w.geometry_descriptor())),
+                proxy_work: self
+                    .proxy_work
+                    .as_ref()
+                    .map(|work| (work.descriptor_layout, work.benchmark_descriptor())),
+                benchmark: self.mode == RenderMode::Benchmark,
+                cooked_hud_work: self
+                    .benchmark
+                    .as_ref()
+                    .filter(|b| {
+                        self.mode == RenderMode::AssetResolve
+                            && b.config.overlay
+                            && self.scene.is_none()
+                    })
+                    .map(|_| self.work.as_ref().unwrap().benchmark_descriptor()),
+                materials: self.materials.as_ref().map(|buffer| {
+                    vk::DescriptorBufferInfo::default()
+                        .buffer(buffer.handle)
+                        .offset(buffer.offset)
+                        .range(buffer.bytes)
+                }),
+                texture: self.texture.as_ref().map(|texture| texture.descriptor()),
+                texture_count: self.textures.len() as u32,
+                texture_images: std::array::from_fn(|i| {
+                    self.textures
+                        .get(i)
+                        .map_or(vk::DescriptorImageInfo::default(), |v| v.descriptor())
+                }),
+                footprint: self.footprint.as_ref().map(|buffer| {
+                    vk::DescriptorBufferInfo::default()
+                        .buffer(buffer.handle)
+                        .offset(buffer.offset)
+                        .range(buffer.bytes)
+                }),
+                mip_tail: self.texture_tail,
+                texture_table: self.texture_table.as_ref().map(|buffer| {
+                    vk::DescriptorBufferInfo::default()
+                        .buffer(buffer.handle)
+                        .offset(buffer.offset)
+                        .range(buffer.bytes)
+                }),
+                uvs: self.uvs.as_ref().map(|buffer| {
+                    vk::DescriptorBufferInfo::default()
+                        .buffer(buffer.handle)
+                        .offset(buffer.offset)
+                        .range(buffer.bytes)
+                }),
+            },
         )? {
             self.chain = Some(chain);
             self.recreate = false;
@@ -801,7 +2375,21 @@ impl Renderer {
         }
         Ok(())
     }
+    pub fn authority_push(&mut self, bytes: [u8; 64]) -> Result<()> {
+        if self.mode != RenderMode::Authority {
+            return Err("Authority push requires the separate authority mode".into());
+        }
+        self.authority = Some(bytes);
+        Ok(())
+    }
     pub fn draw(&mut self, size: PhysicalSize<u32>) -> Result<bool> {
+        if size.width > 0
+            && size.height > 0
+            && let Some(recorder) = &mut self.benchmark
+        {
+            recorder.pace(self.presented);
+        }
+        let cpu_started = std::time::Instant::now();
         if size.width == 0 || size.height == 0 {
             self.recreate = true;
             return Ok(false);
@@ -817,26 +2405,191 @@ impl Renderer {
         } else {
             self.work_items
         };
-        if self.work.is_some() && self.last_input != Some(input) {
-            println!(
-                "Indirect qualification input: {input} work items (GPU produces command/count; no host readback)"
-            );
+        if self.work.is_some()
+            && self.last_input != Some(input)
+            && self.mode != RenderMode::Benchmark
+        {
+            if matches!(
+                self.mode,
+                RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
+            ) {
+                println!(
+                    "GPU frustum qualification view: {input} (0 translated empty, 1 narrow left, 2 full; compute selects meshlet IDs/counts)"
+                );
+            } else if matches!(
+                self.mode,
+                RenderMode::Asset
+                    | RenderMode::AssetCamera
+                    | RenderMode::AssetCull
+                    | RenderMode::AssetLod
+                    | RenderMode::AssetResolve
+            ) {
+                println!(
+                    "Cooked mesh qualification scenario: {input} (0 empty, 1 first meshlet, 2 all; GPU reads asset header/counts; no count readback)"
+                );
+            } else if self.mode == RenderMode::Spatial {
+                println!(
+                    "Spatial qualification scenario: {input} (0 empty, 1 left/low, 2 full; GPU produces visibility/counts; no host readback)"
+                );
+            } else {
+                println!(
+                    "Indirect qualification input: {input} work items (GPU produces command/count; no host readback)"
+                );
+            }
             self.last_input = Some(input);
         }
+        // SAFETY: This fence covers the only frame in flight. Retire old descriptor/buffer readers
+        // before cell publication; no submitted command may observe a descriptor update.
+        unsafe {
+            self.ctx.device.as_ref().unwrap().wait_for_fences(
+                &[self.ctx.complete],
+                true,
+                u64::MAX,
+            )?;
+        }
+        if let Some(benchmark) = &mut self.benchmark {
+            benchmark.collect()?;
+        }
+        if let Some(stream) = &mut self.stream {
+            // SAFETY: Selected physical device belongs to the live instance retained in Context.
+            let (memory, limit) = unsafe {
+                let instance = self.ctx.instance.as_ref().unwrap();
+                (
+                    instance.get_physical_device_memory_properties(self.ctx.physical),
+                    instance
+                        .get_physical_device_properties(self.ctx.physical)
+                        .limits
+                        .max_storage_buffer_range,
+                )
+            };
+            stream.tick(
+                self.presented,
+                self.work.as_mut().unwrap(),
+                self.ctx.device.as_ref().unwrap(),
+                &memory,
+                (self.ctx.graphics_family, self.ctx.graphics),
+                limit,
+            )?;
+        }
+        self.tick_bundle(size)?;
+        self.tick_world_bundle(size)?;
+        self.tick_covered_retirement(size)?;
+        self.tick_covered_reload(size)?;
+        self.tick_world_camera(size)?;
+        self.tick_texture_refinement(size)?;
+        let cooked_stats = (self.benchmark.is_some()
+            && self.mode == RenderMode::AssetResolve
+            && self.scene.is_none())
+        .then(|| crate::benchmark::CookedStats {
+            bundle_bytes: self.bundle_resource_bytes(),
+            textures: self.textures.len() as u32,
+            publications: self.bundle_stream.as_ref().map_or(0, |s| s.publications),
+            deferrals: self.bundle_stream.as_ref().map_or(0, |s| s.rejections),
+        });
+        let world_stats = if self.benchmark.is_some() {
+            self.scene
+                .as_ref()
+                .map(|s| s.benchmark_stats(self.presented))
+                .transpose()?
+        } else {
+            None
+        };
+        let work_allocation_bytes = self.work_allocation_bytes();
         let chain = self.chain.as_mut().unwrap();
         let ctx = &self.ctx;
         let device = ctx.device.as_ref().unwrap();
+        let benchmark_push = self
+            .benchmark
+            .as_ref()
+            .filter(|_| self.scene.is_none())
+            .map(|b| {
+                crate::benchmark::push(
+                    &b.config,
+                    self.presented,
+                    chain.extent.width,
+                    chain.extent.height,
+                )
+            })
+            .transpose()?;
+        let world_proxy_push = self
+            .world_crowd
+            .map(|players| {
+                self.scene.as_ref().unwrap().proxy_push(
+                    self.presented,
+                    chain.extent.width,
+                    chain.extent.height,
+                    players,
+                )
+            })
+            .transpose()?;
+        let world_camera_rows = self
+            .scene
+            .as_ref()
+            .map(|s| s.camera_rows(self.presented, chain.extent.width, chain.extent.height))
+            .transpose()?
+            .flatten();
+        let camera_rows = if let Some((_, rows)) = benchmark_push {
+            Some(rows)
+        } else if world_camera_rows.is_some() {
+            world_camera_rows
+        } else if self.world_work.is_some() || self.scene.is_some() {
+            Some(crate::camera::world_pair_rows(
+                chain.extent.width,
+                chain.extent.height,
+                input,
+            )?)
+        } else if matches!(
+            self.mode,
+            RenderMode::AssetCull | RenderMode::AssetLod | RenderMode::AssetResolve
+        ) {
+            Some(crate::camera::view_rows(
+                chain.extent.width,
+                chain.extent.height,
+                input,
+            )?)
+        } else if self.mode == RenderMode::AssetCamera {
+            Some(crate::camera::rows(
+                chain.extent.width,
+                chain.extent.height,
+            )?)
+        } else {
+            None
+        };
+        if self.mode == RenderMode::Benchmark {
+            chain
+                .visibility
+                .as_mut()
+                .unwrap()
+                .bind_geometry(self.work.as_ref().unwrap().benchmark_descriptor());
+        }
+        if self.mode == RenderMode::AssetResolve && self.scene.is_none() {
+            chain
+                .visibility
+                .as_mut()
+                .unwrap()
+                .bind_geometry(self.work.as_ref().unwrap().geometry_descriptor());
+        }
         // SAFETY: A single frame in flight; its fence protects command buffer/acquire semaphore reuse.
         // Image-specific presentation semaphores are reused only after acquire and a presentation-fence
-        // wait. Barriers order color writes and the present transition. Swapchain owns all referenced views.
+        // wait. Barriers order color writes/presentation and depth reuse after earlier fragment tests.
+        // Camera push constants match the qualified 64-byte mesh layout. Swapchain owns all referenced views.
         unsafe {
-            device.wait_for_fences(&[ctx.complete], true, u64::MAX)?;
-            let (index, suboptimal) = match chain.loader.acquire_next_image(
-                chain.handle,
-                u64::MAX,
-                ctx.acquired,
-                vk::Fence::null(),
-            ) {
+            // Inject before acquire so an out-of-date probe cannot leave its semaphore signaled.
+            let acquire = if self.probes.hit(Probe::AcquireOutOfDate, self.presented) {
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR)
+            } else {
+                let result = chain.loader.acquire_next_image(
+                    chain.handle,
+                    u64::MAX,
+                    ctx.acquired,
+                    vk::Fence::null(),
+                );
+                if !matches!(result, Ok((_, false))) {
+                    println!("WSI DRIVER acquire result: {result:?}");
+                }
+                result
+            };
+            let (index, mut suboptimal) = match acquire {
                 Ok(value) => value,
                 Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                     self.recreate = true;
@@ -844,6 +2597,7 @@ impl Renderer {
                 }
                 Err(error) => return Err(error.into()),
             };
+            suboptimal |= self.probes.hit(Probe::AcquireSuboptimal, self.presented);
             let i = index as usize;
             chain.wait_present(i)?;
             device.reset_command_buffer(ctx.command, vk::CommandBufferResetFlags::empty())?;
@@ -852,8 +2606,126 @@ impl Renderer {
                 &vk::CommandBufferBeginInfo::default()
                     .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
             )?;
-            if let Some(work) = &self.work {
-                work.generate(ctx.command, input);
+            if let Some(benchmark) = &self.benchmark {
+                benchmark.begin(ctx.command);
+            }
+            if let Some(buffer) = &self.footprint {
+                let reuse = [vk::BufferMemoryBarrier2::default()
+                    .src_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                    .src_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                    .dst_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                    .dst_access_mask(vk::AccessFlags2::SHADER_STORAGE_WRITE)
+                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .buffer(buffer.handle)
+                    .offset(buffer.offset)
+                    .size(buffer.bytes)];
+                device.cmd_pipeline_barrier2(
+                    ctx.command,
+                    &vk::DependencyInfo::default().buffer_memory_barriers(&reuse),
+                );
+            }
+            if self.mode == RenderMode::Benchmark {
+                let (push, _) = benchmark_push.as_ref().unwrap();
+                self.work.as_ref().unwrap().generate_benchmark(
+                    ctx.command,
+                    push,
+                    self.benchmark.as_ref().unwrap().config.players
+                        + crate::benchmark::STATIC_OBJECTS,
+                );
+            } else if let Some(work) = &self.work {
+                work.generate(
+                    ctx.command,
+                    input,
+                    camera_rows,
+                    self.lod.map(|mut lod| {
+                        lod.extent = [chain.extent.width, chain.extent.height];
+                        // One fixed view/page pair owns this buffer. Resizing keeps
+                        // history; a fresh work buffer's first dispatch starts fine.
+                        lod.reset = self.presented == 0;
+                        if lod.test_trajectory {
+                            let phase = ((self.presented / 20) % 8) as usize;
+                            lod.pixels = [6., 7., 6., 4., 7., 6., 6., 4.][phase];
+                            // Explicit qualification probe: a new history context
+                            // throughout phase six must ignore old coarse state.
+                            lod.reset |= phase == 6;
+                        }
+                        lod
+                    }),
+                );
+            }
+            if let Some(scene) = &self.scene {
+                for work in &scene.work {
+                    work.generate(ctx.command, input, camera_rows, None);
+                }
+            }
+            if let Some(world) = &self.world_work {
+                world.generate(ctx.command, input, camera_rows, None);
+            }
+            if let Some(proxy) = &self.proxy_work {
+                let (push, players) = if let Some(push) = world_proxy_push {
+                    (push, self.world_crowd.unwrap())
+                } else {
+                    let mut push = benchmark_push.as_ref().unwrap().0;
+                    push[88..92].copy_from_slice(&1u32.to_ne_bytes());
+                    (push, self.benchmark.as_ref().unwrap().config.players)
+                };
+                proxy.generate_benchmark(ctx.command, &push, players);
+            }
+            if let Some(benchmark) = &self.benchmark {
+                benchmark.mark(ctx.command, 1);
+            }
+            if let Some(depth) = &chain.depth {
+                let barriers = [vk::ImageMemoryBarrier2::default()
+                    .src_stage_mask(
+                        vk::PipelineStageFlags2::EARLY_FRAGMENT_TESTS
+                            | vk::PipelineStageFlags2::LATE_FRAGMENT_TESTS,
+                    )
+                    .src_access_mask(
+                        vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_READ
+                            | vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                    )
+                    .dst_stage_mask(
+                        vk::PipelineStageFlags2::EARLY_FRAGMENT_TESTS
+                            | vk::PipelineStageFlags2::LATE_FRAGMENT_TESTS,
+                    )
+                    .dst_access_mask(
+                        vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_READ
+                            | vk::AccessFlags2::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                    )
+                    .old_layout(vk::ImageLayout::UNDEFINED)
+                    .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .image(depth.handle)
+                    .subresource_range(depth.range())];
+                device.cmd_pipeline_barrier2(
+                    ctx.command,
+                    &vk::DependencyInfo::default().image_memory_barriers(&barriers),
+                );
+            }
+            if let Some(target) = &chain.visibility {
+                target.record_identity(
+                    ctx.command,
+                    ctx.mesh_commands.as_ref().unwrap(),
+                    self.work
+                        .as_ref()
+                        .or_else(|| self.scene.as_ref().map(|s| &s.work[0]))
+                        .unwrap(),
+                    self.proxy_work.as_ref(),
+                    if let Some(scene) = &self.scene {
+                        crate::visibility::WorldDraws::Scene(&scene.work[1..])
+                    } else {
+                        self.world_work.as_ref().map_or(
+                            crate::visibility::WorldDraws::None,
+                            crate::visibility::WorldDraws::Pair,
+                        )
+                    },
+                    camera_rows,
+                );
+            }
+            if let Some(benchmark) = &self.benchmark {
+                benchmark.mark(ctx.command, 2);
             }
             let to_color = [vk::ImageMemoryBarrier2::default()
                 .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
@@ -880,17 +2752,83 @@ impl Renderer {
                         float32: [0.025, 0.07, 0.12, 1.0],
                     },
                 })];
-            device.cmd_begin_rendering(
-                ctx.command,
-                &vk::RenderingInfo::default()
-                    .render_area(vk::Rect2D {
-                        offset: vk::Offset2D::default(),
-                        extent: chain.extent,
+            let depth_attachment = chain.depth.as_ref().map(|depth| {
+                vk::RenderingAttachmentInfo::default()
+                    .image_view(depth.view)
+                    .image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                    .load_op(vk::AttachmentLoadOp::CLEAR)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .clear_value(vk::ClearValue {
+                        depth_stencil: vk::ClearDepthStencilValue {
+                            depth: 1.,
+                            stencil: 0,
+                        },
                     })
-                    .layer_count(1)
-                    .color_attachments(&attachments),
-            );
-            if let Some(pipeline) = &chain.pipeline {
+            });
+            let mut rendering = vk::RenderingInfo::default()
+                .render_area(vk::Rect2D {
+                    offset: vk::Offset2D::default(),
+                    extent: chain.extent,
+                })
+                .layer_count(1)
+                .color_attachments(&attachments);
+            if let Some(depth) = &depth_attachment {
+                rendering = rendering.depth_attachment(depth);
+            }
+            device.cmd_begin_rendering(ctx.command, &rendering);
+            let overlay = self
+                .benchmark
+                .as_ref()
+                .filter(|b| self.mode == RenderMode::Benchmark || b.config.overlay)
+                .map(|b| {
+                    let base = b.overlay(
+                        self.presented,
+                        work_allocation_bytes
+                            + chain.visibility.as_ref().unwrap().allocated_bytes(),
+                    );
+                    let mut bytes = [0; 48];
+                    bytes[..32].copy_from_slice(&base);
+                    if let Some(stats) = &world_stats {
+                        let words = [
+                            ((stats["total_gpu_bytes"].as_u64().unwrap() as f64 / 1048576. * 1000.)
+                                .round()
+                                .clamp(0., u32::MAX as f64)) as u32,
+                            stats["selected_images"]
+                                .as_u64()
+                                .unwrap()
+                                .min(u32::MAX as u64) as u32,
+                            stats["publications"].as_u64().unwrap().min(u32::MAX as u64) as u32,
+                            stats["evictions"].as_u64().unwrap().min(u32::MAX as u64) as u32,
+                        ];
+                        for (i, word) in words.into_iter().enumerate() {
+                            bytes[32 + i * 4..36 + i * 4].copy_from_slice(&word.to_ne_bytes());
+                        }
+                        bytes[28..32].copy_from_slice(
+                            &(stats["deferrals"].as_u64().unwrap().min(u32::MAX as u64) as u32)
+                                .to_ne_bytes(),
+                        );
+                    }
+                    if let Some(stats) = cooked_stats {
+                        for (i, value) in stats.hud_words().iter().enumerate() {
+                            bytes[32 + i * 4..36 + i * 4].copy_from_slice(&value.to_ne_bytes());
+                        }
+                    }
+                    bytes
+                });
+            if let Some(target) = &chain.visibility {
+                target.record_resolve(
+                    ctx.command,
+                    ctx.mesh_commands.as_ref().unwrap(),
+                    camera_rows,
+                    overlay.as_ref().map(|v| {
+                        &v[..if cooked_stats.is_some() || world_stats.is_some() {
+                            48
+                        } else {
+                            32
+                        }]
+                    }),
+                );
+            } else if let Some(pipeline) = &chain.pipeline {
                 device.cmd_bind_pipeline(
                     ctx.command,
                     vk::PipelineBindPoint::GRAPHICS,
@@ -914,13 +2852,42 @@ impl Renderer {
                     }],
                 );
                 let commands = ctx.mesh_commands.as_ref().unwrap();
-                if let Some(work) = &self.work {
+                if matches!(
+                    self.mode,
+                    RenderMode::AssetCamera | RenderMode::AssetCull | RenderMode::AssetLod
+                ) {
+                    let rows = camera_rows.unwrap();
+                    let mut bytes = [0u8; 64];
+                    for (i, value) in rows.iter().flatten().enumerate() {
+                        bytes[i * 4..i * 4 + 4].copy_from_slice(&value.to_ne_bytes());
+                    }
+                    device.cmd_push_constants(
+                        ctx.command,
+                        pipeline.layout,
+                        vk::ShaderStageFlags::MESH_EXT,
+                        0,
+                        &bytes,
+                    );
+                }
+                if let Some(bytes) = &self.authority {
+                    device.cmd_push_constants(
+                        ctx.command,
+                        pipeline.layout,
+                        vk::ShaderStageFlags::MESH_EXT,
+                        0,
+                        bytes,
+                    );
+                    commands.cmd_draw_mesh_tasks(ctx.command, 3, 1, 1);
+                } else if let Some(work) = &self.work {
                     work.draw(ctx.command, pipeline.layout, commands);
                 } else {
                     commands.cmd_draw_mesh_tasks(ctx.command, 1, 1, 1);
                 }
             }
             device.cmd_end_rendering(ctx.command);
+            if let Some(benchmark) = &self.benchmark {
+                benchmark.mark(ctx.command, 3);
+            }
             let to_present = [vk::ImageMemoryBarrier2::default()
                 .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
                 .src_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE)
@@ -954,6 +2921,9 @@ impl Renderer {
                     .command_buffer_infos(&commands)],
                 ctx.complete,
             )?;
+            if let Some(stream) = &mut self.stream {
+                stream.submitted();
+            }
             let present_waits = [chain.ready[i]];
             let chains = [chain.handle];
             let indices = [index];
@@ -964,30 +2934,101 @@ impl Renderer {
                 .swapchains(&chains)
                 .image_indices(&indices)
                 .push_next(&mut fence_info);
-            match chain.loader.queue_present(ctx.present, &info) {
-                Ok(present_suboptimal) => {
-                    chain.pending[i] = true;
-                    self.presented += 1;
-                    self.recreate |= suboptimal || present_suboptimal;
-                    Ok(true)
-                }
-                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    chain.pending[i] = true;
-                    self.recreate = true;
-                    Ok(false)
-                }
-                Err(error) => {
-                    // Surface loss still queues presentation operations. Allocation failure leaves
-                    // synchronization untouched; device loss prevents outstanding work from continuing.
-                    chain.pending[i] = matches!(
-                        error,
-                        vk::Result::ERROR_SURFACE_LOST_KHR
-                            | vk::Result::ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT
-                    );
-                    Err(error.into())
+            let mut present = chain.loader.queue_present(ctx.present, &info);
+            if !matches!(present, Ok(false)) {
+                println!("WSI DRIVER present result: {present:?}");
+            }
+            // Override only successful real presents: semaphore waits and fence are already queued.
+            // Never hide a real driver error or fabricate an unqueued presentation fence.
+            if present.is_ok() {
+                if self.probes.hit(Probe::PresentOutOfDate, self.presented) {
+                    present = Err(vk::Result::ERROR_OUT_OF_DATE_KHR);
+                } else if self.probes.hit(Probe::PresentSuboptimal, self.presented) {
+                    present = Ok(true);
                 }
             }
+            let outcome = PresentOutcome::classify(present);
+            chain.pending[i] = outcome.pending;
+            self.recreate |= suboptimal || outcome.recreate;
+            if let Some(error) = outcome.error {
+                return Err(error.into());
+            }
+            if let Some(benchmark) = &mut self.benchmark {
+                if !outcome.presented {
+                    return Err("Benchmark presentation interrupted; report withheld".into());
+                }
+                benchmark.submitted(
+                    self.presented,
+                    cpu_started.elapsed().as_secs_f64() * 1000.,
+                    [chain.extent.width, chain.extent.height],
+                    work_allocation_bytes + chain.visibility.as_ref().unwrap().allocated_bytes(),
+                    cooked_stats,
+                    world_stats,
+                );
+            }
+            self.presented += u64::from(outcome.presented);
+            Ok(outcome.presented)
         }
+    }
+    pub fn qualification_complete(&mut self) -> Result<()> {
+        if let Some(benchmark) = &mut self.benchmark {
+            // SAFETY: Live complete fence covers the last benchmark query recording.
+            unsafe {
+                self.ctx.device.as_ref().unwrap().wait_for_fences(
+                    &[self.ctx.complete],
+                    true,
+                    u64::MAX,
+                )?;
+            }
+            benchmark.finish(
+                self.generations,
+                self.scene
+                    .as_ref()
+                    .and_then(crate::world_scene::Scene::stream_outcome)
+                    .or_else(|| {
+                        self.bundle_stream
+                            .as_ref()
+                            .map(|s| (s.publications, s.rejections))
+                    }),
+            )?;
+        }
+        if let Some(stream) = &self.stream {
+            println!(
+                "Cell qualification: {} publications, {} physical-budget deferrals",
+                stream.publications, stream.rejections
+            );
+            if self.cycle_work && stream.publications < 2 && stream.rejections == 0 {
+                return Err(
+                    "Cell smoke did not qualify page replacement or physical-budget deferral"
+                        .into(),
+                );
+            }
+        }
+        if let Some(stream) = &self.bundle_stream {
+            println!(
+                "Bundle qualification: {} complete publications, {} budget deferrals",
+                stream.publications, stream.rejections
+            );
+            if self.cycle_work && stream.publications < 2 && stream.rejections == 0 {
+                return Err("Bundle smoke did not qualify replacement or budget deferral".into());
+            }
+        }
+        if let Some(stream) = &self.world_stream {
+            if self.cycle_work && stream.publications < 2 && stream.deferrals == 0 {
+                return Err("World chunk smoke did not qualify publication or deferral".into());
+            }
+            stream.report()?;
+        }
+        if self.probes.remaining() != 0 {
+            return Err("WSI qualification ended before all four recovery probes ran".into());
+        }
+        if let Some(refinement) = &self.texture_refinement {
+            refinement.check_complete(self.presented)?;
+        }
+        if let Some(scene) = &self.scene {
+            scene.qualification_complete(self.presented)?;
+        }
+        Ok(())
     }
 }
 impl Drop for Renderer {
@@ -995,7 +3036,24 @@ impl Drop for Renderer {
         // Destroy graphics pipelines before their work descriptor layout, then work resources
         // before Context destroys the device. This also runs when new() fails in rebuild().
         drop(self.chain.take());
+        drop(self.stream.take());
+        drop(self.bundle_stream.take());
+        drop(self.texture_refinement.take());
+        drop(self.benchmark.take());
         drop(self.work.take());
+        drop(self.proxy_work.take());
+        drop(self.ground_table.take());
+        drop(self.world_work.take());
+        drop(self.world_resources.take());
+        drop(self.scene.take());
+        drop(self.materials.take());
+        drop(self.uvs.take());
+        drop(self.texture.take());
+        self.textures.clear();
+        drop(self.texture_table.take());
+        drop(self.footprint.take());
+        drop(self.world_cpu.take());
+        drop(self.world_stream.take());
         println!(
             "Render Lab teardown: {} swapchain generations",
             self.generations

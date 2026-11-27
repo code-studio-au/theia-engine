@@ -1,0 +1,113 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "Theia bounded static-scene qualification fixture"
+  },
+  "buffers": [
+    {
+      "byteLength": 60,
+      "uri": "data:application/octet-stream;base64,AACAvgAAAAAzM7M+AACAPgAAAAAzM7M+AACAPgAAAAAzM7O+AACAvgAAAAAzM7O+AAABAAIAAAACAAMA"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 48
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 48,
+      "byteLength": 12
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 4,
+      "type": "VEC3",
+      "min": [
+        -0.25,
+        0.0,
+        -0.35
+      ],
+      "max": [
+        0.25,
+        0.0,
+        0.35
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5123,
+      "count": 6,
+      "type": "SCALAR"
+    }
+  ],
+  "meshes": [
+    {
+      "name": "shared_quad",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "indices": 1
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "scene_root",
+      "translation": [
+        0.0,
+        0.5,
+        0.0
+      ],
+      "children": [
+        1,
+        2
+      ]
+    },
+    {
+      "name": "left_static",
+      "mesh": 0,
+      "translation": [
+        -0.35,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "right_reflected_raised",
+      "mesh": 0,
+      "translation": [
+        0.35,
+        0.15,
+        0.2
+      ],
+      "rotation": [
+        0.0,
+        0.3826834323650898,
+        0.0,
+        0.9238795325112867
+      ],
+      "scale": [
+        -0.7,
+        1.0,
+        0.7
+      ]
+    }
+  ],
+  "scenes": [
+    {
+      "name": "qualification_scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "scene": 0
+}

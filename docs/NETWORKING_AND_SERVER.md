@@ -41,3 +41,379 @@ PostgreSQL for ACID currency, item ownership, inventory, trades, meaningful prog
 ## Benchmark metrics
 
 Packet-processing cycles/packet, p99 latency, useful updates/sec, recipient–entity delivery count, shared-encoding cache hit rate, baseline repair, per-client bytes/queue age, contention, server tick p99, cross-worker traffic, DB commit p99. Distinguish transport crypto cost from replication/interest cost.
+
+## M7 actual bounded movement prototype
+
+A separate pure Rust `theia-sim` store and headless `theia-server-lab` now
+qualify server-owned fixed-tick movement. This is an early parallel M7 slice,
+not a networked server or full authoritative ECS. Dense ID/position/intent/expiry/
+controller columns and a logical-ID row map implement single-writer ownership.
+The server supplies world IDs; the prototype has no persistence identity
+registry. Connection contexts are issued per world/session and must be bound by
+a future authenticated transport, never accepted as client packet credentials.
+
+Clients supply only direction axes and monotonically increasing sequence.
+Admission queues input; it does not acknowledge completed movement. Latest
+accepted direction wins within a tick, and each actor moves once. Bounded
+global/per-session queues reject pressure without consuming retry sequence.
+Held direction expires after a server-defined tick count. Client time/destination/
+speed are not authority inputs. Immutable scene/rules are server-owned.
+
+The qualification uses integer millimetres on a Z=0 floor, static rectangles
+and axis-aligned square actor footprints. Speed normalization rounds
+conservatively; exact rational slab intersection prevents swept tunneling.
+Ordinary actors never block each other. Whole moves into world/obstacle contact
+are rejected; sliding, meshes/capsules/slopes/caves/flight and navigation remain
+unimplemented. Prototype default 50 ms/3000 mm/s/250 mm half extent/three-tick
+input hold are local test values, not approved engine/network policy constants.
+
+Administrative spawn/despawn occur at tick boundaries, with logical identity
+independent of dense row placement. Character respawn issues a fresh context;
+stale queued commands are cancelled. Snapshots/changes are copied immutable
+values, not writable authority. Combat, interactions, reliable gameplay outcomes,
+Quinn, replication, persistence and worker handoff remain future gates.
+
+## M7 actual bounded combat prototype
+
+Server-owned health/cooldown columns now share the movement store's stable IDs
+and lifecycle. `AttackInput` contains only sequence and requested target. The
+trusted connection context supplies the attacker; damage, range, health and
+timing come from server rules/current state. Prototype defaults: health 100,
+damage 25, point range 1500 mm and four-tick cooldown. These are local test
+settings, not agreed production gameplay/balance constants.
+
+Each tick consumes admitted inputs, moves actors once, then processes attacks
+in admitted order against current post-movement state. Unknown/self/dead targets,
+dead attackers, cooldown, range and static-rectangle LOS fail with explicit
+sequenced outcomes. Successful hits consume cooldown and clamp health to zero.
+Death clears held motion; dead actors reject new input. Ordinary actors do not
+occlude this prototype's point LOS, independently of non-blocking movement.
+No general 3D hit volume/faction/ability/projectile system is implied.
+
+Health changes coalesce to one final value per actor/tick. `Frame.applied` is
+a processed-input watermark, not a promise of successful movement/attack or
+durable gameplay commit. Rejected attacks still have explicit outcomes.
+Lifecycle target lookup uses logical IDs after compaction; a despawned target
+fails without damaging the row that replaces it. The local store currently
+shares input sequence ordering across moves/attacks. Before mixed DATAGRAM/
+reliable transport, qualify independent sequence domains and bounded idempotent
+outcomes so movement reordering cannot discard a reliable gameplay request.
+
+## M8 actual transport-neutral request adapter
+
+`theia-protocol::Authority` privately owns the simulation. Server-issued opaque
+peer handles bind callers to actors; they are trusted transport context, not
+packet credentials or authentication. Movement has an independent strictly
+increasing external sequence. Combat request IDs start at zero and may arrive
+out of order within a bounded sliding window. Private monotonic simulation
+sequences preserve the original store's ordering without mixing the two external
+domains. Movement ACKs describe consumed input, even when movement is blocked.
+
+Duplicate combat requests with the same target return pending, the original
+completed outcome, or an acknowledged tombstone. Different target reuse fails.
+Every admitted request has one effect/outcome within its live session. Completed
+outcomes retain their original tick/result even after subsequent damage. Dead
+attackers receive a cached semantic rejection. Queue pressure fails admission
+without consuming the retry ID. No durable exactly-once guarantee is implied.
+
+Outcome acknowledgements are application messages, separate from transport ACKs.
+Only completed outcomes can be acknowledged. Out-of-order ACK tombstones remain
+until all lower IDs are acknowledged; holes hold the window closed. Clients must
+allocate contiguous IDs and recover holes. Below-floor retries are stale. There
+is no timeout eviction of unacknowledged results. Defaults are 128 peers/64 IDs
+per peer, hard caps 4096 peers/256 IDs, also constrained by simulation actor/input
+budgets. Counts bound retained metadata; encoded byte limits belong to the future
+wire layer. Counters fail on exhaustion rather than wrap.
+
+Disconnect cancels that actor's pending inputs and drops its cache. Reattachment
+issues a fresh peer; old contexts fail. No cross-reconnect retry continuity,
+account binding, durable transactions, wire version, baseline replication or
+Quinn socket exists in this unit. Outcome delivery loss can be repaired by
+resubmitting the same unacknowledged request while the session remains live.
+
+## M8 actual encrypted loopback transport
+
+The separate `theia-network-lab` now qualifies Quinn/rustls/ring over IPv4
+loopback with two clients. Trusted fixture setup assigns logical IDs 10/20 to
+server-side connection contexts. TLS authenticates the generated localhost
+server certificate and negotiated `theia-lab-1` ALPN. Wrong hostname, untrusted
+root and ALPN mismatch fail. No client account identity or mutual TLS is implied.
+Both endpoints disable early data, and only complete handshakes enter gameplay.
+
+Movement messages and full two-actor snapshots use DATAGRAM. Each attack/semantic
+ACK uses its own bidirectional reliable stream. Queued/pending replies require
+same-ID retries until completion; lost outcome delivery can reuse the retained
+result. Application ACKs release outcomes through the adapter's contiguous floor.
+This wire prototype uses `THN1`, explicit little-endian fields and enum tags,
+exact lengths, strict ID/range/order checks and a 128-byte encoded limit. It is
+qualification-only, not an approved general replication schema. Full snapshots
+need no delta baseline and contain processed movement watermarks, not durable
+commit ACKs. General client snapshot version/clock/interpolation work remains open.
+
+Two connections each admit at most four concurrent stream handlers; whole stream
+exchanges have one-second deadlines. The authority event channel holds 32
+entries; movement drops when full. Reliable producers wait within their deadline.
+Transport windows bound per-stream/connection receive/send bytes to 256/4096/4096;
+DATAGRAM receive/send queues use 1024/128 bytes. Tick execution is a 50 ms lab
+interval with missed-tick skip, not a production scheduler or wall-clock fidelity
+claim. Default two-thread Tokio runtime, two actor contexts and four retained
+request IDs per peer bound this fixture. Stalled streams do not suspend ticks or
+another peer's request; shutdown aborts and joins workers.
+
+IPv6 address selection is explicit but this host disables IPv6, so bind fails
+without silent IPv4 fallback. Network faults, replication deltas/baseline repair,
+account authorization, durable effects, disconnect lifecycle/reconnect repair,
+renderer input/presentation integration and scale measurement remain unqualified.
+
+## M8 actual controlled packet faults
+
+`--faults` inserts one UDP relay per connection, enabling directional packet-count
+faults after verified handshakes. Every eleventh eligible packet drops; every
+seventh holds for up to 10 ms; a following packet forwards first and releases the
+held one. Every thirteenth eligible directly forwarded packet duplicates. Exact
+counts depend on QUIC packet scheduling. Payloads remain encrypted and unchanged.
+Each relay accepts only its fixed server/client socket addresses; unknown sources
+are ignored. Packets exceeding 2048 bytes are rejected (2049-byte receive buffer
+allows detecting truncation). One pending packet per direction bounds payload
+retention to 4096 bytes per relay, excluding receive buffers and OS/Quinn queues.
+Relays abort on dropped owners and join during explicit shutdown.
+
+The client retransmits a supersedable movement intent every 50 ms until it sees
+that sequence's applied watermark, under a two-second deadline. Same-sequence
+retries do not reapply movement or refresh held motion. Repeated complete snapshots
+repair lost state naturally; this does not implement delta baseline ACKs. Reliable
+requests/outcomes retain the preceding bounded application result semantics.
+Packet duplication is also handled by the existing audited QUIC stack.
+
+The controlled lab keeps exactly two hits and health [75,75] under actual packet
+drop/delay/reordering/duplication. The opaque relay cannot attribute a dropped
+packet to a specific gameplay message. Faults start after handshake and end
+before close draining. No burst outage, WAN/MTU/congestion/load, handshake-loss,
+account/persistence or performance qualification is implied.
+
+## M8 actual readonly client snapshot store
+
+`theia-protocol::replica` accepts complete sorted logical-ID actor sets within a
+configured cap (1..128 actors). Prototype positions/health follow the preceding
+integer-mm +/-1M/health <=1M profile. Complete-set validation precedes atomic
+publication; caller spare vector capacity is discarded before retention. One
+current full set is retained, with immutable borrowed access; it cannot mutate
+server authority. Full empty sets remove all actors and later sets can replace
+identities/lifecycle membership without dense-row identity assumptions.
+
+A server tick is this prototype's snapshot version. Older snapshots are stale;
+identical same-tick snapshots are duplicates; contradictory same-tick snapshots
+fail. Newer snapshots cannot regress or erase an already processed movement
+watermark. Missing intermediate ticks need no baseline for a complete set.
+The issuing server must publish one immutable completed state per tick; a future
+protocol supporting revisions within a tick will need an explicit revision.
+
+Opaque locally issued connection contexts bind delivery to a replica instance.
+New connection/reset clears prior state, stale/foreign sources fail, disconnect
+clears the current set, and counters never wrap. This local context is not a wire
+credential, server partition authority epoch, authentication or durable reconnect
+protocol. Both network-lab clients feed every consumed snapshot through the store
+and clear it at shutdown. Screen interpolation/extrapolation, clock synchronization,
+prediction, delta baseline/repair and renderer integration remain unimplemented.
+
+## M8 actual bounded presentation oracle
+
+Replica retention now moves the last accepted full set into a previous slot,
+keeping at most two sets (each capped at configured actor count and normalized
+allocation capacity). Rejected/stale/duplicate updates cannot change either
+endpoint; connection reset/disconnect clears both. `presentation::Time` keeps
+integer tick and finite [0,1) fraction separate. `Replica::present` consumes that
+explicit screen time without advancing simulation or assuming receive time equals
+server time. This is a bounded CPU reference for later GPU presentation.
+
+Positions for matching IDs interpolate between retained sets. Earlier/later
+screen times hold endpoints; no extrapolation. A caller-chosen 1..120 tick maximum
+gap guards long missing intervals by snapping to latest. Latest full-set membership
+and health remain current; new IDs snap, removed IDs disappear. An observed
+health-zero→positive transition snaps to latest to avoid blending a known respawn.
+A death/respawn wholly hidden by lost snapshots cannot be detected without future
+incarnation/version metadata. Teleport flags, collision-aware visual paths,
+network clock estimation, prediction and GPU renderer integration remain open.
+Interpolation may cut between legal positions and is never movement legality.
+
+## M7 actual fixed GPU presentation connection
+
+A separate Render Lab authority mode now consumes two completed local authority
+ticks through the readonly replica oracle. It transfers two actor positions/IDs/
+health as one 64-byte push; Slang performs positional interpolation and generates
+actor/obstacle squares in three mesh groups with one draw. IDs are split low/high
+32-bit words; fixture IDs exceed 32 bits and both words affect the palette.
+Health is current server state, not interpolated or client-owned. This fixed
+profile is neither a general GPU actor store nor animation/character system.
+The fixture does not consume live Quinn snapshots or interactive input yet.
+
+## M7 actual interactive local authority fixture
+
+Render Lab's separate demo now routes WASD/arrows directional intent and Space
+attack edges into the private authority model. Source session/target/rules stay
+server-owned; no client destination/speed/damage or mutable snapshot input.
+Opposing keys cancel, aliases retain independent held state, focus loss clears
+all controls, and pending attack edges coalesce to one per tick; native key repeat
+cannot generate repeated Space attacks. GPU consumes whole readonly completed
+states and owns interpolation/quad generation only.
+
+This local development fixture runs authority in the same process/event loop as
+the viewer; it is not a trusted network client authority. A Winit 50 ms deadline
+advances fixed steps even when redraw is deferred. Host/driver waits can still
+delay that event loop; there is no separate simulation thread or production
+latency guarantee. Catchup caps at four steps/wake, logs skipped wall intervals
+and snaps presentation after a long stall. Source clocks remain explicit, rather
+than taking render-frame count as gameplay time. The independently qualified
+Quinn server lab remains separate; live network presentation is the next gate.
+
+## M8 shared qualification fixture ownership
+
+Existing strict wire, verified TLS configuration, two-actor authority loop and
+readonly client receiver are now shared through `crates/theia-network-fixture`.
+The executable imports those modules; the opaque fault relay stays app-local.
+This extraction preserves protocol/limits/gameplay behavior and is preparation
+for a separate listener and renderer client. It does not implement accounts,
+a production server API or a live graphics connection by itself.
+
+## M8 actual separate listener/bootstrap
+
+The shared fixture now uses THN2 and `theia-lab-2` ALPN. A reliable server-owned
+welcome contains actor, target and one of two fixed scene profile enums. Completed
+verified handshakes and empty welcome stream completion precede gameplay. Old
+wire/ALPN and invalid profile/duplicate IDs fail. Actors still come from trusted
+server connection context; welcome is identity assignment, not client login.
+No production replication format is locked by this prototype update.
+
+`--serve` accepts exactly two localhost peers, stores only the public localhost
+DER certificate at a generated path and keeps the signing key in memory. A
+separate probe trusts that explicit public certificate, then binds its readonly
+receiver to the retained connection object (preventing stable-ID lifetime reuse).
+Foreign connection data is rejected before consumption; roster must match welcome.
+The server rejects a duplicate connection pair. A one-second keepalive permits the
+first peer to wait for the second beyond the five-second idle timeout; bootstrap
+acceptance is still bounded. One peer closing ends the pair; early first-peer
+closure before pairing fails the fixture. Reconnect/general lifecycle is absent.
+
+Profile 0 keeps the preceding empty rectangle-floor laboratory at Y=0. Profile 1
+uses the local demo's central static rectangle and actor spawns at Y=-1000 mm.
+Both use the existing 50 ms/100 health/250 mm actor footprint/4000 mm half-world
+prototype rules. No configurable production scene, account authorization,
+persistence or graphics connection is implemented by this listener unit.
+
+## M8 actual separate encrypted GPU viewer
+
+Render Lab accepts explicit loopback address/public certificate, verifies TLS and
+server-owned THN2 actor/target/profile bootstrap, then retains readonly full
+snapshots from that exact connection. Its live mode creates no local `World`.
+A separate single-thread Tokio worker sends movement at the prototype 50 ms
+cadence and coalesces one pending attack behind one in-flight reliable request.
+Retries reuse the same request ID until completion; acknowledged outcomes are
+checked against bootstrap identity. A failed/deadline-expired exchange closes
+this development connection rather than claiming cross-reconnect delivery.
+
+Two retained snapshots feed the existing 64-byte GPU push profile. Matching
+positions blend using bounded time since arrival; gaps above four ticks snap,
+latest health stays exact and there is no extrapolation/prediction or network
+clock estimator. Local-demo profile shows its known static rectangle; laboratory
+profile hides it. Unknown/disconnected identity clears actor geometry. This fixed
+two-actor/profile fixture is not a general streamed world/scene protocol.
+See [target-GPU evidence](validation/M8_NETWORK_VIEWER.md).
+
+Live viewers now optionally route through the same shared bounded qualification
+relay (`--network-faults`). Activation follows verified bootstrap; teardown disables
+faults before bounded close draining and joins the relay. Separate GPU/native input/
+WSI/replay tests pass under actual encrypted packet faults. No WAN/handshake-loss/
+load or general repair/reconnect claim. [Evidence](validation/M8_LIVE_PACKET_FAULTS.md).
+
+## M8 actual transport-neutral delta reconstruction
+
+`theia-protocol::delta` qualifies sorted full-actor replacements/removals against
+an explicit complete baseline tick. Replica accepts only its current/previous
+retained complete set; missing/evicted baseline returns `MissingBaseline` without
+changing either endpoint. The caller must obtain a full snapshot; no guessed
+actor values or partial delta application. Full repair obeys the same source,
+canonical state, monotonic tick and processed-movement watermark guards.
+
+Limits remain at most 128 actors, two retained sets, bounded delta lists and
+reconstruction union. Changes include creation/removal/health/observed respawn;
+this is full-actor replacement, not component bitpacking or a performance result.
+Older delta envelopes can be ignored as stale; same-tick reconstruction checks
+conflicts when its baseline is retained. Without the baseline, even a duplicate
+requires explicit repair. No baseline ACK policy/cache or wire message is added;
+THN2 network labs/viewers continue full snapshots. Next qualify an explicitly
+acknowledged sender baseline policy. [Evidence](validation/M8_DELTA_RECONSTRUCTION.md).
+
+## M8 actual acknowledged sender baseline prototype
+
+`theia-protocol::replication::Sender` retains 2..16 canonical prepared complete
+sets for one locally issued recipient context. Only explicit ACK of a retained
+prepared tick enables delta selection. Unknown/future/evicted ACKs cannot invent
+a baseline; older ACKs are stale. Evicting the acknowledged tick clears selection
+and produces full state. Source reset/disconnect clears prepared history and ACKs.
+These contexts require binding to exact trusted transport connections, not packet
+credentials or account identity. Preparation is not proof of network delivery.
+
+A repair request clears the baseline and fences ACKs at/below the latest prepared
+tick. Full state continues until a newer complete set is explicitly acknowledged;
+delayed pre-repair ACKs cannot cancel repair. Strict complete-state validation,
+monotonic ticks/processed movement watermarks and same-tick conflict guards precede
+cache mutation. Caller-owned packet allocations are outside retained history.
+
+Synthetic state/ACK loss/reordering qualification passes bounded history, complete
+readonly values and explicit repairs. No wire/QUIC ACK exchange or synchronized
+baseline retention lease yet; receiver's two-set eviction can still require repair.
+Next qualify versioned encrypted delta/ACK/repair messages. [Evidence](validation/M8_ACKNOWLEDGED_BASELINES.md).
+
+## M8 actual replication envelope codec
+
+Separate qualification `replication_wire` uses TDR1 magic, explicit little-endian
+full/delta/snapshot-ACK/repair tags, a 128-byte cap and two actors/list. Full sets may
+be empty for lifecycle repair. Delta envelope checks sorted/disjoint IDs and tick
+ordering; baseline membership/watermark relationships still require reconstruction.
+Decoding bounds counts before allocation; encoding rejects invalid caller values.
+This is a codec-only prototype, not a locked component schema or negotiated network
+feature. THN2/its ALPN and listener/viewer behavior remain unchanged. Next qualify
+isolated certificate-verified encrypted TDR1 exchange. [Evidence](validation/M8_REPLICATION_CODEC.md).
+
+## M8 actual isolated encrypted delta exchange
+
+Separate `theia-network-lab --replication-test` sends TDR1 full/delta DATAGRAMs and
+receives application snapshot ACK/repair DATAGRAMs on exact verified connections.
+Two sender histories (eight sets each) and readonly clients (two sets each) use
+synthetic two-actor complete states, checked against independent values. This is
+replication qualification, not a gameplay source or account service. Explicit test
+mode selects participants; existing TLS ALPN remains theia-lab-2, with no production
+feature negotiation. THN2 listener/viewer behavior stays unchanged.
+
+Clients ACK only reconstructed complete publication; missing baselines send repair
+and retain current/previous state. Repeated state/control delivery repairs loss;
+requests/ACKs are supersedable DATAGRAMs, not combat/durable outcome ACKs. Deliberate
+early ACK withholding exercises receiver eviction. Server stops only after both
+clients ACK the prepared final tick; a fenced same-tick final ACK confirms completion
+without reactivating baseline selection. Clients verify exact final state before
+accepting closure. All tasks/futures and endpoint/relay lifetimes remain bounded.
+Next revise the live protocol explicitly and integrate actual authority snapshots.
+[Evidence](validation/M8_ENCRYPTED_REPLICATION.md).
+
+## M8 actual authority/live delta adoption
+
+Live bootstrap/movement/combat now uses THN3 and TLS ALPN theia-lab-3. Previous
+versions reject before live exchange; TDR1 carries state/replication controls within
+this explicit qualification profile. Each actual authority peer has an eight-set
+prepared sender history. Snapshot ACKs select exact retained baselines; eviction
+forces full state and repair fences delayed ACKs. DATAGRAM input/control shares
+bounded event admission; reliable combat retains separate handlers/request IDs.
+
+Clients verify exact retained connection before consumption, reconstruct delta
+against either readonly endpoint, validate the complete two-actor bootstrap roster
+before publication, then queue application ACK. Missing baseline leaves both sets
+intact and queues repair; repeated incoming deltas retry lost repair. GPU front
+retains its previous verified state/receipt time until a new complete tick arrives.
+No partial health/position publication, local World or gameplay authority.
+
+Explicit `--network-repair-test` withholds ACKs for deltas until receiver eviction
+requests repair, then resumes normal ACKs. Default clients do not inject withholding.
+Faulted WSI/replay confirms actual authority→readonly reconstruction→GPU full repair.
+This remains a fixed two-actor/profile fixture, not general roster changes, baseline
+leases, production schema negotiation, persistence or reconnect continuity.
+[Evidence](validation/M8_LIVE_DELTA_REPLICATION.md).
