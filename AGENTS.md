@@ -2,6 +2,8 @@
 
 You are working on **Theia Engine**, an experimental high-performance MMO engine. Before editing, read `docs/CURRENT_STATUS.md`, `docs/DECISIONS.md`, `docs/ARCHITECTURE.md`, `docs/RISKS_AND_VALIDATION.md`, and the relevant subsystem document.
 
+Keep this repository self-contained for Rust engine experiments and qualification. Game story documents, worldbuilding sources and narrative extraction tools belong in a separate project. Use small, synthetic test fixtures without dependencies on another Theia repository. Preserve the existing Rust/Go/Slang architecture decisions.
+
 ## Rules
 
 1. **Preserve verified work.** Existing headless `theia-gpu-test` executes a Slang SPIR-V compute shader on Radeon RX 7900 XTX; do not repurpose or break it. Add separate `apps/theia-render-lab` for M0-D.
